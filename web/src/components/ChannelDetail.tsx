@@ -178,6 +178,15 @@ export function ChannelDetail({
     }
   };
 
+  const handleUpdateEvent = async (id: number, eventData: Partial<EventItem>) => {
+    try {
+      await api.updateEvent(channel.chatId, id, eventData);
+      await refreshAllData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update event");
+    }
+  };
+
   const handleDeleteEvent = async (id: number) => {
     if (!confirm("Are you sure you want to delete this reminder?")) return;
     try {
@@ -284,6 +293,7 @@ export function ChannelDetail({
           onPrevMonth={handleCalPrevMonth}
           onNextMonth={handleCalNextMonth}
           onCreateEvent={handleCreateEvent}
+          onUpdateEvent={handleUpdateEvent}
           onDeleteEvent={handleDeleteEvent}
         />
       )}

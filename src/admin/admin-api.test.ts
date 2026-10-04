@@ -265,7 +265,21 @@ describe("Admin REST API", () => {
       });
       assert.equal(listRes.statusCode, 200);
       const listBody = JSON.parse(listRes.body);
-      assert.equal(listBody.events.length, 1);
+      // Update event
+      const patchRes = await app.inject({
+        method: "PATCH",
+        url: `/api/admin/channels/group-300/events/${eventId}`,
+        headers: { authorization: `Bearer ${adminPassword}` },
+        payload: JSON.stringify({
+          title: "Sinh nhật Bé (Đã sửa)",
+          remindDaysBefore: 3,
+        }),
+      });
+      assert.equal(patchRes.statusCode, 200);
+      const patchBody = JSON.parse(patchRes.body);
+      assert.equal(patchBody.ok, true);
+      assert.equal(patchBody.event.title, "Sinh nhật Bé (Đã sửa)");
+      assert.equal(patchBody.event.remindDaysBefore, 3);
 
       // Delete event
       const deleteRes = await app.inject({

@@ -159,6 +159,14 @@ export const api = {
     return res.event;
   },
 
+  async updateEvent(chatId: string, id: number, updates: Partial<EventItem>): Promise<EventItem> {
+    const res = await request<{ ok: boolean; event: EventItem }>(`/api/admin/channels/${encodeURIComponent(chatId)}/events/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+    return res.event;
+  },
+
   async deleteEvent(chatId: string, id: number): Promise<void> {
     await request(`/api/admin/channels/${encodeURIComponent(chatId)}/events/${id}`, {
       method: "DELETE",

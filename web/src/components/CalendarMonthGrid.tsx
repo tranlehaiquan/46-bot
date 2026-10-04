@@ -69,15 +69,25 @@ function HolidayBadge({ holiday }: { holiday: HolidayOccurrence }) {
 function EventBadge({
   ev,
   showChannelLabel,
+  onSelectEvent,
 }: {
   ev: CalendarEventOccurrence;
   showChannelLabel: boolean;
+  onSelectEvent?: (eventId: number) => void;
 }) {
   const emoji = KIND_EMOJI[ev.kind] ?? "📌";
   return (
     <div
       title={`${ev.title}${showChannelLabel ? ` [${ev.channelName}]` : ""}`}
-      className="bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 rounded text-[10px] font-semibold px-1.5 py-0.5 truncate cursor-default leading-tight"
+      onClick={(e) => {
+        if (onSelectEvent) {
+          e.stopPropagation();
+          onSelectEvent(ev.eventId);
+        }
+      }}
+      className={`bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 rounded text-[10px] font-semibold px-1.5 py-0.5 truncate leading-tight transition-colors ${
+        onSelectEvent ? "cursor-pointer hover:bg-indigo-500/30 hover:border-indigo-500/50" : "cursor-default"
+      }`}
     >
       {emoji} {ev.title}
       {showChannelLabel && (
@@ -95,12 +105,14 @@ function DayCell({
   month,
   entries,
   showChannelLabels,
+  onSelectEvent,
 }: {
   day: number;
   year: number;
   month: number;
   entries: CalendarEntry[];
   showChannelLabels: boolean;
+  onSelectEvent?: (eventId: number) => void;
 }) {
   const mm = String(month).padStart(2, "0");
   const dd = String(day).padStart(2, "0");
@@ -116,7 +128,14 @@ function DayCell({
   // Show max 3 badges, with overflow indicator
   const allBadges: React.ReactNode[] = [
     ...holidays.map((h) => <HolidayBadge key={`h-${h.id}`} holiday={h} />),
-    ...events.map((e) => <EventBadge key={`e-${e.eventId}`} ev={e} showChannelLabel={showChannelLabels} />),
+    ...events.map((e) => (
+      <EventBadge
+        key={`e-${e.eventId}`}
+        ev={e}
+        showChannelLabel={showChannelLabels}
+        onSelectEvent={onSelectEvent}
+      />
+    )),
   ];
   const visibleBadges = allBadges.slice(0, 3);
   const overflow = allBadges.length - 3;
@@ -168,6 +187,7 @@ export function CalendarMonthGrid({
   showChannelLabels,
   onPrevMonth,
   onNextMonth,
+  onSelectEvent,
 }: {
   year: number;
   month: number;
@@ -176,6 +196,7 @@ export function CalendarMonthGrid({
   showChannelLabels: boolean;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  onSelectEvent?: (eventId: number) => void;
 }) {
   // Build a map: dateStr -> CalendarEntry[]
   const entriesByDate = useMemo(() => {
@@ -263,6 +284,7 @@ export function CalendarMonthGrid({
               month={month}
               entries={entries}
               showChannelLabels={showChannelLabels}
+              onSelectEvent={onSelectEvent}
             />
           );
         })}

@@ -169,6 +169,36 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       return reply.code(201).send({ ok: true, event });
     });
 
+    adminScope.patch("/api/admin/channels/:chatId/events/:id", async (request, reply) => {
+      const { id } = request.params as { chatId: string; id: string };
+      const body = parseJsonBody(request.body);
+
+      if (!deps.eventsRepo) {
+        return reply.code(503).send({ error: "Events repository unavailable" });
+      }
+
+      const eventId = Number(id);
+      const existing = deps.eventsRepo.getEventById(eventId);
+      if (!existing) {
+        return reply.code(404).send({ error: "Event not found" });
+      }
+
+      const updated = deps.eventsRepo.updateEvent(eventId, {
+        title: typeof body.title === "string" ? body.title : undefined,
+        kind: body.kind as any,
+        calendar: body.calendar as any,
+        day: body.day !== undefined ? Number(body.day) : undefined,
+        month: body.month !== undefined ? Number(body.month) : undefined,
+        year: body.year !== undefined ? (body.year ? Number(body.year) : null) : undefined,
+        isLeapMonth: typeof body.isLeapMonth === "boolean" ? body.isLeapMonth : undefined,
+        recurrence: body.recurrence as any,
+        remindDaysBefore: body.remindDaysBefore !== undefined ? Number(body.remindDaysBefore) : undefined,
+        notes: typeof body.notes === "string" ? body.notes : (body.notes === null ? null : undefined),
+      });
+
+      return reply.send({ ok: true, event: updated });
+    });
+
     adminScope.delete("/api/admin/channels/:chatId/events/:id", async (request, reply) => {
       const { id } = request.params as { chatId: string; id: string };
       if (!deps.eventsRepo) {
