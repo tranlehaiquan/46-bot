@@ -57,7 +57,7 @@ describe("loadConfig", () => {
     const config = loadConfig(env);
     assert.equal(config.llmProvider, "gemini");
     assert.equal(config.llmApiKey, "test-gemini-key");
-    assert.equal(config.llmModel, "gemini-2.0-flash");
+    assert.equal(config.llmModel, "gemini-3.8-flash");
   });
 
   it("accepts custom GEMINI_MODEL", () => {
