@@ -53,6 +53,28 @@ export type MemoryStory = {
   ts: number;
 };
 
+export type HolidayOccurrence = {
+  id: string;
+  name: string;
+  calendar: "solar" | "lunar";
+  originalDate: string;
+  occurrenceDateStr: string;
+  daysRemaining: number;
+  daysOfLeave?: number;
+  isPublicHoliday: boolean;
+  description?: string;
+};
+
+export type CalendarEventOccurrence = {
+  eventId: number;
+  chatId: string;
+  channelName: string;
+  title: string;
+  kind: string;
+  calendar: string;
+  occurrenceDateStr: string;
+};
+
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem("bot_admin_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -173,5 +195,18 @@ export const api = {
     await request(`/api/admin/channels/${encodeURIComponent(chatId)}/memories/stories/${id}`, {
       method: "DELETE",
     });
+  },
+
+  async getHolidays(year?: number): Promise<HolidayOccurrence[]> {
+    const y = year ?? new Date().getFullYear();
+    const res = await request<{ holidays: HolidayOccurrence[] }>(`/api/admin/holidays?year=${y}`);
+    return res.holidays;
+  },
+
+  async getCalendarEvents(year: number, month: number, chatId?: string): Promise<CalendarEventOccurrence[]> {
+    const base = `/api/admin/calendar/events?year=${year}&month=${month}`;
+    const url = chatId ? `${base}&chatId=${encodeURIComponent(chatId)}` : base;
+    const res = await request<{ events: CalendarEventOccurrence[] }>(url);
+    return res.events;
   },
 };

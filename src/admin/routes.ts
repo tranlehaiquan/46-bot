@@ -3,6 +3,8 @@ import type { ServerDeps } from "../server.js";
 import { createAuthHook, createToken } from "./auth.js";
 import type { ChannelStatus } from "../db/repositories/channels.js";
 import { getChannelActivatedMessage } from "../delivery.js";
+import { getUpcomingHolidays } from "../holidays/index.js";
+import { getNextOccurrence, formatUtc7DateStr, createUtc7Date, getUtc7Parts } from "../db/repositories/events.js";
 
 function parseJsonBody(body: unknown): Record<string, unknown> {
   if (Buffer.isBuffer(body)) {
@@ -254,6 +256,66 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       }
       const success = deps.memoryRepo.deleteStory(chatId, Number(id));
       return reply.send({ ok: success });
+    });
+
+    // 6. Calendar: Vietnam Holidays
+    adminScope.get("/api/admin/holidays", async (request, reply) => {
+      const query = (request.query || {}) as { year?: string };
+      const year = Number(query.year) || new Date().getFullYear();
+      // Use Jan 1 of that year as reference, window of 400 days covers the full year
+      const referenceDate = createUtc7Date(year, 1, 1);
+      const holidays = getUpcomingHolidays({ windowDays: 400, referenceDate });
+      return reply.send({ holidays });
+    });
+
+    // 7. Calendar: Channel Events with computed occurrences
+    adminScope.get("/api/admin/calendar/events", async (request, reply) => {
+      const query = (request.query || {}) as { year?: string; month?: string; chatId?: string };
+      const year = Number(query.year) || new Date().getFullYear();
+      const month = Math.min(12, Math.max(1, Number(query.month) || new Date().getMonth() + 1));
+      const chatIdFilter = typeof query.chatId === "string" && query.chatId ? query.chatId : undefined;
+
+      if (!deps.eventsRepo) {
+        return reply.send({ events: [] });
+      }
+
+      const allEvents = chatIdFilter
+        ? deps.eventsRepo.getEventsByChat(chatIdFilter)
+        : deps.eventsRepo.getAllEvents();
+
+      // Reference is the first day of the requested month
+      const refDate = createUtc7Date(year, month, 1);
+
+      const events: Array<{
+        eventId: number;
+        chatId: string;
+        channelName: string;
+        title: string;
+        kind: string;
+        calendar: string;
+        occurrenceDateStr: string;
+      }> = [];
+
+      for (const event of allEvents) {
+        const occ = getNextOccurrence(event, refDate);
+        if (!occ) continue;
+        // Only include occurrences that fall within the requested month
+        const occParts = getUtc7Parts(occ.date);
+        if (occParts.year !== year || occParts.month !== month) continue;
+
+        const channel = deps.channelRepo ? deps.channelRepo.getChannel(event.chatId) : undefined;
+        events.push({
+          eventId: event.id,
+          chatId: event.chatId,
+          channelName: channel?.name ?? event.chatId,
+          title: event.title,
+          kind: event.kind,
+          calendar: event.calendar,
+          occurrenceDateStr: occ.dateStr,
+        });
+      }
+
+      return reply.send({ events });
     });
   });
 }

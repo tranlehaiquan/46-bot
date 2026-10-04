@@ -4,6 +4,7 @@ import { Login } from "./components/Login";
 import { Navbar } from "./components/Navbar";
 import { ChannelList } from "./components/ChannelList";
 import { ChannelDetail } from "./components/ChannelDetail";
+import { CalendarPage } from "./components/CalendarPage";
 import { MessageSquareOff } from "lucide-react";
 
 export function App() {
@@ -11,6 +12,7 @@ export function App() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState<"channels" | "calendar">("channels");
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -76,40 +78,49 @@ export function App() {
       <Navbar
         channels={channels}
         onLogout={() => setIsAuthenticated(false)}
+        currentPage={page}
+        onNavigate={setPage}
       />
 
       <main style={{
         flex: 1,
         padding: "0 1.5rem 1.5rem 1.5rem",
-        display: "grid",
-        gridTemplateColumns: "360px 1fr",
-        gap: "1.25rem",
-        alignItems: "start"
       }}>
-        <ChannelList
-          channels={channels}
-          selectedChannel={selectedChannel}
-          onSelectChannel={setSelectedChannel}
-          onUpdateStatus={handleUpdateStatus}
-        />
-
-        {selectedChannel ? (
-          <ChannelDetail
-            channel={selectedChannel}
-            onChannelUpdated={handleChannelUpdated}
-          />
+        {page === "calendar" ? (
+          <CalendarPage channels={channels} />
         ) : (
-          <div className="glass-panel" style={{
-            height: "calc(100vh - 120px)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--text-muted)",
-            gap: "1rem"
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "360px 1fr",
+            gap: "1.25rem",
+            alignItems: "start",
           }}>
-            <MessageSquareOff size={48} opacity={0.4} />
-            <p>Chọn một kênh bên trái để xem tin nhắn, nhắc nhở và bộ nhớ.</p>
+            <ChannelList
+              channels={channels}
+              selectedChannel={selectedChannel}
+              onSelectChannel={setSelectedChannel}
+              onUpdateStatus={handleUpdateStatus}
+            />
+
+            {selectedChannel ? (
+              <ChannelDetail
+                channel={selectedChannel}
+                onChannelUpdated={handleChannelUpdated}
+              />
+            ) : (
+              <div className="glass-panel" style={{
+                height: "calc(100vh - 120px)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--text-muted)",
+                gap: "1rem"
+              }}>
+                <MessageSquareOff size={48} opacity={0.4} />
+                <p>Select a channel on the left to view messages, reminders and memory.</p>
+              </div>
+            )}
           </div>
         )}
       </main>

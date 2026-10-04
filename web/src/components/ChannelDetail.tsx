@@ -19,7 +19,10 @@ import {
   type EventItem,
   type MemoryFact,
   type MemoryStory,
+  type HolidayOccurrence,
+  type CalendarEventOccurrence,
 } from "../api";
+import { CalendarMonthGrid } from "./CalendarMonthGrid";
 
 export function ChannelDetail({
   channel,
@@ -57,7 +60,31 @@ export function ChannelDetail({
   const [showStoryForm, setShowStoryForm] = useState(false);
   const [storyForm, setStoryForm] = useState({ title: "", story: "", people: "", happenedOn: "" });
 
+  // Calendar state (for reminders tab)
+  const now = new Date();
+  const [calYear, setCalYear] = useState(now.getFullYear());
+  const [calMonth, setCalMonth] = useState(now.getMonth() + 1);
+  const [calHolidays, setCalHolidays] = useState<HolidayOccurrence[]>([]);
+  const [calEvents, setCalEvents] = useState<CalendarEventOccurrence[]>([]);
+
   const [loading, setLoading] = useState(false);
+
+  // Load calendar data whenever the reminders tab is active or month changes
+  useEffect(() => {
+    if (activeTab !== "reminders") return;
+    api.getHolidays(calYear).then(setCalHolidays).catch(console.error);
+    api.getCalendarEvents(calYear, calMonth, channel.chatId).then(setCalEvents).catch(console.error);
+  }, [channel.chatId, activeTab, calYear, calMonth]);
+
+  const handleCalPrevMonth = () => {
+    if (calMonth === 1) { setCalYear((y) => y - 1); setCalMonth(12); }
+    else setCalMonth((m) => m - 1);
+  };
+
+  const handleCalNextMonth = () => {
+    if (calMonth === 12) { setCalYear((y) => y + 1); setCalMonth(1); }
+    else setCalMonth((m) => m + 1);
+  };
 
   // Load data when channel or activeTab changes
   useEffect(() => {
@@ -386,8 +413,25 @@ export function ChannelDetail({
       {/* Tab 2: Reminders & Events */}
       {activeTab === "reminders" && (
         <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem" }}>
+
+          {/* Channel Calendar */}
+          <div className="glass-panel" style={{ padding: "1.25rem", marginBottom: "1.5rem" }}>
+            <CalendarMonthGrid
+              year={calYear}
+              month={calMonth}
+              holidays={calHolidays.filter((h) => {
+                const [hy, hm] = h.occurrenceDateStr.split("-").map(Number);
+                return hy === calYear && hm === calMonth;
+              })}
+              events={calEvents}
+              showChannelLabels={false}
+              onPrevMonth={handleCalPrevMonth}
+              onNextMonth={handleCalNextMonth}
+            />
+          </div>
+
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-            <h3 style={{ fontSize: "1.1rem", fontWeight: "700" }}>Sự kiện & Nhắc nhở</h3>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: "700" }}>Events & Reminders</h3>
             <button
               onClick={() => setShowEventForm(!showEventForm)}
               className="btn btn-primary"
