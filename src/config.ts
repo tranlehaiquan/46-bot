@@ -8,6 +8,7 @@ const envSchema = z.object({
     })
     .min(1, "ZALO_BOT_TOKEN is required"),
   FAMILY_CHAT_ID: z.preprocess((value) => (value === undefined ? "" : value), z.string()),
+  FAMILY_CHAT_IDS: z.preprocess((value) => (value === undefined ? "" : value), z.string()),
   WEBHOOK_URL: z
     .string({
       required_error: "WEBHOOK_URL is required",
@@ -121,6 +122,7 @@ export class ConfigError extends Error {
 export type AppConfig = {
   zaloBotToken: string;
   familyChatId: string;
+  familyChatIds: string[];
   webhookUrl: string;
   webhookSecret: string;
   mode: "webhook";
@@ -156,9 +158,19 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   const apiKey = provider === "gemini" ? parsed.data.GEMINI_API_KEY! : parsed.data.DEEPSEEK_API_KEY!;
   const model = provider === "gemini" ? parsed.data.GEMINI_MODEL : parsed.data.DEEPSEEK_MODEL;
 
+  const rawChatIds = (parsed.data.FAMILY_CHAT_IDS && parsed.data.FAMILY_CHAT_IDS.trim() !== "")
+    ? parsed.data.FAMILY_CHAT_IDS
+    : parsed.data.FAMILY_CHAT_ID;
+  const familyChatIds = rawChatIds
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  const familyChatId = familyChatIds[0] ?? "";
+
   return {
     zaloBotToken: parsed.data.ZALO_BOT_TOKEN,
-    familyChatId: parsed.data.FAMILY_CHAT_ID,
+    familyChatId,
+    familyChatIds,
     webhookUrl: parsed.data.WEBHOOK_URL,
     webhookSecret: parsed.data.WEBHOOK_SECRET,
     mode: "webhook",

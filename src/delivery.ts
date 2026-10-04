@@ -14,6 +14,10 @@ import { splitText } from "./utils/split-text.js";
 import type { ZaloClient } from "./zalo-client.js";
 
 export const CANNED_REPLY = "Mình nhận được.";
+export const ONBOARDING_MESSAGE_PREFIX = "Nhóm này chưa nằm trong danh sách cho phép. Vui lòng thêm chat ID";
+export function getOnboardingMessage(chatId: string): string {
+  return `Nhóm này chưa nằm trong danh sách cho phép. Vui lòng thêm chat ID "${chatId}" vào FAMILY_CHAT_IDS để kích hoạt bot nhé.`;
+}
 
 export type DeliveryDependencies = {
   payload: Buffer | undefined;
@@ -45,7 +49,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
 
   const message = normalizeDelivery(parsed);
   if (!message) {
-    if (config.familyChatId === "") {
+    if (config.familyChatIds.length === 0) {
       log.info({ event: "unrecognized_delivery", raw: parsed });
     } else {
       log.info({ event: "unrecognized_delivery" });
@@ -53,7 +57,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     return;
   }
 
-  if (config.familyChatId === "") {
+  if (config.familyChatIds.length === 0) {
     log.info({
       event: "discovery",
       chat_id: message.chatId,
@@ -79,16 +83,16 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
   }
 
   const isDirect = message.chatType === "PRIVATE";
-  const isAllowedGroup =
-    message.chatType === "GROUP" &&
-    (config.familyChatId === "" || message.chatId === config.familyChatId);
+  const isGroup = message.chatType === "GROUP";
 
-  if (!isDirect && !isAllowedGroup) {
+  if (!isDirect && !isGroup) {
     return;
   }
 
-  // In groups, only reply if mentioned or replying to bot
-  if (message.chatType === "GROUP" && config.familyChatId !== "" && !isMentionedOrReplied(message, config.botId)) {
+  const isAddressed = isDirect || isMentionedOrReplied(message, config.botId);
+
+  // In groups, only respond if mentioned or replying to bot
+  if (isGroup && !isAddressed) {
     return;
   }
 
@@ -103,6 +107,13 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       return;
     }
     seen.add(message.messageId);
+  }
+
+  // If group is not in familyChatIds (new or unlisted group), reply with onboarding notice
+  const isAllowedGroup = isGroup && config.familyChatIds.includes(message.chatId);
+  if (isGroup && !isAllowedGroup) {
+    await zalo.sendMessage(message.chatId, getOnboardingMessage(message.chatId));
+    return;
   }
 
   // Reply generation

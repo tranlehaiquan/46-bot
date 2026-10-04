@@ -13,6 +13,7 @@ import { redactText } from "./redact.js";
 import { syncWebhook } from "./register.js";
 import { buildServer } from "./server.js";
 import { createZaloClient } from "./zalo-client.js";
+import { startScheduler } from "./scheduler/index.js";
 
 async function main(): Promise<void> {
   const startupLog = createLogger();
@@ -70,6 +71,13 @@ async function main(): Promise<void> {
     llmClient,
   });
 
+  const scheduler = startScheduler({
+    config,
+    eventsRepo,
+    zalo,
+    log,
+  });
+
   await boot(
     async () => {
       await app.listen({ port: config.port, host: "0.0.0.0" });
@@ -88,7 +96,10 @@ async function main(): Promise<void> {
 
   installShutdown(process, async () => {
     await shutdown(
-      () => app.close(),
+      () => {
+        scheduler.stop();
+        return app.close();
+      },
       queue,
       () => {
         closeDatabase(db);

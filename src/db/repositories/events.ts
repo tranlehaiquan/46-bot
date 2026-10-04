@@ -57,13 +57,25 @@ export type UpcomingEvent = {
   daysRemaining: number;
 };
 
+export type DueReminder = {
+  event: EventRow;
+  occurrenceDate: Date;
+  occurrenceDateStr: string;
+  daysRemaining: number;
+  isAdvanceNotice: boolean;
+};
+
 export interface EventsRepository {
   createEvent(input: CreateEventInput): EventRow;
   getEventById(id: number): EventRow | undefined;
   getEventsByChat(chatId: string): EventRow[];
+  getAllEvents(): EventRow[];
   updateEvent(id: number, updates: UpdateEventInput): EventRow | undefined;
   deleteEvent(id: number): boolean;
   listUpcomingEvents(chatId: string, windowDays?: number, referenceDate?: Date): UpcomingEvent[];
+  isReminderSent(eventId: number, occurrenceDate: string): boolean;
+  recordReminderSent(eventId: number, occurrenceDate: string, sentAt?: number): void;
+  findEventsDueForReminder(referenceDate?: Date, chatId?: string): DueReminder[];
 }
 
 export function getUtc7Parts(date: Date): { year: number; month: number; day: number } {
@@ -412,6 +424,50 @@ export function createEventsRepository(db: SqliteDatabase): EventsRepository {
       });
 
       return upcoming;
+    },
+    getAllEvents(): EventRow[] {
+      const rows = db.prepare("SELECT * FROM events ORDER BY id ASC").all();
+      return rows.map(mapEventRow);
+    },
+
+    isReminderSent(eventId: number, occurrenceDate: string): boolean {
+      const row = db
+        .prepare("SELECT 1 FROM reminders_sent WHERE event_id = ? AND occurrence_date = ? LIMIT 1")
+        .get(eventId, occurrenceDate);
+      return Boolean(row);
+    },
+
+    recordReminderSent(eventId: number, occurrenceDate: string, sentAt = Date.now()): void {
+      db.prepare("INSERT OR IGNORE INTO reminders_sent (event_id, occurrence_date, sent_at) VALUES (?, ?, ?)").run(
+        eventId,
+        occurrenceDate,
+        sentAt,
+      );
+    },
+
+    findEventsDueForReminder(referenceDate = new Date(), chatId?: string): DueReminder[] {
+      const events = chatId ? repo.getEventsByChat(chatId) : repo.getAllEvents();
+      const due: DueReminder[] = [];
+
+      for (const event of events) {
+        const occ = getNextOccurrence(event, referenceDate);
+        if (!occ) continue;
+
+        const isDayOf = occ.daysRemaining === 0;
+        const isAdvance = event.remindDaysBefore > 0 && occ.daysRemaining === event.remindDaysBefore;
+
+        if (isDayOf || isAdvance) {
+          due.push({
+            event,
+            occurrenceDate: occ.date,
+            occurrenceDateStr: occ.dateStr,
+            daysRemaining: occ.daysRemaining,
+            isAdvanceNotice: isAdvance && !isDayOf,
+          });
+        }
+      }
+
+      return due;
     },
   };
 

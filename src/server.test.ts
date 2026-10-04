@@ -7,7 +7,7 @@ import { createMessageRepository, type MessageRepository } from "./db/message-re
 import { migrate } from "./db/migrations.js";
 import { createEventsRepository, type EventsRepository } from "./db/repositories/events.js";
 import { createSeenRepository, type SeenRepository } from "./db/seen-repo.js";
-import { CANNED_REPLY } from "./delivery.js";
+import { CANNED_REPLY, getOnboardingMessage } from "./delivery.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
 import { createLogger } from "./logger.js";
 import { WorkQueue } from "./queue.js";
@@ -199,11 +199,17 @@ describe("group discovery", () => {
   it("logs and replies to group and private text during discovery", async () => {
     const lines: string[] = [];
     const { app, zalo, queue } = testApp("", lines);
-    const group = envelope({
+    const groupMention = envelope({
       chatId: "group-9",
       chatType: "GROUP",
-      text: `hello ${secret}`,
+      text: `@bot hello ${secret}`,
       extra: { leaked: token },
+    });
+    const groupSilent = envelope({
+      chatId: "group-9",
+      chatType: "GROUP",
+      messageId: "msg-silent",
+      text: "just chatting among friends",
     });
     const privateChat = envelope({
       chatId: "user-9",
@@ -211,7 +217,8 @@ describe("group discovery", () => {
       messageId: "msg-private",
       senderName: "Minh",
     });
-    assert.equal((await post(app, JSON.stringify(group))).statusCode, 200);
+    assert.equal((await post(app, JSON.stringify(groupMention))).statusCode, 200);
+    assert.equal((await post(app, JSON.stringify(groupSilent))).statusCode, 200);
     assert.equal((await post(app, JSON.stringify(privateChat))).statusCode, 200);
     await queue.drain();
     const joined = lines.join("\n");
@@ -222,7 +229,7 @@ describe("group discovery", () => {
     assert.equal(joined.includes(secret), false);
     assert.equal(joined.includes(token), false);
     assert.deepEqual(zalo.sends, [
-      { chatId: "group-9", text: CANNED_REPLY },
+      { chatId: "group-9", text: getOnboardingMessage("group-9") },
       { chatId: "user-9", text: CANNED_REPLY },
     ]);
     await app.close();
@@ -266,7 +273,7 @@ describe("group discovery", () => {
   it("replies to a private text chat and stays silent for other groups, bot senders, and images", async () => {
     const { app, zalo, queue } = testApp("group-1");
     await post(app, JSON.stringify(envelope({ isBot: true, messageId: "bot-msg" })));
-    await post(app, JSON.stringify(envelope({ chatId: "group-2", messageId: "other-group" })));
+    await post(app, JSON.stringify(envelope({ chatId: "group-2", messageId: "other-group", text: "no mention here" })));
     await post(
       app,
       JSON.stringify(
@@ -291,6 +298,52 @@ describe("group discovery", () => {
     );
     await queue.drain();
     assert.deepEqual(zalo.sends, [{ chatId: "user-9", text: CANNED_REPLY }]);
+    await app.close();
+  });
+
+  it("replies with onboarding message when mentioned in an unlisted group", async () => {
+    const { app, zalo, queue } = testApp("group-1");
+    await post(
+      app,
+      JSON.stringify(
+        envelope({ chatId: "group-unlisted", messageId: "unlisted-msg", text: "@bot xin chao" }),
+      ),
+    );
+    await queue.drain();
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-unlisted", text: getOnboardingMessage("group-unlisted") },
+    ]);
+    await app.close();
+  });
+
+  it("allows multiple family chat IDs configured via comma-separated list", async () => {
+    const zalo = fakeZalo();
+    const queue = new WorkQueue();
+    const app = buildServer({
+      config: loadConfig({
+        ZALO_BOT_TOKEN: token,
+        FAMILY_CHAT_IDS: "group-a, group-b",
+        WEBHOOK_URL: "https://family.example/webhooks/zalo",
+        WEBHOOK_SECRET: secret,
+        MODE: "webhook",
+        PORT: "3000",
+        GEMINI_API_KEY: "dummy-key",
+      }),
+      log: createLogger({ write: () => {}, secrets: [token, secret] }),
+      zalo,
+      queue,
+    });
+
+    await post(app, JSON.stringify(envelope({ chatId: "group-a", messageId: "msg-a", text: "@bot chao A" })));
+    await post(app, JSON.stringify(envelope({ chatId: "group-b", messageId: "msg-b", text: "@bot chao B" })));
+    await post(app, JSON.stringify(envelope({ chatId: "group-c", messageId: "msg-c", text: "@bot chao C" })));
+    await queue.drain();
+
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-a", text: CANNED_REPLY },
+      { chatId: "group-b", text: CANNED_REPLY },
+      { chatId: "group-c", text: getOnboardingMessage("group-c") },
+    ]);
     await app.close();
   });
 

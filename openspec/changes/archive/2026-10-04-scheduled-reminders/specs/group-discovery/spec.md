@@ -1,10 +1,4 @@
-# group-discovery Specification
-
-## Purpose
-
-Learn the family group id from a live Zalo delivery, support multiple allowed family chat IDs (`FAMILY_CHAT_IDS`), and ensure the bot only participates in group conversations when explicitly addressed by mention or reply.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Unset family chat allows every group
 While `FAMILY_CHAT_IDS` is empty (or unset), every group is treated as an unlisted new chat. The process SHALL log `chat.id`, `chat_type`, sender id, and sender display name for every delivery that has a message id. If an incoming group text message addresses the bot (via @mention or direct reply), the process SHALL reply with the onboarding message: `Nhóm này chưa nằm trong danh sách cho phép. Vui lòng thêm chat ID "<chat_id>" vào FAMILY_CHAT_IDS để kích hoạt bot nhé.` displaying that group's actual `chat.id`. If a group message does not address the bot, the process SHALL remain silent.
@@ -16,10 +10,6 @@ While `FAMILY_CHAT_IDS` is empty (or unset), every group is treated as an unlist
 #### Scenario: Group message without mention when FAMILY_CHAT_IDS is empty
 - **WHEN** `FAMILY_CHAT_IDS` is empty and members chat without mentioning or replying to the bot
 - **THEN** the delivery is logged for discovery, and no Zalo message is sent
-
-#### Scenario: Private message is logged during discovery
-- **WHEN** `FAMILY_CHAT_IDS` is empty and a person sends a private text message
-- **THEN** the log includes `chat_type` of `PRIVATE`
 
 ### Requirement: Matching group text requires mention or reply
 When `FAMILY_CHAT_IDS` is configured with one or more chat IDs, the process SHALL process incoming text messages in any listed family group ONLY when the bot is @mentioned or when the message is a direct reply to one of the bot's messages. Messages that do not mention the bot or reply to the bot SHALL be ignored silently. When triggered, the process SHALL generate and send a conversational LLM reply.
@@ -36,21 +26,6 @@ When `FAMILY_CHAT_IDS` is configured with one or more chat IDs, the process SHAL
 - **WHEN** a member in an allowed family chat replies directly to a previous message sent by the bot
 - **THEN** the bot processes the message and responds with an LLM-generated answer
 
-#### Scenario: Bot's own message is ignored
-- **WHEN** a delivery in the family group has a sender marked as a bot
-- **THEN** no Zalo message is sent
-
-### Requirement: Private text triggers conversational reply
-The process SHALL accept incoming text messages in private chats (direct messages) whose sender is not a bot, and respond with an LLM-generated reply. Non-text events (images, stickers, voice) in private chats SHALL NOT be answered.
-
-#### Scenario: Direct text message
-- **WHEN** a person sends a text message in a private chat
-- **THEN** that chat receives an LLM-generated conversational reply
-
-#### Scenario: Direct image
-- **WHEN** a private chat delivers an image event
-- **THEN** no Zalo message is sent
-
 ### Requirement: Every other group stays silent
 When `FAMILY_CHAT_IDS` is configured and an incoming group message arrives for a new or unlisted `chat.id` not present in `FAMILY_CHAT_IDS`, the process SHALL reply with `Nhóm này chưa nằm trong danh sách cho phép. Vui lòng thêm chat ID "<chat_id>" vào FAMILY_CHAT_IDS để kích hoạt bot nhé.` substituting the group's actual `chat.id` if the bot is @mentioned or replied to, and SHALL stay silent and send no message if the bot is not addressed.
 
@@ -60,11 +35,4 @@ When `FAMILY_CHAT_IDS` is configured and an incoming group message arrives for a
 
 #### Scenario: Unlisted group chat without mention
 - **WHEN** `FAMILY_CHAT_IDS` is set to ["group-1"] and members chat in unlisted "group-2" without mentioning the bot
-- **THEN** no Zalo message is sent
-
-### Requirement: Non-text events are not answered
-The process SHALL respond only to text messages. Image, sticker, voice, and unsupported events in the family group SHALL be logged and SHALL NOT be answered.
-
-#### Scenario: Image in the family group
-- **WHEN** `FAMILY_CHAT_IDS` is set and the family group delivers an image event
 - **THEN** no Zalo message is sent

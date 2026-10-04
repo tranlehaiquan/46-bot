@@ -266,4 +266,89 @@ describe("EventsRepository", () => {
       assert.equal(upcoming[1]?.daysRemaining, 5);
     });
   });
+
+  describe("Reminder Tracking & Due Reminders", () => {
+    it("tracks sent reminders idempotently", () => {
+      const ev = repo.createEvent({
+        chatId: "chat-1",
+        title: "Test Event",
+        day: 5,
+        month: 10,
+        createdBy: "user-1",
+      });
+      assert.equal(repo.isReminderSent(ev.id, "2026-10-05"), false);
+      repo.recordReminderSent(ev.id, "2026-10-05");
+      assert.equal(repo.isReminderSent(ev.id, "2026-10-05"), true);
+      assert.equal(repo.isReminderSent(ev.id, "2026-10-06"), false);
+
+      // Duplicate record is ignored without throwing
+      repo.recordReminderSent(ev.id, "2026-10-05");
+      assert.equal(repo.isReminderSent(ev.id, "2026-10-05"), true);
+    });
+
+    it("identifies events due for day-of and advance reminders", () => {
+      const refDate = createUtc7Date(2026, 10, 5);
+
+      // Event happening today (day-of)
+      const ev1 = repo.createEvent({
+        chatId: "chat-1",
+        title: "Sinh nhật Ba",
+        day: 5,
+        month: 10,
+        year: 2026,
+        remindDaysBefore: 0,
+        createdBy: "user-1",
+      });
+
+      // Event happening in 3 days, with remindDaysBefore = 3 (advance alert due today)
+      const ev2 = repo.createEvent({
+        chatId: "chat-1",
+        title: "Giỗ Cụ",
+        calendar: "solar",
+        day: 8,
+        month: 10,
+        year: 2026,
+        remindDaysBefore: 3,
+        createdBy: "user-1",
+      });
+
+      // Event happening in 5 days, with remindDaysBefore = 3 (not due today)
+      repo.createEvent({
+        chatId: "chat-1",
+        title: "Khám sức khỏe",
+        day: 10,
+        month: 10,
+        year: 2026,
+        remindDaysBefore: 3,
+        createdBy: "user-1",
+      });
+
+      // Event in chat-2
+      const ev4 = repo.createEvent({
+        chatId: "chat-2",
+        title: "Họp chi bộ",
+        day: 5,
+        month: 10,
+        year: 2026,
+        remindDaysBefore: 0,
+        createdBy: "user-2",
+      });
+
+      // Query for chat-1
+      const dueChat1 = repo.findEventsDueForReminder(refDate, "chat-1");
+      assert.equal(dueChat1.length, 2);
+      assert.equal(dueChat1[0]?.event.id, ev1.id);
+      assert.equal(dueChat1[0]?.isAdvanceNotice, false);
+      assert.equal(dueChat1[0]?.daysRemaining, 0);
+
+      assert.equal(dueChat1[1]?.event.id, ev2.id);
+      assert.equal(dueChat1[1]?.isAdvanceNotice, true);
+      assert.equal(dueChat1[1]?.daysRemaining, 3);
+
+      // Query for all chats
+      const dueAll = repo.findEventsDueForReminder(refDate);
+      assert.equal(dueAll.length, 3);
+      assert.ok(dueAll.some((d) => d.event.id === ev4.id));
+    });
+  });
 });

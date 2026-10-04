@@ -1,178 +1,165 @@
-# Task: Build "Family Bot", a Zalo group-chat bot for my family
+# Family Bot (Zalo Bot)
 
-You are building a small, reliable, self-hosted Zalo bot for ONE family group chat, deployed with Docker Compose on Dokploy. Work in phases, run and test each phase before moving on, and keep the code simple. Before writing code, read the official Zalo Bot docs (https://bot.zapps.me/, including the webhook guide and API pages for setWebhook, deleteWebhook, getWebhookInfo, sendMessage, sendChatAction) and the `zalo-bot-js` README (https://github.com/KaiyoDev/zalo-bot-js), then give me a short plan. Do not guess API shapes: log a real incoming group webhook payload first and adapt to it.
+Trợ lý ảo thông minh, thân thiện dành riêng cho nhóm chat gia đình trên Zalo. Bot được xây dựng trên nền tảng Node.js 22, TypeScript, SQLite, Fastify và tích hợp mô hình ngôn ngữ lớn (Gemini 3.8 Flash / DeepSeek) thông qua Vercel AI SDK với khả năng tự động gọi công cụ (Function Calling / Tool Calling).
 
-## Goals and scope (Version 1)
+---
 
-The bot replies ONLY when mentioned (or when someone replies to one of its messages), and also sends scheduled messages that I configure.
+## 🌟 What ZaloBot Can Do (Khả năng & Tính năng)
 
-Features in V1:
+ZaloBot đóng vai trò là một thành viên hỗ trợ đa năng trong gia đình với các khả năng cốt lõi:
 
-1. **Shared lists**: shopping, to-do, packing, etc. (create, add, remove, check off, show).
-2. **Events and reminders**: one unified model for reminders, appointments, birthdays, and anniversaries, with recurrence and "remind N days before". Must support both **solar and lunar (âm lịch)** dates, including yearly recurrence for lunar dates (e.g. death anniversaries / giỗ).
-3. **Scheduled messages**: daily and weekly messages (e.g. today's events, upcoming birthdays), configurable by me.
-4. **Memory**: (a) short-term conversation history, (b) long-term "facts" the bot saves on explicit request ("nhớ giúp là..."), (c) a **family memory book** of stories and memories that can be saved and recalled.
+### 1. 🤖 Trò chuyện & Tương tác thông minh
+- **Kích hoạt khi cần:** Phản hồi tự động khi được nhắc tên (`@bot`) hoặc khi có thành viên trong nhóm trả lời (`reply`) tin nhắn của bot.
+- **Phong cách thân thiện:** Giọng điệu ấm áp, tự nhiên, gần gũi như người trong gia đình; ngôn ngữ mặc định là tiếng Việt (tự động chuyển sang tiếng Anh nếu người dùng chat bằng tiếng Anh).
+- **Định dạng hiển thị Zalo:** Tự động định dạng văn bản thuần, không dùng Markdown phức tạp (tránh lỗi hiển thị ký tự thô trên Zalo), hiển thị danh sách dạng bullet (`•`) hoặc số thứ tự rõ ràng kèm emoji sinh động.
+- **Nhận diện ngữ cảnh:** Lưu trữ lịch sử 20 lượt trò chuyện gần nhất, ghi nhận tên người gửi (Bố, Mẹ, Con...) để hiểu đúng ngữ cảnh và xưng hô chuẩn xác.
 
-Out of scope for V1 (keep the design extensible so tools can be added later, but do NOT implement now): web search, weather, translation/unit/currency conversion, image understanding, Google Calendar sync.
+### 2. 📝 Quản lý danh sách dùng chung (Shared Lists)
+- Tạo và quản lý nhiều danh sách khác nhau trong nhóm chat (ví dụ: *Đi chợ*, *Việc nhà*, *Đồ chuẩn bị đi du lịch*, *Đồ cần mua*...).
+- Thêm một hoặc nhiều món cùng lúc vào danh sách.
+- Đánh dấu hoàn thành (`[x]`) hoặc chưa hoàn thành (`[ ]`).
+- Xóa món hoặc xem toàn bộ danh sách một cách trực quan, rõ ràng.
 
-## Tech stack
+### 3. 📅 Quản lý Sự kiện & Nhắc nhở Âm / Dương lịch (Events & Reminders)
+- **Lịch Âm & Dương chuẩn xác:** Tích hợp thuật toán chuyển đổi Âm lịch Việt Nam (múi giờ UTC+7, thiên văn Hồ Ngọc Đức), hỗ trợ chính xác cả năm nhuận và tháng nhuận.
+- **Đa dạng loại sự kiện:** Quản lý ngày giỗ chạp (`gio`), sinh nhật (`birthday`), lịch hẹn khám bệnh (`appointment`), ngày kỷ niệm (`anniversary`), nhắc nhở việc quan trọng (`reminder`).
+- **Tần suất lặp lại (Recurrence):** Tự động tính toán ngày kế tiếp cho các sự kiện định kỳ hàng năm (`yearly`), hàng tháng (`monthly`), hàng tuần (`weekly`), hàng ngày (`daily`), hoặc diễn ra một lần (`none`).
+- **Nhắc nhở trước N ngày:** Cài đặt số ngày cần nhắc trước (`remindDaysBefore`) để gia đình chuẩn bị chu đáo (mua sắm đồ cúng giỗ, quà sinh nhật...).
 
-- Node.js 22 + TypeScript (strict), ESM.
-- Zalo: `zalo-bot-js` for the API client and update handling, with **webhook as the primary mode**. Keep long-polling as an optional mode for local development only (MODE env var).
-- HTTP server for the webhook: Fastify or Express (pick one, justify briefly).
-- LLM: Vercel AI SDK (`ai`) with the DeepSeek provider (`@ai-sdk/deepseek` or an OpenAI-compatible provider). Use the NON-thinking chat model by default (known tool-calling issues with thinking mode in some SDK versions); model name configurable via env. Check current DeepSeek model names in its docs.
-- Tools defined with `zod` schemas using the AI SDK's tool calling. Cap tool steps (max 4 per request) using the correct option for the installed SDK version (`stopWhen` / `maxSteps`).
-- Storage: SQLite via `better-sqlite3`, WAL mode, busy timeout, file at `/data/family.db`. Put all queries behind a small data-access layer (repository functions) so it could move to Postgres later.
-- Scheduling: `node-cron` (or similar) inside the same process, timezone `Asia/Ho_Chi_Minh`.
-- Run exactly one instance (SQLite single writer).
+### 4. 🇻🇳 Tra cứu & Đồng bộ Ngày lễ Việt Nam (Vietnamese Holidays)
+- **Dữ liệu đầy đủ:** Cập nhật toàn bộ các ngày nghỉ lễ chính thức theo Bộ luật Lao động (Tết Nguyên Đán, Giỗ Tổ Hùng Vương, 30/4 - 1/5, Quốc khánh 2/9, Tết Dương lịch) cùng số ngày nghỉ quy định.
+- **Lễ hội truyền thống:** Tra cứu các ngày lễ phong tục cổ truyền (Tết Trung Thu, Lễ Vu Lan, Tết Hàn Thực, Tết Đoan Ngọ, Tết Ông Công Ông Táo...).
+- **Đồng bộ tự động:** Tính năng nhập tự động các ngày lễ vào lịch sự kiện của nhóm chat chỉ bằng một câu lệnh.
 
-## Webhook mode (primary)
+### 5. 🔍 Tìm kiếm thông tin thời gian thực (Real-time Web Search)
+- Tích hợp công cụ tìm kiếm Tavily Search để tra cứu thông tin thời gian thực trên Internet: thời tiết hôm nay, giá cả thị trường, tin tức nóng, kết quả thể thao, công thức nấu ăn...
+- Tổng hợp thông tin ngắn gọn, súc tích kèm nguồn tham khảo khi cần.
 
-- Endpoint: `POST /webhooks/zalo`. Registered with Zalo via `setWebhook` (JSON body with `url` and `secret_token`; both required; secret 8 to 256 chars; production URL must be HTTPS).
-- Verify the `X-Bot-Api-Secret-Token` header on every request using a constant-time comparison; reject with 401 otherwise. Require `Content-Type: application/json` and set a small body size limit.
-- **Acknowledge fast**: respond `200` with JSON (e.g. `{"message":"Success"}`) immediately, then process asynchronously (in-process queue with per-chat ordering and bounded concurrency). Never do LLM calls before responding.
-- Dedupe by `message_id` (persisted in SQLite, with periodic cleanup), because deliveries can repeat and redeploys can overlap briefly.
-- On startup (webhook mode): call `getWebhookInfo`; if the registered URL differs from `WEBHOOK_URL`, call `setWebhook`. Do not re-register on every start if unchanged. Log the outcome without logging secrets.
-- Provide a `GET /health` endpoint (returns 200 if the process and DB are OK) for the Docker healthcheck. Do not expose any other routes.
-- Polling mode (local dev only): before polling, call `deleteWebhook` and warn clearly in logs that this unregisters any webhook for that token. README must say: use a SEPARATE test bot token for local development, never the production token.
+### 6. ⏰ Nhắc nhở & Điểm tin tự động (Scheduled Messages)
+- **Bản tin buổi sáng (07:00):** Điểm tin ngày mới, sự kiện hôm nay, các ngày lễ hoặc sinh nhật/ngày giỗ sắp diễn ra trong 7 ngày tới.
+- **Tổng kết tuần (Chủ nhật 20:00):** Tổng hợp lịch trình, kế hoạch và các việc cần chú ý cho tuần tới.
+- **Thông báo nhắc hẹn (08:00):** Gửi tin nhắn thông báo đúng ngày diễn ra sự kiện hoặc trước N ngày theo cài đặt.
+- **Chống gửi lặp (Idempotent):** Ghi nhận trạng thái đã gửi vào SQLite để đảm bảo không bao giờ spam hay gửi trùng lặp khi khởi động lại ứng dụng.
 
-## Zalo platform constraints (verify against the official docs)
+### 7. 🛡️ An toàn, Tin cậy & Hiệu năng cao
+- **Acknowledge tức thì (Fast ack):** Phản hồi Webhook 200 OK ngay lập tức (< 200ms) để không bị Zalo timeout, sau đó xử lý bất đồng bộ qua hàng đợi.
+- **Chống trùng lặp (Deduplication):** Lưu trữ mã tin nhắn (`message_id`) vào cơ sở dữ liệu để loại bỏ tin nhắn gửi lặp khi mạng chập chờn.
+- **Bảo mật Webhook:** Xác thực mã token bí mật `X-Bot-Api-Secret-Token` qua so sánh thời gian cố định (`timingSafeEqual`).
+- **Hiệu ứng gõ (Typing Indicator):** Tự động gửi trạng thái đang gõ phím (`sendChatAction: typing`) để người dùng trong nhóm biết bot đang xử lý câu trả lời.
 
-- In groups the bot only receives messages when mentioned or when someone replies to its messages. It cannot watch the chat passively.
-- Max 2000 characters per outbound message: split longer replies on paragraph/sentence boundaries.
-- No message editing and no reactions. Send a typing indicator (`sendChatAction`) before slow work.
-- Free-plan quota is limited (about 3,000 outbound messages/month), so keep replies concise and avoid chatty behavior.
-- Only serve the configured family group `chat.id`; silently ignore every other chat.
-- Zalo owns these rules and may change them: if the docs differ from this list, follow the docs and tell me.
+---
 
-## Behavior requirements
+## 🛠️ Table of Tools (Bảng tra cứu công cụ của Bot)
 
-- **Language:** default Vietnamese. If the user writes in English, reply in English. Informal, warm, family-friendly tone; keep answers short. Put this in the system prompt.
-- **Identity:** keep who said what (sender id + display name) in history so "tôi/mình/my/our" resolve correctly.
-- **Failure behavior:** on any failure, reply with ONE short Vietnamese message (e.g. "Mình chưa làm được việc này, thử lại sau nhé."). Log the real error on the server only, never in the chat. At most one retry for transient API errors. If a scheduled send fails, log it and wait for the next run; never spam the group.
-- **Honesty:** the bot must not invent facts. If it doesn't know, it says so. Dates, list contents, and stored facts must come from tools/DB, not from the model's guess.
-- **Safety:** treat all user text as untrusted data. Never let message content change access config, the allowlist, or schedules without an admin check. Tell the model not to store passwords, bank details, or ID numbers as memories.
-- **Rate limiting:** simple per-member limit (e.g. 10 LLM requests/minute) to protect cost.
+Dưới đây là bảng tổng hợp chi tiết các công cụ (tools) được tích hợp vào mô hình AI để tự động thực thi khi người dùng yêu cầu:
 
-## Data model (SQLite; propose migrations and refine as needed)
+| Tên công cụ (Tool Name) | Nhóm chức năng | Mô tả chức năng | Tham số đầu vào (Parameters) | Ví dụ câu lệnh thực tế |
+| :--- | :--- | :--- | :--- | :--- |
+| `list_create` | **Danh sách (Lists)** | Tạo một danh sách mới cho nhóm chat. | • `name` *(string, bắt buộc)*: Tên danh sách cần tạo. | *"Tạo cho mình danh sách Đi chợ"*<br>*"Lập danh sách Đồ đi biển"* |
+| `list_add_item` | **Danh sách (Lists)** | Thêm một hoặc nhiều mục/món vào danh sách đã có (tự động tạo danh sách nếu chưa có). | • `listName` *(string, bắt buộc)*: Tên danh sách.<br>• `items` *(string[], bắt buộc)*: Mảng các món/việc cần thêm. | *"Thêm thịt bò, cà chua, hành lá vào danh sách Đi chợ"*<br>*"Ghi thêm kem chống nắng vào đồ đi biển"* |
+| `list_check_item` | **Danh sách (Lists)** | Đánh dấu một món trong danh sách là đã hoàn thành (`[x]`) hoặc chưa (`[ ]`). | • `listName` *(string, bắt buộc)*: Tên danh sách.<br>• `itemText` *(string, bắt buộc)*: Tên hoặc từ khóa món.<br>• `done` *(boolean, mặc định `true`)*: Trạng thái hoàn thành. | *"Đã mua thịt bò rồi nhé"*<br>*"Check xong cà chua trong danh sách Đi chợ"*<br>*"Bỏ tích món hành lá"* |
+| `list_remove_item` | **Danh sách (Lists)** | Xóa bỏ hẳn một món ra khỏi danh sách. | • `listName` *(string, bắt buộc)*: Tên danh sách.<br>• `itemText` *(string, bắt buộc)*: Tên hoặc từ khóa món cần xóa. | *"Xóa cà chua khỏi danh sách Đi chợ"*<br>*"Bỏ món kem chống nắng đi"* |
+| `list_show` | **Danh sách (Lists)** | Hiển thị nội dung chi tiết của một danh sách hoặc xem tất cả danh sách hiện có trong nhóm. | • `listName` *(string, tùy chọn)*: Tên danh sách cần xem. Nếu để trống sẽ liệt kê tất cả danh sách. | *"Xem danh sách Đi chợ"*<br>*"Hiện tại nhóm mình có những danh sách nào?"* |
+| `event_add` | **Sự kiện & Nhắc nhở (Events)** | Thêm sự kiện, lịch hẹn, sinh nhật, ngày giỗ chạp, nhắc nhở (hỗ trợ cả Dương lịch và Âm lịch). | • `title` *(string, bắt buộc)*: Tên sự kiện.<br>• `kind` *(enum: `event`, `reminder`, `birthday`, `anniversary`, `gio`, `appointment`)*.<br>• `calendar` *(enum: `solar`, `lunar`, mặc định `solar`)*.<br>• `day` *(number, 1–31)*.<br>• `month` *(number, 1–12)*.<br>• `year` *(number, tùy chọn)*.<br>• `isLeapMonth` *(boolean, mặc định `false`)*.<br>• `recurrence` *(enum: `none`, `yearly`, `monthly`, `weekly`, `daily`)*.<br>• `remindDaysBefore` *(number, số ngày nhắc trước)*.<br>• `notes` *(string, tùy chọn)*. | *"Nhắc ngày giỗ ông nội vào ngày 15 tháng 8 âm lịch hàng năm"*<br>*"Thêm sinh nhật Mẹ ngày 24/11 hàng năm, nhắc trước 3 ngày"*<br>*"Hẹn lịch khám mắt ngày 10/10/2026"* |
+| `event_list_upcoming` | **Sự kiện & Nhắc nhở (Events)** | Liệt kê các sự kiện, ngày giỗ, sinh nhật sắp tới trong khoảng thời gian xác định. | • `windowDays` *(number, 1–365, mặc định `30`)*: Số ngày tới cần tìm. | *"Sắp tới có sự kiện hay ngày giỗ nào không?"*<br>*"Xem lịch sinh nhật trong 60 ngày tới"* |
+| `event_update` | **Sự kiện & Nhắc nhở (Events)** | Cập nhật thông tin chi tiết của một sự kiện/lịch hẹn đã lưu thông qua ID. | • `id` *(number, bắt buộc)*: ID của sự kiện.<br>• Các trường tùy chọn cập nhật: `title`, `kind`, `calendar`, `day`, `month`, `year`, `recurrence`, `remindDaysBefore`, `notes`. | *"Đổi lịch khám mắt ID 3 sang ngày 15/10"*<br>*"Chỉnh sự kiện số 2 nhắc trước 5 ngày"* |
+| `event_delete` | **Sự kiện & Nhắc nhở (Events)** | Xóa bỏ một sự kiện/lịch hẹn khỏi cơ sở dữ liệu theo ID. | • `id` *(number, bắt buộc)*: ID của sự kiện cần xóa. | *"Xóa sự kiện ID 4"*<br>*"Hủy nhắc nhở số 2 giúp mình"* |
+| `holiday_list_upcoming`| **Ngày lễ Việt Nam (Holidays)** | Tra cứu các ngày nghỉ lễ chính thức hoặc lễ hội truyền thống sắp tới tại Việt Nam. | • `windowDays` *(number, 1–365, mặc định `365`)*: Khoảng thời gian tra cứu.<br>• `publicOnly` *(boolean, mặc định `false`)*: Chỉ lọc các ngày nghỉ lễ chính thức hưởng nguyên lương theo luật. | *"Sắp tới có ngày nghỉ lễ nào không?"*<br>*"Năm nay Tết Nguyên Đán rơi vào ngày nào dương lịch?"*<br>*"Bao giờ đến Tết Trung Thu?"* |
+| `holiday_import` | **Ngày lễ Việt Nam (Holidays)** | Tự động thêm các ngày nghỉ lễ chính thức hoặc toàn bộ lễ hội truyền thống vào lịch sự kiện của nhóm. | • `includeTraditional` *(boolean, mặc định `false`)*: `true` nếu muốn thêm cả các lễ truyền thống (Trung Thu, Vu Lan, Ông Táo...). | *"Lưu các ngày nghỉ lễ năm nay vào lịch nhóm"*<br>*"Nhập tất cả ngày lễ truyền thống vào lịch"* |
+| `web_search` | **Tìm kiếm Web (Search)** | Tìm kiếm thông tin thời gian thực từ Internet qua Tavily Search API. | • `query` *(string, bắt buộc)*: Từ khóa hoặc câu hỏi cần tra cứu.<br>• `maxResults` *(number, 1–5, mặc định `3`)*: Số kết quả tối đa cần trả về. | *"Thời tiết Đà Lạt cuối tuần này thế nào?"*<br>*"Giá vàng hôm nay bao nhiêu?"*<br>*"Tìm công thức nấu bò kho ngon"* |
 
-- `seen_messages(message_id PK, ts)`
-- `messages(id, chat_id, sender_id, sender_name, role, content, ts)`: short-term history; keep the last ~20 turns in the prompt, prune old rows.
-- `lists(id, chat_id, name)` and `list_items(id, list_id, text, done, added_by, ts)`
-- `events(id, chat_id, title, kind, calendar ('solar'|'lunar'), day, month, year NULLABLE, is_leap_month, recurrence ('none'|'yearly'|'monthly'|'weekly'|'daily'), remind_days_before, notes, created_by, ts)`
-- `reminders_sent(event_id, fire_date, ts)`: for idempotency.
-- `memories(id, chat_id, subject, fact, created_by, ts)`: short facts for the system prompt.
-- `memory_book(id, chat_id, title, story, people, happened_on NULLABLE, created_by, ts)`
-- `schedules(id, chat_id, cron, kind, params_json, enabled)`
-- Admins: from env `ADMIN_SENDER_IDS`.
+---
 
-## Tools to expose to the model
+## 🏗️ Kiến trúc & Công nghệ (Tech Stack)
 
-Lists: `list_create`, `list_add_item`, `list_remove_item`, `list_check_item`, `list_show`.
-Events: `event_add`, `event_list_upcoming`, `event_update`, `event_delete`.
-Memory: `remember`, `forget`, `list_memories`, `memory_book_add`, `memory_book_search`.
-Schedules (admin only): `schedule_set`, `schedule_list`, `schedule_remove`.
+- **Ngôn ngữ & Runtime:** Node.js 22 (LTS), TypeScript (Strict Mode), ESM module.
+- **Giao thức Zalo:** Webhook API chính thức của Zalo (`zalo-bot-js` & Fastify Webhook Handler).
+- **Trí tuệ nhân tạo (LLM):** Vercel AI SDK (`ai`), hỗ trợ linh hoạt cả **Google Gemini** (`@ai-sdk/google`) và **DeepSeek** (`@ai-sdk/deepseek`). Tự động xử lý multi-step tool calls (giới hạn tối đa 4 bước xử lý liên hoàn).
+- **Cơ sở dữ liệu:** SQLite thông qua thư viện siêu tốc `better-sqlite3`, chạy ở chế độ WAL (`Write-Ahead Logging`), xử lý timeout đa luồng (`busyTimeout: 5000ms`), lưu trữ file tại `/data/family.db`.
+- **Âm lịch Việt Nam:** Thư viện tính toán thiên văn dựa trên thuật toán Hồ Ngọc Đức, múi giờ GMT+7, hỗ trợ đầy đủ các chu kỳ tháng nhuận và năm nhuận.
+- **Tìm kiếm thời gian thực:** `@tavily/core` API client.
+- **Lập lịch (Scheduling):** In-process scheduler chạy nền theo múi giờ `Asia/Ho_Chi_Minh`.
+- **Triển khai (Deployment):** Docker (Node 22-slim), Docker Compose, tương thích hoàn hảo với nền tảng Dokploy.
 
-Tool descriptions must make it clear when to use `remember` (stable facts) vs `event_add` (dated things) vs `list_add_item` (shopping/to-do) vs `memory_book_add` (stories). `remember` should detect near-duplicate or conflicting facts and update rather than duplicate. On every request, load stored facts into the system prompt ("Things you know about this family: ...") with a stable prefix to benefit from prompt caching.
+---
 
-## Lunar calendar (important)
+## ⚙️ Cấu hình môi trường (.env)
 
-- Never let the LLM convert dates. Use a deterministic library or a small, well-tested implementation of the **Vietnamese** lunar calendar (time zone UTC+7; it can differ from the Chinese calendar in rare years). Support leap months.
-- For yearly lunar events, compute each year's solar date and refresh the next occurrence.
-- Add unit tests with several known conversions (e.g. Tết dates for multiple years, and a leap-month case) and state your sources. If you cannot verify a case, say so.
+Tạo file `.env` (tham khảo file mẫu `.env.example`) với các thông số cấu hình:
 
-## Scheduled messages
+| Biến môi trường | Bắt buộc | Mặc định | Ý nghĩa & Mô tả |
+| :--- | :---: | :---: | :--- |
+| `ZALO_BOT_TOKEN` | **Có** | — | Bot Token do Zalo cung cấp khi tạo bot trên Zalo Bot Platform. |
+| `WEBHOOK_URL` | **Có** | — | Địa chỉ HTTPS công khai dẫn tới endpoint webhook, ví dụ: `https://bot.example.com/webhooks/zalo`. |
+| `WEBHOOK_SECRET` | **Có** | — | Chuỗi bí mật ngẫu nhiên (từ 8 đến 256 ký tự) dùng để ký và xác thực webhook. |
+| `MODE` | **Có** | `webhook` | Chế độ chạy: `webhook` (chế độ chính thức cho môi trường production). |
+| `PORT` | Không | `3000` | Cổng HTTP server lắng nghe bên trong container. |
+| `FAMILY_CHAT_IDS` | Không | `""` | Danh sách các `chat.id` của nhóm gia đình được phục vụ (phân cách bằng dấu phẩy). |
+| `FAMILY_CHAT_ID` | Không | `""` | ID đơn lẻ của nhóm gia đình (hỗ trợ tương thích ngược). Nếu để trống, bot chạy ở chế độ **Discovery Mode**. |
+| `LLM_PROVIDER` | Không | Tự nhận diện | Nhà cung cấp AI: `gemini` hoặc `deepseek`. Tự động suy luận dựa trên API Key cung cấp. |
+| `GEMINI_API_KEY` | Tùy chọn | — | API key của Google AI Studio (nếu dùng provider Gemini). |
+| `GEMINI_MODEL` | Không | `gemini-3.8-flash` | Tên mô hình Gemini sử dụng. |
+| `DEEPSEEK_API_KEY`| Tùy chọn | — | API key của DeepSeek (nếu dùng provider DeepSeek). |
+| `DEEPSEEK_MODEL` | Không | `deepseek-chat` | Tên mô hình DeepSeek (khuyến nghị dùng bản chat, không dùng reasoner). |
+| `TAVILY_API_KEY` | Tùy chọn | — | API key của Tavily Search dùng cho công cụ tìm kiếm web thời gian thực `web_search`. |
+| `DB_PATH` | Không | `/data/family.db` | Đường dẫn tới file SQLite database (gắn với volume Docker `/data`). |
+| `TZ` | Không | `Asia/Ho_Chi_Minh` | Múi giờ hệ thống (khuyến nghị giữ nguyên giờ Việt Nam). |
 
-- Defaults: daily morning message at 07:00 (today's events + birthdays/anniversaries within the next N days) and a weekly summary (e.g. Sunday evening) listing the week ahead. Skip sending when there is nothing to report (configurable).
-- Event reminders fire at 08:00 on the target day and on each "N days before" day.
-- Idempotency: record sent reminders so restarts and redeploys never double-send. On startup, catch up missed reminders from the last few hours only.
-- Schedules come from config/env first; admin-only chat commands to change them are a bonus if time permits.
+---
 
-## Deployment: Docker Compose on Dokploy
+## 🚀 Hướng dẫn Triển khai trên Dokploy (Docker Compose)
 
-- Deploy from a Git repo using Dokploy's **Docker Compose** project type. Provide a `Dockerfile` (multi-stage, `node:22-slim`, NOT alpine, because of the native `better-sqlite3` module; run as a non-root user; the data directory must be writable by that user) and a `docker-compose.yml`.
-- Single service `bot`, `restart: unless-stopped`, ONE named volume `bot-data` mounted at `/data`. Do NOT use absolute host-path bind mounts (Dokploy cleans them on deploy). If a bind mount is ever needed, use the `../files/...` convention.
-- **Environment variables are set in the Dokploy UI.** Dokploy writes them to a `.env` file but does not inject them into containers automatically, so the service MUST declare `env_file: - .env` (or reference each variable via `${VAR}`). Do not commit a real `.env`; provide `.env.example` only. Validate all variables at startup with zod and fail fast with clear messages.
-- The container listens on port 3000 (`PORT` env, default 3000). Do NOT publish host ports in compose; Dokploy's domain settings route the public HTTPS domain to the service and port 3000 via Traefik with automatic SSL. Document exactly what to enter under Domains (service name, container port, HTTPS on).
-- Healthcheck in compose using Node (the slim image has no curl), calling `GET /health`.
-- Exactly one replica. Handle SIGTERM gracefully (stop accepting requests, finish in-flight work, close the DB), since Dokploy stops the old container on every deploy. Dedupe plus the SQLite busy timeout must make a brief redeploy overlap harmless. Test a redeploy and report what you observed.
-- Backups: a scheduled in-app backup using SQLite's backup API to `/data/backups/` (keep the last 7 daily snapshots), plus a documented restore procedure and how to pull snapshots off the server (Dokploy volume backups or manual download).
-- Logging: structured JSON to stdout only. No secrets in logs. Never log the bot token or the webhook secret.
-- README section "Deploy on Dokploy": step by step (create project, connect repo, choose Docker Compose, set env vars in the UI, add the domain, deploy, confirm webhook registration in logs, find `FAMILY_CHAT_ID`, verify), plus troubleshooting: empty env vars in the container, volume not persisting, 401s from a wrong secret, webhook not registered or pointing to an old URL, bot silent because polling mode unregistered the webhook, duplicate replies.
+### Bước 1: Khởi tạo Project trên Dokploy
+1. Trong giao diện quản trị Dokploy, chọn **Create Project** -> **Docker Compose**.
+2. Kết nối tới Git repository này.
+3. Cấu hình volume lưu trữ dữ liệu bền vững: Docker Compose đã định nghĩa sẵn named volume `bot-data` gắn vào `/data`.
 
-## Configuration (.env.example; real values go into Dokploy's env settings)
+### Bước 2: Cài đặt Biến môi trường (Environment Variables)
+Trong mục **Environment** của Dokploy, điền các giá trị từ file mẫu `.env.example`:
+- Để trống `FAMILY_CHAT_IDS` ở lần chạy đầu tiên.
+- Đặt `WEBHOOK_SECRET` là một chuỗi ngẫu nhiên an toàn (tối thiểu 16 ký tự).
+- Cung cấp `GEMINI_API_KEY` (hoặc `DEEPSEEK_API_KEY`) và `TAVILY_API_KEY`.
 
+### Bước 3: Cấu hình Tên miền (Domain & Traefik SSL)
+1. Trong mục **Domains**, thêm domain của bạn (ví dụ `bot.example.com`).
+2. Chọn Service Name là `bot`, Container Port là `3000`.
+3. Bật tùy chọn **HTTPS** (Dokploy tự động cấp chứng chỉ Let's Encrypt SSL miễn phí).
+4. Điền `WEBHOOK_URL` trong biến môi trường đúng bằng: `https://bot.example.com/webhooks/zalo`.
+
+### Bước 4: Deploy & Lấy Family Chat ID (Discovery Mode)
+1. Bấm **Deploy**.
+2. Kiểm tra Logs của container để xác nhận bot đã khởi động thành công và tự động đăng ký Webhook với Zalo qua API `setWebhook`.
+3. Trong nhóm Zalo gia đình, hãy mời bot vào nhóm và gửi một tin nhắn nhắc tên bot: `@FamilyBot xin chào`.
+4. Mở Logs trên Dokploy: Bạn sẽ thấy dòng log ghi nhận tin nhắn đến kèm thông tin `chat.id` của nhóm (loại `chat_type: GROUP`).
+5. Sao chép ID đó và cập nhật vào biến môi trường `FAMILY_CHAT_IDS` (hoặc `FAMILY_CHAT_ID`) trên Dokploy, sau đó bấm **Redeploy**. Từ lúc này, bot chỉ phản hồi nhóm gia đình của bạn.
+
+---
+
+## 💻 Phát triển cục bộ & Kiểm thử (Local Development)
+
+```bash
+# 1. Cài đặt dependencies
+pnpm install
+
+# 2. Kiểm tra Typescript và build dự án
+pnpm build
+
+# 3. Chạy toàn bộ test suites
+pnpm test
+
+# 4. Chạy kiểm tra riêng từng nhóm công cụ
+pnpm test src/tools/lists.test.ts
+pnpm test src/tools/events.test.ts
+pnpm test src/tools/holidays.test.ts
 ```
-ZALO_BOT_TOKEN=
-FAMILY_CHAT_ID=            # find it by mentioning the bot once and reading the logged payload
-ADMIN_SENDER_IDS=          # comma-separated Zalo user IDs
-DEEPSEEK_API_KEY=
-DEEPSEEK_MODEL=
-TZ=Asia/Ho_Chi_Minh
-DB_PATH=/data/family.db
-PORT=3000
-MODE=webhook               # webhook | polling (polling = local dev with a SEPARATE test token)
-WEBHOOK_URL=https://your-domain.example/webhooks/zalo
-WEBHOOK_SECRET=            # 8-256 chars, random
-```
 
-Bootstrap note: before `FAMILY_CHAT_ID` is known, run in a "discovery" mode that logs the chat id of incoming messages and replies nothing, then I set the variable and redeploy.
+---
 
-## Project structure (suggested)
+## 🔒 Xử lý sự cố thường gặp (Troubleshooting)
 
-```
-src/
-  index.ts            # wiring, startup, graceful shutdown
-  config.ts           # env parsing/validation (zod), fail fast
-  http/               # server, /webhooks/zalo, /health
-  zalo/               # bot client, webhook registration, message normalization, send helper (split, typing)
-  llm/                # model, system prompt, tool loop
-  tools/              # one file per tool group
-  db/                 # connection, migrations, repositories, backup
-  scheduler/          # cron jobs, reminder engine
-  lunar/              # lunar calendar utilities + tests
-  utils/              # logger, rate limiter, queue, text splitting
-Dockerfile
-docker-compose.yml
-.env.example
-README.md
-```
-
-## Engineering requirements
-
-- Never put the bot token in URLs that get logged; mask it in any logged URL.
-- Tests: unit tests for repositories, text splitting, lunar conversion, reminder scheduling logic (with a fake clock), and the webhook handler (valid secret, wrong secret, duplicate message_id, wrong chat id). Add a dry-run CLI mode that simulates an incoming message without Zalo so I can test the LLM and tools locally.
-- Keep dependencies minimal; explain any you add.
-
-## Phases (stop after each and show me what works)
-
-1. **Skeleton:** config validation, HTTP server with `/health` and `/webhooks/zalo` (secret check, fast ack, dedupe, allowlist, discovery mode), webhook registration, SQLite, short-term history, plain LLM reply in Vietnamese, Dockerfile + compose + Dokploy README section. Log real payloads. I will deploy this phase to Dokploy and test in the real group before you continue.
-2. **Shared lists** tools end-to-end.
-3. **Events and reminders** with solar + lunar support, plus tests.
-4. **Scheduled messages** (daily and weekly) with idempotency.
-5. **Memory:** `remember`/`forget`/`list_memories`, then the family memory book.
-6. **Hardening:** rate limiting, error messages, backups and restore, redeploy test, README polish.
-
-## Definition of done
-
-- Deploying the compose project on Dokploy brings the bot up, registers the webhook, and it answers in the family group only when mentioned; data survives container restarts, redeploys, and rebuilds.
-- All V1 features work with realistic Vietnamese and English test messages (give me a list of example messages to try).
-- Tests pass, and the README explains setup, configuration, and operations.
-
-If something in these requirements conflicts with what the Zalo API or Dokploy actually does, tell me what you found and propose the closest alternative instead of silently changing the design. Ask me questions only when you are truly blocked.
-
-## Deploy the verify slice on Dokploy
-
-This section is the first deploy only. The container acknowledges webhooks and, once `FAMILY_CHAT_ID` is set, replies with the exact sentence `Mình nhận được.` It does not call DeepSeek and it does not open a database. `MODE=polling` exits before it can call `deleteWebhook`, so use the family bot token with `MODE=webhook` only.
-
-1. In Dokploy, create a project, connect this repo, and choose the Docker Compose project type.
-2. Set environment variables in the Dokploy UI. Dokploy writes them to `.env`. The compose file loads that file with `env_file: .env`. Do not commit a real `.env`. Start from `.env.example`.
-3. Leave `FAMILY_CHAT_ID` empty on the first boot. Set `MODE=webhook`. Set `WEBHOOK_SECRET` to a random string of 8 to 256 characters. Set `PORT=3000` (the container listens there; do not publish a host port).
-4. Under Domains, set the service name to `bot`, the container port to `3000`, and turn HTTPS on. Traefik terminates TLS.
-5. Set `WEBHOOK_URL` to the exact public URL, including the path and with no trailing slash: `https://<that-domain>/webhooks/zalo`. A different slash makes every boot call `setWebhook` again.
-6. Deploy. In the logs, confirm the process is listening, then look for `setWebhook` or `testWebhook` and a verification outcome. The bot token and the webhook secret are not logged.
-7. In the family group, @mention the bot once. Copy `chat.id` from the log line whose `chat_type` is `GROUP`. A direct message is `chat_type` `PRIVATE`; leave that id out of `FAMILY_CHAT_ID`. While `FAMILY_CHAT_ID` is empty, private text and text delivered from any group receive `Mình nhận được.`
-8. Set `FAMILY_CHAT_ID` to the group id and redeploy. @mention the bot once. The group receives `Mình nhận được.`
-9. Rollback: redeploy the previous image, or stop the service. Zalo keeps the stored webhook URL. This slice does not call `deleteWebhook`. There is no database to restore.
-
-The named volume `bot-data` is mounted at `/data` and is unused in this slice. Later slices store SQLite there without changing the compose mount.
+- **Webhook trả về lỗi 401 Unauthorized:** Kiểm tra xem `WEBHOOK_SECRET` trên Dokploy có khớp với secret được đăng ký tại Zalo hay không.
+- **Bot không phản hồi trong nhóm:**
+  - Nhóm chat trên Zalo yêu cầu phải tag `@bot` hoặc ấn **Reply** vào tin nhắn của bot để bot nhận được webhook.
+  - Kiểm tra xem `FAMILY_CHAT_IDS` có chứa đúng `chat.id` của nhóm hay không.
+- **Lỗi hết quota / Rate Limit:** Bot được thiết kế để giữ câu trả lời ngắn gọn, súc tích nhằm tiết kiệm hạn ngạch tin nhắn miễn phí của Zalo Official Account.
+- **Dữ liệu danh sách hoặc sự kiện bị mất sau khi redeploy:** Đảm bảo container đang dùng named volume `bot-data` mount vào thư mục `/data` theo đúng file `docker-compose.yml`.

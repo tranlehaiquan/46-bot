@@ -107,6 +107,7 @@ describe("loadConfig", () => {
   it("accepts an empty FAMILY_CHAT_ID", () => {
     const config = loadConfig(validEnv({ FAMILY_CHAT_ID: "" }));
     assert.equal(config.familyChatId, "");
+    assert.deepEqual(config.familyChatIds, []);
     assert.equal(config.mode, "webhook");
     assert.equal(config.port, 3000);
   });
@@ -116,6 +117,27 @@ describe("loadConfig", () => {
     delete env.FAMILY_CHAT_ID;
     const config = loadConfig(env);
     assert.equal(config.familyChatId, "");
+    assert.deepEqual(config.familyChatIds, []);
+  });
+
+  it("parses comma-separated FAMILY_CHAT_IDS", () => {
+    const config = loadConfig(
+      validEnv({
+        FAMILY_CHAT_IDS: "group-1, group-2 ,group-3",
+      }),
+    );
+    assert.equal(config.familyChatId, "group-1");
+    assert.deepEqual(config.familyChatIds, ["group-1", "group-2", "group-3"]);
+  });
+
+  it("falls back to FAMILY_CHAT_ID when FAMILY_CHAT_IDS is not provided", () => {
+    const config = loadConfig(
+      validEnv({
+        FAMILY_CHAT_ID: "group-fallback",
+      }),
+    );
+    assert.equal(config.familyChatId, "group-fallback");
+    assert.deepEqual(config.familyChatIds, ["group-fallback"]);
   });
 
   it("rejects a secret shorter than 8 characters without echoing it", () => {
