@@ -163,7 +163,7 @@ describe("webhook http", () => {
 });
 
 describe("group discovery", () => {
-  it("logs a group during discovery without sending, and replies to a private chat", async () => {
+  it("logs and replies to group and private text during discovery", async () => {
     const lines: string[] = [];
     const { app, zalo, queue } = testApp("", lines);
     const group = envelope({
@@ -188,7 +188,10 @@ describe("group discovery", () => {
     assert.match(joined, /https:\/\/cdn\.example\/photo\.jpg/);
     assert.equal(joined.includes(secret), false);
     assert.equal(joined.includes(token), false);
-    assert.deepEqual(zalo.sends, [{ chatId: "user-9", text: CANNED_REPLY }]);
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-9", text: CANNED_REPLY },
+      { chatId: "user-9", text: CANNED_REPLY },
+    ]);
     await app.close();
   });
 

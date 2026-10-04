@@ -61,8 +61,10 @@ export async function handleDelivery(input: {
     return;
   }
   const isDirect = message.chatType === "PRIVATE";
-  const isFamilyGroup = message.chatType === "GROUP" && message.chatId === config.familyChatId;
-  if (!isDirect && !isFamilyGroup) {
+  const isAllowedGroup =
+    message.chatType === "GROUP" &&
+    (config.familyChatId === "" || message.chatId === config.familyChatId);
+  if (!isDirect && !isAllowedGroup) {
     return;
   }
   if (seen.has(message.messageId)) {

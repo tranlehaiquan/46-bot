@@ -6,12 +6,12 @@ Learn the family group id from a live Zalo mention, then prove the bot can speak
 
 ## Requirements
 
-### Requirement: Unset family chat stays silent
-While `FAMILY_CHAT_ID` is empty, the process SHALL log `chat.id`, `chat_type`, sender id, and sender display name for every delivery that has a message id. A group delivery SHALL NOT be answered.
+### Requirement: Unset family chat allows every group
+While `FAMILY_CHAT_ID` is empty, the process SHALL log `chat.id`, `chat_type`, sender id, and sender display name for every delivery that has a message id. The process SHALL send the exact text `Mình nhận được.` for an incoming group text message whose sender is not a bot.
 
 #### Scenario: Group mention during discovery
 - **WHEN** `FAMILY_CHAT_ID` is empty and a group text message arrives
-- **THEN** the log includes that message's `chat.id` and `chat_type` of `GROUP`, and no Zalo message is sent
+- **THEN** the log includes that message's `chat.id` and `chat_type` of `GROUP`, and that group receives one message whose text is exactly `Mình nhận được.`
 
 #### Scenario: Private message is logged during discovery
 - **WHEN** `FAMILY_CHAT_ID` is empty and a person sends a private text message

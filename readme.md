@@ -171,7 +171,7 @@ This section is the first deploy only. The container acknowledges webhooks and, 
 4. Under Domains, set the service name to `bot`, the container port to `3000`, and turn HTTPS on. Traefik terminates TLS.
 5. Set `WEBHOOK_URL` to the exact public URL, including the path and with no trailing slash: `https://<that-domain>/webhooks/zalo`. A different slash makes every boot call `setWebhook` again.
 6. Deploy. In the logs, confirm the process is listening, then look for `setWebhook` or `testWebhook` and a verification outcome. The bot token and the webhook secret are not logged.
-7. In the family group, @mention the bot once. Copy `chat.id` from the log line whose `chat_type` is `GROUP`. A direct message is `chat_type` `PRIVATE`. Leave that id out of `FAMILY_CHAT_ID`. A private text message receives `Mình nhận được.` on its own. The group stays silent until `FAMILY_CHAT_ID` is the group id.
+7. In the family group, @mention the bot once. Copy `chat.id` from the log line whose `chat_type` is `GROUP`. A direct message is `chat_type` `PRIVATE`; leave that id out of `FAMILY_CHAT_ID`. While `FAMILY_CHAT_ID` is empty, private text and text delivered from any group receive `Mình nhận được.`
 8. Set `FAMILY_CHAT_ID` to the group id and redeploy. @mention the bot once. The group receives `Mình nhận được.`
 9. Rollback: redeploy the previous image, or stop the service. Zalo keeps the stored webhook URL. This slice does not call `deleteWebhook`. There is no database to restore.
 
