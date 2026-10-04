@@ -22,4 +22,34 @@ describe("buildSystemPrompt", () => {
     assert.ok(prompt.startsWith(customPrompt));
     assert.match(prompt, /Thời gian hiện tại \(Việt Nam, GMT\+7\):/);
   });
+
+  it("injects memories into system prompt under dedicated section", () => {
+    const fixedDate = new Date("2026-10-04T12:00:00.000Z");
+    const memories = [
+      { subject: "Bố", fact: "Thích uống cà phê đen không đường" },
+      { subject: "Mẹ", fact: "Dị ứng hành tây" },
+      { subject: "Bé Na", fact: "Thích màu hồng, học lớp 4" },
+    ];
+
+    const prompt = buildSystemPrompt(DEFAULT_SYSTEM_PROMPT, fixedDate, memories);
+
+    assert.match(prompt, /### Things you know about this family:/);
+    assert.match(prompt, /- \[Bố\]: Thích uống cà phê đen không đường/);
+    assert.match(prompt, /- \[Mẹ\]: Dị ứng hành tây/);
+    assert.match(prompt, /- \[Bé Na\]: Thích màu hồng, học lớp 4/);
+
+    // Verify memories appear before time string
+    const memoryIdx = prompt.indexOf("### Things you know about this family:");
+    const timeIdx = prompt.indexOf("- Thời gian hiện tại (Việt Nam, GMT+7):");
+    assert.ok(memoryIdx < timeIdx);
+  });
+
+  it("omits memories section when no memories are passed", () => {
+    const fixedDate = new Date("2026-10-04T12:00:00.000Z");
+    const promptWithEmpty = buildSystemPrompt(DEFAULT_SYSTEM_PROMPT, fixedDate, []);
+    assert.equal(promptWithEmpty.includes("### Things you know about this family:"), false);
+
+    const promptWithUndefined = buildSystemPrompt(DEFAULT_SYSTEM_PROMPT, fixedDate, undefined);
+    assert.equal(promptWithUndefined.includes("### Things you know about this family:"), false);
+  });
 });

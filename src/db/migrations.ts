@@ -67,5 +67,29 @@ export function migrate(db: SqliteDatabase): void {
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_reminders_sent_event_date ON reminders_sent(event_id, occurrence_date);
+
+    CREATE TABLE IF NOT EXISTS memories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      fact TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      ts INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_memories_chat_subject ON memories(chat_id, subject);
+
+    CREATE TABLE IF NOT EXISTS memory_book (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      story TEXT NOT NULL,
+      people TEXT NOT NULL,
+      happened_on TEXT,
+      created_by TEXT NOT NULL,
+      ts INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_memory_book_chat ON memory_book(chat_id, ts DESC);
   `);
 }

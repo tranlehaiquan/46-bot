@@ -16,17 +16,43 @@ export const DEFAULT_SYSTEM_PROMPT = `Bạn là Family Bot, trợ lý thân thi�
 - Sự kiện và Nhắc nhở: Khi người dùng muốn đặt lịch, hẹn giờ, nhắc nhở, lưu ngày sinh nhật hoặc ngày giỗ (âm lịch/dương lịch), hãy gọi các công cụ quản lý sự kiện tương ứng (event_add, event_list_upcoming, event_update, event_delete).
   • Phân biệt Âm lịch và Dương lịch: Các ngày giỗ chạp, cúng giỗ, ngày rằm, mùng 1, Tết truyền thống luôn tính theo Âm lịch (calendar: 'lunar'). Sinh nhật, cuộc hẹn khám, lịch làm việc thường là Dương lịch (calendar: 'solar') trừ khi người dùng nói rõ là ngày âm.
   • Tần suất lặp lại (recurrence): Sinh nhật và ngày giỗ thường lặp lại hàng năm ('yearly'). Lịch hẹn hoặc công việc diễn ra một lần dùng 'none'.
+- Ghi nhớ và Cuốn sổ Kỷ niệm (Memory & Memory Book):
+  • Phân biệt rõ công cụ để chọn đúng:
+    - remember: Dùng cho thông tin, thói quen, sở thích, đặc điểm ổn định của thành viên (dị ứng thức ăn, thói quen uống cà phê, sở thích, cỡ giày, lớp học...).
+    - event_add: Dùng cho sự kiện có ngày tháng cụ thể, lịch hẹn, sinh nhật, ngày giỗ, lịch nhắc việc trong tương lai.
+    - list_add_item: Dùng cho danh sách đi chợ, mua sắm, việc cần làm ngắn hạn.
+    - memory_book_add: Dùng để lưu lại các câu chuyện, cột mốc kỷ niệm gia đình ý nghĩa trong quá khứ (chuyến du lịch, lần đầu biết bơi, kỷ niệm đáng nhớ...).
+    - memory_book_search: Dùng để tìm kiếm các kỷ niệm xưa trong sổ kỷ niệm khi gia đình ôn lại chuyện cũ.
+  • Bảo vệ quyền riêng tư: TUYỆT ĐỐI KHÔNG lưu mật khẩu, thông tin tài khoản ngân hàng, số thẻ tín dụng hoặc số CCCD/CMND. Nếu người dùng yêu cầu nhớ những thông tin này, hãy từ chối lịch sự vì lý do an toàn bảo mật.
 - Tra cứu và quản lý Ngày lễ Việt Nam: Khi người dùng hỏi về các ngày nghỉ lễ, ngày lễ sắp tới, lịch nghỉ Tết, Giỗ Tổ Hùng Vương, 30/4 - 1/5, Quốc khánh 2/9 hay các lễ hội truyền thống (Trung Thu, Vu Lan, Đoan Ngọ, Ông Táo), hãy gọi công cụ holiday_list_upcoming (dùng publicOnly: true nếu chỉ quan tâm các ngày nghỉ lễ chính thức theo luật lao động). Khi gia đình muốn lưu/thêm các ngày lễ vào lịch sự kiện của nhóm, hãy gọi holiday_import.
 - Tìm kiếm web: Khi cần thông tin thời gian thực (tin tức, sự kiện, thời tiết, giá cả...), hãy gọi công cụ web_search với câu truy vấn phù hợp rồi tổng hợp kết quả thành câu trả lời ngắn gọn, kèm nguồn nếu cần.`;
 
-export function buildSystemPrompt(basePrompt = DEFAULT_SYSTEM_PROMPT, now = new Date()): string {
+export type MemoryItem = {
+  subject: string;
+  fact: string;
+};
+
+export function formatMemoriesSection(memories?: MemoryItem[]): string {
+  if (!memories || memories.length === 0) {
+    return "";
+  }
+  const lines = memories.map((m) => `- [${m.subject}]: ${m.fact}`);
+  return `\n\n### Things you know about this family:\n${lines.join("\n")}`;
+}
+
+export function buildSystemPrompt(
+  basePrompt = DEFAULT_SYSTEM_PROMPT,
+  now = new Date(),
+  memories?: MemoryItem[],
+): string {
   const formattedTime = new Intl.DateTimeFormat("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
     dateStyle: "full",
     timeStyle: "medium",
   }).format(now);
 
-  return `${basePrompt}\n- Thời gian hiện tại (Việt Nam, GMT+7): ${formattedTime}.`;
+  const memorySection = formatMemoriesSection(memories);
+  return `${basePrompt}${memorySection}\n\n- Thời gian hiện tại (Việt Nam, GMT+7): ${formattedTime}.`;
 }
 
 export type ToolSet = NonNullable<Parameters<typeof generateText>[0]["tools"]>;
@@ -34,6 +60,7 @@ export type ToolSet = NonNullable<Parameters<typeof generateText>[0]["tools"]>;
 export interface LlmClient {
   generateReply(params: {
     systemPrompt?: string;
+    memories?: MemoryItem[];
     history: MessageRow[];
     incomingMessage: {
       senderId: string;
@@ -84,7 +111,11 @@ export function createLlmClient(options: LlmClientOptions): LlmClient {
         content: `${currentSender}: ${params.incomingMessage.content}`,
       });
 
-      const system = buildSystemPrompt(params.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
+      const system = buildSystemPrompt(
+        params.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+        new Date(),
+        params.memories,
+      );
 
       const result = await generateText({
         model,

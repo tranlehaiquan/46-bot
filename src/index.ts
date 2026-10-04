@@ -4,6 +4,7 @@ import { createListRepository } from "./db/list-repo.js";
 import { createMessageRepository } from "./db/message-repo.js";
 import { migrate } from "./db/migrations.js";
 import { createEventsRepository } from "./db/repositories/events.js";
+import { createMemoryRepository } from "./db/repositories/memory.js";
 import { createSeenRepository } from "./db/seen-repo.js";
 import { createLlmClient } from "./llm/client.js";
 import { createLogger } from "./logger.js";
@@ -51,6 +52,7 @@ async function main(): Promise<void> {
   const messageRepo = createMessageRepository(db);
   const listRepo = createListRepository(db);
   const eventsRepo = createEventsRepository(db);
+  const memoryRepo = createMemoryRepository(db);
 
   const llmClient = createLlmClient({
     provider: config.llmProvider,
@@ -68,6 +70,7 @@ async function main(): Promise<void> {
     messageRepo,
     listRepo,
     eventsRepo,
+    memoryRepo,
     llmClient,
   });
 

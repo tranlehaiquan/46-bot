@@ -6,6 +6,7 @@ import { createListRepository, type ListRepository } from "./db/list-repo.js";
 import { createMessageRepository, type MessageRepository } from "./db/message-repo.js";
 import { migrate } from "./db/migrations.js";
 import { createEventsRepository, type EventsRepository } from "./db/repositories/events.js";
+import { createMemoryRepository, type MemoryRepository } from "./db/repositories/memory.js";
 import { createSeenRepository, type SeenRepository } from "./db/seen-repo.js";
 import { CANNED_REPLY, getOnboardingMessage } from "./delivery.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
@@ -75,6 +76,7 @@ function testApp(
     messageRepo?: MessageRepository;
     listRepo?: ListRepository;
     eventsRepo?: EventsRepository;
+    memoryRepo?: MemoryRepository;
     llmClient?: LlmClient;
   },
 ) {
@@ -92,6 +94,7 @@ function testApp(
     messageRepo: options?.messageRepo,
     listRepo: options?.listRepo,
     eventsRepo: options?.eventsRepo,
+    memoryRepo: options?.memoryRepo,
     llmClient: options?.llmClient,
   });
   return { app, zalo, queue };
@@ -678,6 +681,87 @@ describe("LLM conversation and database integration", () => {
 
     const events = eventsRepo.getEventsByChat("group-1");
     assert.equal(events.length, 7);
+
+    await app.close();
+    closeDatabase(db);
+  });
+
+  it("supports long-term memory and memory book tools execution and prompt injection through conversational flow", async () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+    const memoryRepo = createMemoryRepository(db);
+
+    // Seed existing memory to verify prompt injection
+    memoryRepo.upsertMemory("group-1", "Bố", "Thích uống cà phê đen không đường", "user-1");
+
+    let receivedMemories: Array<{ subject: string; fact: string }> | undefined;
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        receivedMemories = params.memories;
+        assert.ok(params.tools, "Tools should be provided to LLM");
+        const tools = params.tools as Record<string, { execute?: (args: any, opt?: any) => Promise<any> }>;
+        assert.ok(tools.remember, "remember tool should exist");
+        assert.ok(tools.forget, "forget tool should exist");
+        assert.ok(tools.list_memories, "list_memories tool should exist");
+        assert.ok(tools.memory_book_add, "memory_book_add tool should exist");
+        assert.ok(tools.memory_book_search, "memory_book_search tool should exist");
+
+        // Simulate tool calls: remember a new fact and add a story
+        await tools.remember.execute?.({
+          subject: "Mẹ",
+          fact: "Dị ứng hành tây",
+        });
+
+        await tools.memory_book_add.execute?.({
+          title: "Chuyến đi Đà Lạt đầu tiên",
+          story: "Cả nhà cùng nhau đi chợ đêm uống sữa đậu nành.",
+          people: "Bố, Mẹ, Bé Na",
+          happenedOn: "2024-06-15",
+        });
+
+        return "Đã ghi nhớ thông tin về Mẹ và lưu kỷ niệm Đà Lạt vào sổ gia đình!";
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      memoryRepo,
+      llmClient: mockLlm,
+    });
+
+    const msg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Nhớ là mẹ bị dị ứng hành tây nhé, và lưu kỷ niệm chuyến đi Đà Lạt đầu tiên nữa",
+      senderId: "user-1",
+      senderName: "Bố",
+      messageId: "msg-mem-1",
+    });
+
+    await post(app, JSON.stringify(msg));
+    await queue.drain();
+
+    // Verify LLM received injected memories
+    assert.ok(receivedMemories);
+    assert.equal(receivedMemories.length, 1);
+    assert.equal(receivedMemories[0].subject, "Bố");
+    assert.equal(receivedMemories[0].fact, "Thích uống cà phê đen không đường");
+
+    // Verify response sent
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: "Đã ghi nhớ thông tin về Mẹ và lưu kỷ niệm Đà Lạt vào sổ gia đình!" },
+    ]);
+
+    // Verify persistence in SQLite
+    const memories = memoryRepo.listMemories("group-1");
+    assert.equal(memories.length, 2);
+    const stories = memoryRepo.searchStories("group-1", "Đà Lạt");
+    assert.equal(stories.length, 1);
+    assert.equal(stories[0].title, "Chuyến đi Đà Lạt đầu tiên");
 
     await app.close();
     closeDatabase(db);

@@ -2,6 +2,7 @@ import type { AppConfig } from "./config.js";
 import type { ListRepository } from "./db/list-repo.js";
 import type { MessageRepository } from "./db/message-repo.js";
 import type { EventsRepository } from "./db/repositories/events.js";
+import type { MemoryRepository } from "./db/repositories/memory.js";
 import type { SeenRepository } from "./db/seen-repo.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
 import type { Logger } from "./logger.js";
@@ -9,6 +10,7 @@ import { isMentionedOrReplied, normalizeDelivery } from "./normalize.js";
 import { createEventTools } from "./tools/events.js";
 import { createHolidayTools } from "./tools/holidays.js";
 import { createListTools } from "./tools/lists.js";
+import { createMemoryTools } from "./tools/memory.js";
 import { createWebSearchTool } from "./tools/web-search.js";
 import { splitText } from "./utils/split-text.js";
 import type { ZaloClient } from "./zalo-client.js";
@@ -28,12 +30,13 @@ export type DeliveryDependencies = {
   messageRepo?: MessageRepository;
   listRepo?: ListRepository;
   eventsRepo?: EventsRepository;
+  memoryRepo?: MemoryRepository;
   llmClient?: LlmClient;
   seen?: Set<string>;
 };
 
 export async function handleDelivery(input: DeliveryDependencies): Promise<void> {
-  const { payload, config, log, zalo, seenRepo, messageRepo, listRepo, eventsRepo, llmClient, seen } = input;
+  const { payload, config, log, zalo, seenRepo, messageRepo, listRepo, eventsRepo, memoryRepo, llmClient, seen } = input;
   if (!payload || payload.length === 0) {
     log.info({ event: "unrecognized_delivery" });
     return;
@@ -161,14 +164,24 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       ? createWebSearchTool(config.tavilyApiKey)
       : undefined;
 
+    const memoryTools = memoryRepo
+      ? createMemoryTools(memoryRepo, {
+          chatId: message.chatId,
+          senderName: message.senderName || message.senderId,
+        })
+      : undefined;
+
     const tools =
-      listTools || eventTools || holidayTools || searchTools
-        ? { ...listTools, ...eventTools, ...holidayTools, ...searchTools }
+      listTools || eventTools || holidayTools || searchTools || memoryTools
+        ? { ...listTools, ...eventTools, ...holidayTools, ...searchTools, ...memoryTools }
         : undefined;
+
+    const memories = memoryRepo ? memoryRepo.listMemories(message.chatId) : undefined;
 
     let replyText: string;
     try {
       replyText = await llmClient.generateReply({
+        memories,
         history,
         incomingMessage: {
           senderId: message.senderId,

@@ -59,4 +59,19 @@ describe("SQLite database layer", () => {
       closeDatabase(db);
     }
   });
+
+  it("creates memories and memory_book tables idempotently", () => {
+    const db = openDatabase(":memory:");
+    try {
+      migrate(db);
+      migrate(db); // Idempotency check
+
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('memories', 'memory_book')")
+        .all() as Array<{ name: string }>;
+      assert.equal(tables.length, 2);
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });
