@@ -6,6 +6,10 @@ import type { MemoryRepository } from "./db/repositories/memory.js";
 import type { ChannelRepository } from "./db/repositories/channels.js";
 import type { SeenRepository } from "./db/seen-repo.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
+import {
+  detectPromptInjection,
+  PROMPT_INJECTION_REFUSAL_MESSAGE,
+} from "./llm/prompt-security.js";
 import type { Logger } from "./logger.js";
 import { isMentionedOrReplied, normalizeDelivery } from "./normalize.js";
 import { createEventTools } from "./tools/events.js";
@@ -211,21 +215,32 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     const memories = memoryRepo ? memoryRepo.listMemories(message.chatId) : undefined;
 
     let replyText: string;
-    try {
-      replyText = await llmClient.generateReply({
-        memories,
-        history,
-        incomingMessage: {
-          senderId: message.senderId,
-          senderName: message.senderName,
-          content: message.text,
-        },
-        tools,
+    const injectionCheck = detectPromptInjection(message.text);
+    if (injectionCheck.isInjection) {
+      log.warn({
+        event: "prompt_injection_blocked",
+        chatId: message.chatId,
+        senderId: message.senderId,
+        reason: injectionCheck.reason,
       });
-    } catch (error) {
-      const errMessage = error instanceof Error ? error.message : String(error);
-      log.error({ event: "llm_error", message: errMessage });
-      replyText = FALLBACK_ERROR_MESSAGE;
+      replyText = PROMPT_INJECTION_REFUSAL_MESSAGE;
+    } else {
+      try {
+        replyText = await llmClient.generateReply({
+          memories,
+          history,
+          incomingMessage: {
+            senderId: message.senderId,
+            senderName: message.senderName,
+            content: message.text,
+          },
+          tools,
+        });
+      } catch (error) {
+        const errMessage = error instanceof Error ? error.message : String(error);
+        log.error({ event: "llm_error", message: errMessage });
+        replyText = FALLBACK_ERROR_MESSAGE;
+      }
     }
 
     const chunks = splitText(replyText, 2000);

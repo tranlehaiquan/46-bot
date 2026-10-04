@@ -1,6 +1,11 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { MemoryRepository } from "../db/repositories/memory.js";
+import {
+  detectPromptInjection,
+  isMemorySafe,
+  PROMPT_INJECTION_REFUSAL_MESSAGE,
+} from "../llm/prompt-security.js";
 
 const SENSITIVE_PATTERNS = [
   /\b(mật\s*khẩu|password|pass|mã\s*pin|pin\s*code)\b/i,
@@ -35,6 +40,13 @@ export function createMemoryTools(
         return {
           success: false,
           message: SENSITIVE_DATA_REJECTION_MESSAGE,
+        };
+      }
+
+      if (!isMemorySafe(subject, fact)) {
+        return {
+          success: false,
+          message: PROMPT_INJECTION_REFUSAL_MESSAGE,
         };
       }
 
@@ -121,6 +133,15 @@ export function createMemoryTools(
         return {
           success: false,
           message: SENSITIVE_DATA_REJECTION_MESSAGE,
+        };
+      }
+
+      const combinedText = [title, story, people, happenedOn].filter(Boolean).join(" ");
+      const check = detectPromptInjection(combinedText);
+      if (check.isInjection) {
+        return {
+          success: false,
+          message: PROMPT_INJECTION_REFUSAL_MESSAGE,
         };
       }
 
