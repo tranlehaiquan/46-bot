@@ -192,6 +192,24 @@ describe("group discovery", () => {
     await app.close();
   });
 
+  it("replies to a private text event posted without a result wrapper", async () => {
+    const { app, zalo, queue } = testApp("");
+    const body = {
+      event_name: "message.text.received",
+      message: {
+        date: 1791110406476,
+        chat: { chat_type: "PRIVATE", id: "user-9" },
+        message_id: "ede818735e37226e7b21",
+        from: { id: "user-9", is_bot: false, display_name: "Lan" },
+        text: "hi",
+      },
+    };
+    assert.equal((await post(app, JSON.stringify(body))).statusCode, 200);
+    await queue.drain();
+    assert.deepEqual(zalo.sends, [{ chatId: "user-9", text: CANNED_REPLY }]);
+    await app.close();
+  });
+
   it("sends the canned reply only to the matching group chat id", async () => {
     const lines: string[] = [];
     const { app, zalo, queue } = testApp("group-1", lines);

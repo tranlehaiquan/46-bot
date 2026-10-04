@@ -14,11 +14,10 @@ export function normalizeDelivery(body: unknown): IncomingMessage | undefined {
     return undefined;
   }
   const root = body as Record<string, unknown>;
-  const result = root.result;
-  if (!result || typeof result !== "object") {
+  const resultRecord = eventRecord(root);
+  if (!resultRecord) {
     return undefined;
   }
-  const resultRecord = result as Record<string, unknown>;
   const eventName = resultRecord.event_name;
   const message = resultRecord.message;
   if (typeof eventName !== "string" || !message || typeof message !== "object") {
@@ -49,6 +48,17 @@ export function normalizeDelivery(body: unknown): IncomingMessage | undefined {
     isBot: fromRecord.is_bot === true,
     raw: body,
   };
+}
+
+function eventRecord(root: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (typeof root.event_name === "string") {
+    return root;
+  }
+  const result = root.result;
+  if (result && typeof result === "object") {
+    return result as Record<string, unknown>;
+  }
+  return undefined;
 }
 
 function messageIdOf(value: unknown): string | undefined {
