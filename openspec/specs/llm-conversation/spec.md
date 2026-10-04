@@ -7,7 +7,7 @@ Power conversational interactions using Gemini or DeepSeek models via the Vercel
 ## Requirements
 
 ### Requirement: Conversational Vietnamese generation with Gemini or DeepSeek
-The system SHALL use the Vercel AI SDK to prompt the configured LLM provider (Gemini via `@ai-sdk/google` or DeepSeek via `@ai-sdk/deepseek`). The prompt SHALL enforce a warm, informal, family-friendly Vietnamese persona by default (or English if the user writes in English), keeping answers concise and grounded.
+The system SHALL use the Vercel AI SDK to prompt the configured LLM provider (Gemini via `@ai-sdk/google` or DeepSeek via `@ai-sdk/deepseek`). The prompt SHALL enforce a warm, informal, family-friendly Vietnamese persona by default (or English if the user writes in English), keeping answers concise and grounded. The prompt construction SHALL enforce strict instruction hierarchy and wrap user turns and memories in structured XML delimiters to isolate untrusted text from system directives.
 
 #### Scenario: General question in Vietnamese
 - **WHEN** a family member asks a general question in Vietnamese
@@ -16,6 +16,10 @@ The system SHALL use the Vercel AI SDK to prompt the configured LLM provider (Ge
 #### Scenario: Question in English
 - **WHEN** a user addresses the bot in English
 - **THEN** the model generates the reply in English
+
+#### Scenario: Untrusted content wrapped in delimiters
+- **WHEN** user messages and historical context are prepared for the LLM
+- **THEN** user inputs are wrapped in `<user_message>` tags and memory facts are wrapped in `<memory_item>` tags
 
 ### Requirement: Typing indicator before generation
 The system SHALL send a chat action indicator (`typing`) via `sendChatAction` before initiating the LLM generation process to signal to the user that work is in progress.
@@ -41,3 +45,11 @@ If LLM generation or delivery fails after one retry, the system SHALL send a sin
 #### Scenario: LLM API failure
 - **WHEN** the LLM API call fails or times out
 - **THEN** the group or private chat receives the Vietnamese fallback message, and the real error is logged to stdout
+
+### Requirement: Prompt security integration in conversational reply pipeline
+The system SHALL evaluate incoming conversation messages against prompt security validation before triggering LLM generation. When a security violation or injection attempt is detected, the pipeline SHALL send a safe refusal reply directly and skip LLM generation.
+
+#### Scenario: Security rejection in reply pipeline
+- **WHEN** an incoming message to the bot triggers prompt security detection
+- **THEN** the system sends the friendly safety refusal without calling the LLM API
+
