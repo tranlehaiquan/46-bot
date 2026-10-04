@@ -12,6 +12,7 @@ function validEnv(overrides: Record<string, string | undefined> = {}): Record<st
     WEBHOOK_URL: "https://family.example/webhooks/zalo",
     WEBHOOK_SECRET: secret,
     MODE: "webhook",
+    DEEPSEEK_API_KEY: "test-deepseek-key",
     ...overrides,
   };
 }
@@ -31,6 +32,38 @@ describe("loadConfig", () => {
         return true;
       },
     );
+  });
+
+  it("names DEEPSEEK_API_KEY when it is missing", () => {
+    const env = validEnv();
+    delete env.DEEPSEEK_API_KEY;
+    assert.throws(
+      () => loadConfig(env),
+      (error: unknown) => {
+        assert.ok(error instanceof ConfigError);
+        assert.ok(error.variables.includes("DEEPSEEK_API_KEY"));
+        assert.match(error.message, /DEEPSEEK_API_KEY/);
+        return true;
+      },
+    );
+  });
+
+  it("defaults DEEPSEEK_MODEL and DB_PATH when unspecified", () => {
+    const config = loadConfig(validEnv());
+    assert.equal(config.deepseekModel, "deepseek-chat");
+    assert.equal(config.dbPath, "/data/family.db");
+    assert.equal(config.deepseekApiKey, "test-deepseek-key");
+  });
+
+  it("accepts custom DEEPSEEK_MODEL and DB_PATH", () => {
+    const config = loadConfig(
+      validEnv({
+        DEEPSEEK_MODEL: "deepseek-reasoner",
+        DB_PATH: "./test.db",
+      }),
+    );
+    assert.equal(config.deepseekModel, "deepseek-reasoner");
+    assert.equal(config.dbPath, "./test.db");
   });
 
   it("refuses MODE=polling", () => {

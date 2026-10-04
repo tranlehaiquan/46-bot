@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Learn the family group id from a live Zalo mention, then prove the bot can speak in that group with one fixed sentence and no model.
+Learn the family group id from a live Zalo delivery, and ensure the bot only participates in group conversations when explicitly addressed by mention or reply.
 
 ## Requirements
 
@@ -17,23 +17,31 @@ While `FAMILY_CHAT_ID` is empty, the process SHALL log `chat.id`, `chat_type`, s
 - **WHEN** `FAMILY_CHAT_ID` is empty and a person sends a private text message
 - **THEN** the log includes `chat_type` of `PRIVATE`
 
-### Requirement: Matching group text gets the canned reply
-When `FAMILY_CHAT_ID` is set, the process SHALL send the exact text `Mình nhận được.` for an incoming text message whose `chat_type` is `GROUP`, whose `chat.id` equals `FAMILY_CHAT_ID`, and whose sender is not a bot. The outbound message SHALL contain no other text. The process SHALL send it to `chat.id` and SHALL NOT send it to the sender's user id.
+### Requirement: Matching group text requires mention or reply
+When `FAMILY_CHAT_ID` is set, the process SHALL process incoming text messages in that group ONLY when the bot is @mentioned or when the message is a direct reply to one of the bot's messages. Messages that do not mention the bot or reply to the bot SHALL be ignored silently. When triggered, the process SHALL generate and send a conversational LLM reply instead of a static canned message.
 
-#### Scenario: Family group mention
-- **WHEN** `FAMILY_CHAT_ID` is set and a person sends a text message in that group
-- **THEN** the group receives one message whose text is exactly `Mình nhận được.`
+#### Scenario: Family group message with mention
+- **WHEN** `FAMILY_CHAT_ID` is set and a group member sends a message mentioning the bot
+- **THEN** the bot processes the message and responds with an LLM-generated answer
+
+#### Scenario: Family group message without mention or reply
+- **WHEN** `FAMILY_CHAT_ID` is set and a group member chats without mentioning or replying to the bot
+- **THEN** no Zalo message is sent and the message is ignored
+
+#### Scenario: Family group reply to bot
+- **WHEN** a group member replies directly to a previous message sent by the bot
+- **THEN** the bot processes the message and responds with an LLM-generated answer
 
 #### Scenario: Bot's own message is ignored
 - **WHEN** a delivery in the family group has a sender marked as a bot
 - **THEN** no Zalo message is sent
 
-### Requirement: Private text gets the canned reply
-The process SHALL send the exact text `Mình nhận được.` for an incoming text message whose `chat_type` is `PRIVATE` and whose sender is not a bot. The process SHALL send it to that message's `chat.id`. This applies whether or not `FAMILY_CHAT_ID` is set. A private image, sticker, voice, or unsupported event SHALL NOT be answered.
+### Requirement: Private text triggers conversational reply
+The process SHALL accept incoming text messages in private chats (direct messages) whose sender is not a bot, and respond with an LLM-generated reply. Non-text events (images, stickers, voice) in private chats SHALL NOT be answered.
 
 #### Scenario: Direct text message
 - **WHEN** a person sends a text message in a private chat
-- **THEN** that chat receives one message whose text is exactly `Mình nhận được.`
+- **THEN** that chat receives an LLM-generated conversational reply
 
 #### Scenario: Direct image
 - **WHEN** a private chat delivers an image event
@@ -47,19 +55,8 @@ When `FAMILY_CHAT_ID` is set, the process SHALL NOT send a message for a group d
 - **THEN** no Zalo message is sent
 
 ### Requirement: Non-text events are not answered
-The canned reply SHALL be sent only for a text message. Image, sticker, voice, and unsupported events in the family group SHALL be logged and SHALL NOT be answered.
+The process SHALL respond only to text messages. Image, sticker, voice, and unsupported events in the family group SHALL be logged and SHALL NOT be answered.
 
 #### Scenario: Image in the family group
 - **WHEN** `FAMILY_CHAT_ID` is set and the family group delivers an image event
 - **THEN** no Zalo message is sent
-
-### Requirement: One reply per message id while the process stays up
-For the lifetime of one process, the process SHALL send the canned reply at most once for a given message id. A repeated delivery of that message id SHALL NOT produce a second send. This slice SHALL NOT persist that record across restarts.
-
-#### Scenario: Duplicate delivery in one process
-- **WHEN** the same message id is delivered twice without a restart
-- **THEN** the canned reply is sent once
-
-#### Scenario: Restart treats a redelivery as new
-- **WHEN** the process restarts and Zalo delivers a message id that the previous process already answered
-- **THEN** the canned reply is sent again

@@ -18,7 +18,14 @@ export function installShutdown(source: SignalSource, run: () => Promise<void>):
   }
 }
 
-export async function shutdown(close: () => Promise<void>, queue: WorkQueue): Promise<void> {
+export async function shutdown(
+  close: () => Promise<void>,
+  queue: WorkQueue,
+  cleanup?: () => void | Promise<void>,
+): Promise<void> {
   await close();
   await queue.drain();
+  if (cleanup) {
+    await cleanup();
+  }
 }

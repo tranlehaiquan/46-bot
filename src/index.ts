@@ -1,4 +1,9 @@
 import { ConfigError, loadConfig } from "./config.js";
+import { closeDatabase, openDatabase } from "./db/connection.js";
+import { createMessageRepository } from "./db/message-repo.js";
+import { migrate } from "./db/migrations.js";
+import { createSeenRepository } from "./db/seen-repo.js";
+import { createLlmClient } from "./llm/client.js";
 import { createLogger } from "./logger.js";
 import { boot, installShutdown, shutdown } from "./lifecycle.js";
 import { WorkQueue } from "./queue.js";
@@ -24,14 +29,33 @@ async function main(): Promise<void> {
     throw error;
   }
 
-  const secrets = [config.zaloBotToken, config.webhookSecret];
+  const secrets = [config.zaloBotToken, config.webhookSecret, config.deepseekApiKey];
   const log = createLogger({ secrets });
   const queue = new WorkQueue((error) => {
     const message = error instanceof Error ? error.message : String(error);
     log.error({ event: "delivery_failed", message: redactText(message, secrets) });
   });
+
+  const db = openDatabase(config.dbPath);
+  migrate(db);
+  const seenRepo = createSeenRepository(db);
+  const messageRepo = createMessageRepository(db);
+
+  const llmClient = createLlmClient({
+    apiKey: config.deepseekApiKey,
+    modelName: config.deepseekModel,
+  });
+
   const zalo = createZaloClient(config.zaloBotToken);
-  const app = buildServer({ config, log, zalo, queue });
+  const app = buildServer({
+    config,
+    log,
+    zalo,
+    queue,
+    seenRepo,
+    messageRepo,
+    llmClient,
+  });
 
   await boot(
     async () => {
@@ -50,7 +74,14 @@ async function main(): Promise<void> {
   );
 
   installShutdown(process, async () => {
-    await shutdown(() => app.close(), queue);
+    await shutdown(
+      () => app.close(),
+      queue,
+      () => {
+        closeDatabase(db);
+        log.info({ event: "db_closed" });
+      },
+    );
     process.exit(0);
   });
 }

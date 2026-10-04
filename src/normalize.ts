@@ -1,3 +1,16 @@
+export type Mention = {
+  uid: string;
+  pos?: number;
+  len?: number;
+};
+
+export type QuotedMessage = {
+  messageId?: string;
+  fromId?: string;
+  isBot?: boolean;
+  text?: string;
+};
+
 export type IncomingMessage = {
   eventName: string;
   messageId: string;
@@ -6,6 +19,9 @@ export type IncomingMessage = {
   senderId: string;
   senderName: string;
   isBot: boolean;
+  text: string;
+  mentions: Mention[];
+  quote?: QuotedMessage;
   raw: unknown;
 };
 
@@ -38,6 +54,11 @@ export function normalizeDelivery(body: unknown): IncomingMessage | undefined {
   if (typeof fromRecord.id !== "string") {
     return undefined;
   }
+
+  const text = typeof messageRecord.text === "string" ? messageRecord.text : "";
+  const mentions = parseMentions(messageRecord.mentions);
+  const quote = parseQuote(messageRecord.quote ?? messageRecord.reply_to ?? messageRecord.reply_to_message);
+
   return {
     eventName,
     messageId,
@@ -46,7 +67,81 @@ export function normalizeDelivery(body: unknown): IncomingMessage | undefined {
     senderId: fromRecord.id,
     senderName: typeof fromRecord.display_name === "string" ? fromRecord.display_name : "",
     isBot: fromRecord.is_bot === true,
+    text,
+    mentions,
+    quote,
     raw: body,
+  };
+}
+
+export function isMentionedOrReplied(message: IncomingMessage, botId?: string): boolean {
+  if (message.chatType === "PRIVATE") {
+    return true;
+  }
+
+  // Check quote/reply
+  if (message.quote) {
+    if (message.quote.isBot) {
+      return true;
+    }
+    if (botId && message.quote.fromId === botId) {
+      return true;
+    }
+    if (!botId && message.quote.fromId !== undefined) {
+      return true;
+    }
+  }
+
+  // Check mentions
+  if (message.mentions.length > 0) {
+    if (botId) {
+      return message.mentions.some((m) => m.uid === botId || m.uid === "bot");
+    }
+    return true;
+  }
+
+  // Fallback: check @ in text
+  if (message.text.includes("@")) {
+    return true;
+  }
+
+  return false;
+}
+
+function parseMentions(rawMentions: unknown): Mention[] {
+  if (!Array.isArray(rawMentions)) {
+    return [];
+  }
+  const mentions: Mention[] = [];
+  for (const item of rawMentions) {
+    if (typeof item === "string" && item.length > 0) {
+      mentions.push({ uid: item });
+    } else if (item && typeof item === "object") {
+      const obj = item as Record<string, unknown>;
+      const uid = typeof obj.uid === "string" ? obj.uid : typeof obj.user_id === "string" ? obj.user_id : undefined;
+      if (uid) {
+        mentions.push({
+          uid,
+          pos: typeof obj.pos === "number" ? obj.pos : undefined,
+          len: typeof obj.len === "number" ? obj.len : undefined,
+        });
+      }
+    }
+  }
+  return mentions;
+}
+
+function parseQuote(rawQuote: unknown): QuotedMessage | undefined {
+  if (!rawQuote || typeof rawQuote !== "object") {
+    return undefined;
+  }
+  const q = rawQuote as Record<string, unknown>;
+  const from = q.from as Record<string, unknown> | undefined;
+  return {
+    messageId: messageIdOf(q.message_id),
+    fromId: from && typeof from.id === "string" ? from.id : typeof q.from_id === "string" ? q.from_id : undefined,
+    isBot: from?.is_bot === true || q.is_bot === true,
+    text: typeof q.text === "string" ? q.text : undefined,
   };
 }
 

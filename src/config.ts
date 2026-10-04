@@ -53,6 +53,21 @@ const envSchema = z.object({
     (value) => (value === undefined || value === "" ? 3000 : value),
     z.coerce.number({ invalid_type_error: "PORT must be a positive integer" }).int().positive("PORT must be a positive integer"),
   ),
+  DEEPSEEK_API_KEY: z
+    .string({
+      required_error: "DEEPSEEK_API_KEY is required",
+      invalid_type_error: "DEEPSEEK_API_KEY is required",
+    })
+    .min(1, "DEEPSEEK_API_KEY is required"),
+  DEEPSEEK_MODEL: z.preprocess(
+    (value) => (value === undefined || value === "" ? "deepseek-chat" : value),
+    z.string().min(1),
+  ),
+  DB_PATH: z.preprocess(
+    (value) => (value === undefined || value === "" ? "/data/family.db" : value),
+    z.string().min(1),
+  ),
+  BOT_ID: z.preprocess((value) => (value === undefined ? "" : value), z.string()),
 });
 
 export class ConfigError extends Error {
@@ -72,6 +87,10 @@ export type AppConfig = {
   webhookSecret: string;
   mode: "webhook";
   port: number;
+  deepseekApiKey: string;
+  deepseekModel: string;
+  dbPath: string;
+  botId: string;
 };
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
@@ -96,5 +115,9 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     webhookSecret: parsed.data.WEBHOOK_SECRET,
     mode: "webhook",
     port: parsed.data.PORT,
+    deepseekApiKey: parsed.data.DEEPSEEK_API_KEY,
+    deepseekModel: parsed.data.DEEPSEEK_MODEL,
+    dbPath: parsed.data.DB_PATH,
+    botId: parsed.data.BOT_ID,
   };
 }

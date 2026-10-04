@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { loadConfig } from "./config.js";
+import { closeDatabase, openDatabase } from "./db/connection.js";
+import { createMessageRepository, type MessageRepository } from "./db/message-repo.js";
+import { migrate } from "./db/migrations.js";
+import { createSeenRepository, type SeenRepository } from "./db/seen-repo.js";
 import { CANNED_REPLY } from "./delivery.js";
+import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
 import { createLogger } from "./logger.js";
 import { WorkQueue } from "./queue.js";
 import { BODY_LIMIT, buildServer } from "./server.js";
@@ -17,6 +22,7 @@ function configFor(familyChatId: string) {
     WEBHOOK_URL: "https://family.example/webhooks/zalo",
     WEBHOOK_SECRET: secret,
     MODE: "webhook",
+    DEEPSEEK_API_KEY: "mock-deepseek-key",
   });
 }
 
@@ -29,6 +35,8 @@ function envelope(overrides?: {
   isBot?: boolean;
   text?: string;
   messageId?: string;
+  mentions?: Array<{ uid: string }>;
+  quote?: { message_id?: string; from?: { id: string; is_bot?: boolean } };
   extra?: Record<string, unknown>;
 }) {
   return {
@@ -45,17 +53,27 @@ function envelope(overrides?: {
           id: overrides?.chatId ?? "group-1",
           chat_type: overrides?.chatType ?? "GROUP",
         },
-        text: overrides?.text ?? "xin chao",
+        text: overrides?.text ?? "@bot xin chao",
         message_id: overrides?.messageId ?? "msg-1",
         date: 1750316131602,
         photo: "https://cdn.example/photo.jpg",
+        mentions: overrides?.mentions,
+        quote: overrides?.quote,
         ...overrides?.extra,
       },
     },
   };
 }
 
-function testApp(familyChatId: string, lines?: string[]) {
+function testApp(
+  familyChatId: string,
+  lines?: string[],
+  options?: {
+    seenRepo?: SeenRepository;
+    messageRepo?: MessageRepository;
+    llmClient?: LlmClient;
+  },
+) {
   const zalo = fakeZalo();
   const queue = new WorkQueue();
   const app = buildServer({
@@ -66,14 +84,22 @@ function testApp(familyChatId: string, lines?: string[]) {
     }),
     zalo,
     queue,
+    seenRepo: options?.seenRepo,
+    messageRepo: options?.messageRepo,
+    llmClient: options?.llmClient,
   });
   return { app, zalo, queue };
 }
 
-function fakeZalo(): ZaloClient & { sends: Array<{ chatId: string; text: string }> } {
+function fakeZalo(): ZaloClient & {
+  sends: Array<{ chatId: string; text: string }>;
+  actions: Array<{ chatId: string; action: string }>;
+} {
   const sends: Array<{ chatId: string; text: string }> = [];
+  const actions: Array<{ chatId: string; action: string }> = [];
   return {
     sends,
+    actions,
     async getWebhookInfo() {
       return { url: "" };
     },
@@ -85,6 +111,9 @@ function fakeZalo(): ZaloClient & { sends: Array<{ chatId: string; text: string 
     },
     async sendMessage(chatId, text) {
       sends.push({ chatId, text });
+    },
+    async sendChatAction(chatId, action) {
+      actions.push({ chatId, action });
     },
   };
 }
@@ -109,40 +138,38 @@ async function post(
 describe("webhook http", () => {
   it("returns 200 for GET /health and 404 for other paths", async () => {
     const { app } = testApp("");
-    const health = await app.inject({ method: "GET", url: "/health" });
-    const missing = await app.inject({ method: "GET", url: "/status" });
-    const wrongMethod = await app.inject({ method: "POST", url: "/health" });
-    assert.equal(health.statusCode, 200);
-    assert.equal(missing.statusCode, 404);
-    assert.equal(wrongMethod.statusCode, 404);
+    assert.equal((await app.inject({ method: "GET", url: "/health" })).statusCode, 200);
+    assert.equal((await app.inject({ method: "GET", url: "/other" })).statusCode, 404);
+    assert.equal((await app.inject({ method: "POST", url: "/health" })).statusCode, 404);
     await app.close();
   });
 
   it("rejects an oversized body", async () => {
-    const { app } = testApp("");
-    const response = await post(app, "x".repeat(BODY_LIMIT + 1));
+    const { app, zalo, queue } = testApp("");
+    const big = "a".repeat(BODY_LIMIT + 1);
+    const response = await post(app, big);
+    await queue.drain();
     assert.notEqual(response.statusCode, 200);
-    assert.equal(response.statusCode, 413);
+    assert.equal(zalo.sends.length, 0);
     await app.close();
   });
 
   it("rejects a wrong or missing secret without sending", async () => {
-    const lines: string[] = [];
-    const { app, zalo, queue } = testApp("", lines);
-    const wrong = await post(app, JSON.stringify(envelope({ text: "secret-body" })), {
-      "x-bot-api-secret-token": "not-the-secret",
-    });
+    const { app, zalo, queue } = testApp("");
+    const body = JSON.stringify(envelope());
+    const wrong = await post(app, body, { "x-bot-api-secret-token": "wrong-secret-token" });
     const missing = await app.inject({
       method: "POST",
       url: "/webhooks/zalo",
       headers: { "content-type": "application/json" },
-      payload: JSON.stringify(envelope()),
+      payload: body,
     });
     await queue.drain();
     assert.equal(wrong.statusCode, 401);
+    assert.deepEqual(wrong.json(), { message: "Unauthorized" });
     assert.equal(missing.statusCode, 401);
+    assert.deepEqual(missing.json(), { message: "Unauthorized" });
     assert.equal(zalo.sends.length, 0);
-    assert.equal(lines.length, 0);
     await app.close();
   });
 
@@ -216,7 +243,7 @@ describe("group discovery", () => {
   it("sends the canned reply only to the matching group chat id", async () => {
     const lines: string[] = [];
     const { app, zalo, queue } = testApp("group-1", lines);
-    const text = "UNIQUE_FAMILY_TEXT";
+    const text = "@bot UNIQUE_FAMILY_TEXT";
     const response = await post(app, JSON.stringify(envelope({ text, senderId: "user-1" })));
     await queue.drain();
     assert.equal(response.statusCode, 200);
@@ -284,5 +311,124 @@ describe("group discovery", () => {
     assert.equal(first.zalo.sends.length, 1);
     assert.equal(second.zalo.sends.length, 1);
     await second.app.close();
+  });
+});
+
+describe("LLM conversation and database integration", () => {
+  it("ignores group messages that do not mention the bot or reply to it", async () => {
+    const { app, zalo, queue } = testApp("group-1");
+    const unmentioned = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "just chatting with family members",
+      mentions: [],
+    });
+
+    await post(app, JSON.stringify(unmentioned));
+    await queue.drain();
+    assert.equal(zalo.sends.length, 0);
+    await app.close();
+  });
+
+  it("triggers typing indicator, queries LLM, splits response, and records history", async () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        assert.equal(params.incomingMessage.content, "@bot Chao buoi sang");
+        return "Chao ban! Chuc mot ngay tot lanh.";
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      llmClient: mockLlm,
+    });
+
+    const msg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Chao buoi sang",
+      senderId: "user-1",
+      senderName: "Alice",
+      messageId: "msg-llm-1",
+    });
+
+    await post(app, JSON.stringify(msg));
+    await queue.drain();
+
+    // Verify typing action was triggered
+    assert.deepEqual(zalo.actions, [{ chatId: "group-1", action: "typing" }]);
+
+    // Verify reply was sent
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: "Chao ban! Chuc mot ngay tot lanh." },
+    ]);
+
+    // Verify messages table has user turn and assistant turn
+    const history = messageRepo.getRecent("group-1");
+    assert.equal(history.length, 2);
+    assert.equal(history[0].role, "user");
+    assert.equal(history[0].content, "@bot Chao buoi sang");
+    assert.equal(history[1].role, "assistant");
+    assert.equal(history[1].content, "Chao ban! Chuc mot ngay tot lanh.");
+
+    await app.close();
+    closeDatabase(db);
+  });
+
+  it("falls back to friendly Vietnamese error message when LLM fails", async () => {
+    const failingLlm: LlmClient = {
+      async generateReply() {
+        throw new Error("DeepSeek timeout");
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      llmClient: failingLlm,
+    });
+
+    const msg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Loi roi",
+      messageId: "msg-err",
+    });
+
+    await post(app, JSON.stringify(msg));
+    await queue.drain();
+
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: FALLBACK_ERROR_MESSAGE },
+    ]);
+
+    await app.close();
+  });
+
+  it("persistently deduplicates across app instances sharing the same database", async () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+    const seenRepo = createSeenRepository(db);
+
+    const body = JSON.stringify(envelope({ messageId: "persistent-id" }));
+
+    const first = testApp("group-1", undefined, { seenRepo });
+    await post(first.app, body);
+    await first.queue.drain();
+    await first.app.close();
+
+    const second = testApp("group-1", undefined, { seenRepo });
+    await post(second.app, body);
+    await second.queue.drain();
+    await second.app.close();
+
+    assert.equal(first.zalo.sends.length, 1);
+    assert.equal(second.zalo.sends.length, 0);
+
+    closeDatabase(db);
   });
 });

@@ -1,5 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { AppConfig } from "./config.js";
+import type { MessageRepository } from "./db/message-repo.js";
+import type { SeenRepository } from "./db/seen-repo.js";
+import type { LlmClient } from "./llm/client.js";
 import { handleDelivery } from "./delivery.js";
 import type { Logger } from "./logger.js";
 import { WorkQueue } from "./queue.js";
@@ -13,6 +16,9 @@ export type ServerDeps = {
   log: Logger;
   zalo: ZaloClient;
   queue?: WorkQueue;
+  seenRepo?: SeenRepository;
+  messageRepo?: MessageRepository;
+  llmClient?: LlmClient;
 };
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
@@ -45,6 +51,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         config: deps.config,
         log: deps.log,
         zalo: deps.zalo,
+        seenRepo: deps.seenRepo,
+        messageRepo: deps.messageRepo,
+        llmClient: deps.llmClient,
         seen,
       }),
     );

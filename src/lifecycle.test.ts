@@ -62,4 +62,17 @@ describe("lifecycle", () => {
     await done;
     assert.deepEqual(events, ["start", "close", "finish", "shutdown-done"]);
   });
+
+  it("calls cleanup callback during shutdown", async () => {
+    const queue = new WorkQueue();
+    let cleanedUp = false;
+    await shutdown(
+      async () => {},
+      queue,
+      () => {
+        cleanedUp = true;
+      },
+    );
+    assert.equal(cleanedUp, true);
+  });
 });
