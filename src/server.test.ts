@@ -799,4 +799,52 @@ describe("LLM conversation and database integration", () => {
     await app.close();
     closeDatabase(db);
   });
+
+  it("supports weather checking tool execution through conversational flow", async () => {
+    let weatherToolCalled = false;
+    let weatherLocation = "";
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        assert.ok(params.tools, "Tools should be provided to LLM");
+        const tools = params.tools as Record<string, { execute?: (args: any, opt?: any) => Promise<any> }>;
+        assert.ok(tools.weather_check, "weather_check tool should exist");
+
+        // Simulate tool call execution
+        const res = await tools.weather_check.execute?.({
+          location: "Đà Lạt",
+          days: 1,
+        });
+
+        assert.ok(res);
+        weatherToolCalled = true;
+        weatherLocation = "Đà Lạt";
+
+        return "Thời tiết Đà Lạt hiện tại khoảng 18°C, trời nhiều mây và se lạnh nhé cả nhà!";
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      llmClient: mockLlm,
+    });
+
+    const msg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Thời tiết Đà Lạt hôm nay thế nào?",
+      messageId: "msg-weather-1",
+    });
+
+    await post(app, JSON.stringify(msg));
+    await queue.drain();
+
+    assert.equal(weatherToolCalled, true);
+    assert.equal(weatherLocation, "Đà Lạt");
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: "Thời tiết Đà Lạt hiện tại khoảng 18°C, trời nhiều mây và se lạnh nhé cả nhà!" },
+    ]);
+
+    await app.close();
+  });
 });
+

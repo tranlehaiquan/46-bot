@@ -16,6 +16,7 @@ import { createEventTools } from "./tools/events.js";
 import { createHolidayTools } from "./tools/holidays.js";
 import { createListTools } from "./tools/lists.js";
 import { createMemoryTools } from "./tools/memory.js";
+import { createWeatherTool } from "./tools/weather.js";
 import { createWebSearchTool } from "./tools/web-search.js";
 import { splitText } from "./utils/split-text.js";
 import type { ZaloClient } from "./zalo-client.js";
@@ -207,9 +208,11 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
         })
       : undefined;
 
+    const weatherTools = createWeatherTool();
+
     const tools =
-      listTools || eventTools || holidayTools || searchTools || memoryTools
-        ? { ...listTools, ...eventTools, ...holidayTools, ...searchTools, ...memoryTools }
+      listTools || eventTools || holidayTools || searchTools || memoryTools || weatherTools
+        ? { ...listTools, ...eventTools, ...holidayTools, ...searchTools, ...memoryTools, ...weatherTools }
         : undefined;
 
     const memories = memoryRepo ? memoryRepo.listMemories(message.chatId) : undefined;
