@@ -2,8 +2,9 @@ FROM node:22-slim AS build
 WORKDIR /app
 RUN npm install -g pnpm@12.9.1
 COPY package.json pnpm-lock.yaml ./
-COPY web/package.json ./web/
-RUN pnpm install --frozen-lockfile && pnpm approve-builds --all --dir web
+RUN pnpm install --frozen-lockfile
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./web/
+RUN pnpm --dir web install --frozen-lockfile
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 COPY web ./web
