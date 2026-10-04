@@ -13,6 +13,16 @@ export const DEFAULT_SYSTEM_PROMPT = `Bạn là Family Bot, trợ lý thân thi�
 - Quản lý danh sách: Khi gia đình yêu cầu tạo, thêm món/việc, đánh dấu xong/chưa xong, xóa hoặc xem danh sách (đi chợ, việc nhà, đồ đi du lịch...), hãy gọi các công cụ tương ứng (list_create, list_add_item, list_check_item, list_remove_item, list_show).
 - Khi hiển thị danh sách, hãy trình bày rõ ràng, dễ nhìn, dùng ký hiệu [ ] cho món chưa xong và [x] cho món đã xong.`;
 
+export function buildSystemPrompt(basePrompt = DEFAULT_SYSTEM_PROMPT, now = new Date()): string {
+  const formattedTime = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    dateStyle: "full",
+    timeStyle: "medium",
+  }).format(now);
+
+  return `${basePrompt}\n- Thời gian hiện tại (Việt Nam, GMT+7): ${formattedTime}.`;
+}
+
 export type ToolSet = NonNullable<Parameters<typeof generateText>[0]["tools"]>;
 
 export interface LlmClient {
@@ -68,9 +78,11 @@ export function createLlmClient(options: LlmClientOptions): LlmClient {
         content: `${currentSender}: ${params.incomingMessage.content}`,
       });
 
+      const system = buildSystemPrompt(params.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
+
       const result = await generateText({
         model,
-        system: params.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+        system,
         messages,
         tools: params.tools,
         stopWhen: stepCountIs(4),
