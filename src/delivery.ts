@@ -24,6 +24,9 @@ export function getOnboardingMessage(chatId: string): string {
 export function getPendingApprovalMessage(chatId: string): string {
   return `Kênh/nhóm này đang chờ quản trị viên phê duyệt trên Dashboard (chat ID "${chatId}").`;
 }
+export function getChannelActivatedMessage(): string {
+  return "Kênh/nhóm này đã được quản trị viên phê duyệt. Bạn có thể bắt đầu trò chuyện với bot nhé.";
+}
 
 export type DeliveryDependencies = {
   payload: Buffer | undefined;

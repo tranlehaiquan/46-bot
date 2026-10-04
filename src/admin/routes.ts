@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import type { ServerDeps } from "../server.js";
 import { createAuthHook, createToken } from "./auth.js";
 import type { ChannelStatus } from "../db/repositories/channels.js";
+import { getChannelActivatedMessage } from "../delivery.js";
 
 function parseJsonBody(body: unknown): Record<string, unknown> {
   if (Buffer.isBuffer(body)) {
@@ -59,6 +60,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         return reply.code(404).send({ error: "Channel not found" });
       }
 
+      const activatesPendingChannel = existing.status === "pending" && body.status === "active";
       if (typeof body.status === "string") {
         const status = body.status as ChannelStatus;
         if (["pending", "active", "disabled"].includes(status)) {
@@ -71,6 +73,22 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       }
 
       const updated = deps.channelRepo.getChannel(chatId);
+      if (activatesPendingChannel) {
+        try {
+          const content = getChannelActivatedMessage();
+          await deps.zalo.sendMessage(chatId, content);
+          deps.messageRepo?.insert({
+            chatId,
+            senderId: "bot",
+            senderName: "Admin",
+            role: "assistant",
+            content,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          deps.log.error({ event: "admin_channel_activation_message_failed", chat_id: chatId, message });
+        }
+      }
       return reply.send({ ok: true, channel: updated });
     });
 

@@ -10,6 +10,7 @@ import { buildServer } from "../server.js";
 import { createLogger } from "../logger.js";
 import type { ZaloClient } from "../zalo-client.js";
 import type { AppConfig } from "../config.js";
+import { getChannelActivatedMessage } from "../delivery.js";
 
 const token = "bot-token-test";
 const secret = "webhook-secret-123456";
@@ -108,6 +109,8 @@ describe("Admin REST API", () => {
     try {
       migrate(db);
       const channelRepo = createChannelRepository(db);
+      const messageRepo = createMessageRepository(db);
+      const zalo = fakeZalo();
       channelRepo.upsertDiscovery({
         chatId: "group-100",
         name: "Discovery Group",
@@ -118,8 +121,9 @@ describe("Admin REST API", () => {
       const app = buildServer({
         config: mockConfig(),
         log: createLogger(),
-        zalo: fakeZalo(),
+        zalo,
         channelRepo,
+        messageRepo,
       });
 
       // List all
@@ -146,6 +150,18 @@ describe("Admin REST API", () => {
       assert.equal(patchBody.ok, true);
       assert.equal(patchBody.channel.status, "active");
       assert.equal(patchBody.channel.name, "Official Group");
+      assert.deepEqual(zalo.sends, [{ chatId: "group-100", text: getChannelActivatedMessage() }]);
+      assert.equal(messageRepo.getRecent("group-100")[0].content, getChannelActivatedMessage());
+
+      // Other transitions, including an unchanged active status, do not repeat the message.
+      const repeatPatchRes = await app.inject({
+        method: "PATCH",
+        url: "/api/admin/channels/group-100",
+        headers: { authorization: `Bearer ${adminPassword}` },
+        payload: JSON.stringify({ status: "active" }),
+      });
+      assert.equal(repeatPatchRes.statusCode, 200);
+      assert.equal(zalo.sends.length, 1);
 
       await app.close();
     } finally {
