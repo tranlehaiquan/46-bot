@@ -6,6 +6,7 @@ import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
 import type { Logger } from "./logger.js";
 import { isMentionedOrReplied, normalizeDelivery } from "./normalize.js";
 import { createListTools } from "./tools/lists.js";
+import { createWebSearchTool } from "./tools/web-search.js";
 import { splitText } from "./utils/split-text.js";
 import type { ZaloClient } from "./zalo-client.js";
 
@@ -122,12 +123,19 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       });
     }
 
-    const tools = listRepo
+    const listTools = listRepo
       ? createListTools(listRepo, {
           chatId: message.chatId,
           senderName: message.senderName || message.senderId,
         })
       : undefined;
+
+    const searchTools = config.tavilyApiKey
+      ? createWebSearchTool(config.tavilyApiKey)
+      : undefined;
+
+    const tools =
+      listTools || searchTools ? { ...listTools, ...searchTools } : undefined;
 
     let replyText: string;
     try {

@@ -17,6 +17,7 @@
   "dependencies": {
     "@ai-sdk/deepseek": "^3.0.58",
     "@ai-sdk/google": "^4.0.87",
+    "@tavily/core": "^0.7.13",
     "ai": "^7.0.127",
     "better-sqlite3": "^13.0.3",
     "fastify": "^5.6.1",

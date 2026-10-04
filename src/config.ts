@@ -78,6 +78,10 @@ const envSchema = z.object({
     z.string().min(1),
   ),
   BOT_ID: z.preprocess((value) => (value === undefined ? "" : value), z.string()),
+  TAVILY_API_KEY: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
 }).superRefine((data, ctx) => {
   const chosenProvider = data.LLM_PROVIDER ?? (data.GEMINI_API_KEY ? "gemini" : data.DEEPSEEK_API_KEY ? "deepseek" : undefined);
   if (!chosenProvider) {
@@ -130,6 +134,7 @@ export type AppConfig = {
   geminiModel: string;
   deepseekApiKey?: string;
   deepseekModel: string;
+  tavilyApiKey?: string;
 };
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
@@ -167,5 +172,6 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     geminiModel: parsed.data.GEMINI_MODEL,
     deepseekApiKey: parsed.data.DEEPSEEK_API_KEY,
     deepseekModel: parsed.data.DEEPSEEK_MODEL,
+    tavilyApiKey: parsed.data.TAVILY_API_KEY,
   };
 }
