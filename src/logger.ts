@@ -2,6 +2,7 @@ import { redactValue } from "./redact.js";
 
 export type Logger = {
   info(fields: Record<string, unknown>): void;
+  warn(fields: Record<string, unknown>): void;
   error(fields: Record<string, unknown>): void;
 };
 
@@ -11,13 +12,16 @@ export function createLogger(options?: {
 }): Logger {
   const write = options?.write ?? ((line: string) => process.stdout.write(`${line}\n`));
   const secrets = options?.secrets ?? [];
-  const emit = (level: "info" | "error", fields: Record<string, unknown>) => {
+  const emit = (level: "info" | "warn" | "error", fields: Record<string, unknown>) => {
     const sanitized = redactValue({ level, ...fields }, secrets);
     write(JSON.stringify(sanitized));
   };
   return {
     info(fields) {
       emit("info", fields);
+    },
+    warn(fields) {
+      emit("warn", fields);
     },
     error(fields) {
       emit("error", fields);

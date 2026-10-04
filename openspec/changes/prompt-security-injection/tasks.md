@@ -18,6 +18,6 @@
 
 ## 4. Webhook Pipeline Integration & Verification
 
-- [ ] 4.1 Integrate prompt security pre-filter in `src/webhook/llm-reply.ts` (or `src/webhook/group-discovery.ts`) to return safe standard refusal without calling LLM
-- [ ] 4.2 Add integration tests for prompt injection refusal in webhook handler tests
-- [ ] 4.3 Run full test suite (`pnpm test`) and frontend verification to ensure complete system stability
+- [x] 4.1 Integrate prompt security pre-filter in `src/webhook/llm-reply.ts` (or `src/webhook/group-discovery.ts`) to return safe standard refusal without calling LLM
+- [x] 4.2 Add integration tests for prompt injection refusal in webhook handler tests
+- [x] 4.3 Run full test suite (`pnpm test`) and frontend verification to ensure complete system stability

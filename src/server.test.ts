@@ -453,7 +453,8 @@ describe("LLM conversation and database integration", () => {
       },
     };
 
-    const { app, zalo, queue } = testApp("group-1", undefined, {
+    const lines: string[] = [];
+    const { app, zalo, queue } = testApp("group-1", lines, {
       llmClient: mockLlm,
     });
 
