@@ -3,14 +3,11 @@ import {
   MessageSquare,
   Calendar,
   Brain,
-  Send,
   Trash2,
   Plus,
   RefreshCw,
   Users,
   User,
-  CheckCircle,
-  Clock,
   Sparkles,
   BookOpen
 } from "lucide-react";
@@ -35,8 +32,6 @@ export function ChannelDetail({
 
   // Messages state
   const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [sendingMsg, setSendingMsg] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Reminders state
@@ -100,20 +95,6 @@ export function ChannelDetail({
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || sendingMsg) return;
-    setSendingMsg(true);
-    try {
-      await api.sendMessage(channel.chatId, newMessage.trim());
-      setNewMessage("");
-      await loadTabData();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Gửi tin nhắn thất bại");
-    } finally {
-      setSendingMsg(false);
-    }
-  };
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -399,35 +380,6 @@ export function ChannelDetail({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Send Direct Message Bar */}
-          <form
-            onSubmit={handleSendMessage}
-            style={{
-              padding: "1rem 1.25rem",
-              borderTop: "1px solid var(--border-color)",
-              background: "rgba(0,0,0,0.2)",
-              display: "flex",
-              gap: "0.75rem"
-            }}
-          >
-            <input
-              type="text"
-              placeholder="Gửi tin nhắn trực tiếp với danh nghĩa Bot vào kênh này..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              className="form-input"
-              disabled={sendingMsg}
-            />
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={sendingMsg || !newMessage.trim()}
-              style={{ padding: "0.6rem 1.25rem" }}
-            >
-              {sendingMsg ? <RefreshCw size={16} className="spin" /> : <Send size={16} />}
-              <span>Gửi</span>
-            </button>
-          </form>
         </div>
       )}
 
