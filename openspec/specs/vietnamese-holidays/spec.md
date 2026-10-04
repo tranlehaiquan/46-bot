@@ -1,7 +1,8 @@
 # vietnamese-holidays Specification
 
 ## Purpose
-TBD - created by archiving change vietnamese-holidays. Update Purpose after archive.
+Provide a comprehensive, deterministic catalog of official Vietnamese public paid holidays (nghỉ lễ hưởng nguyên lương theo Bộ luật Lao động) and traditional cultural festivals, calculate upcoming occurrences using the lunar engine, and expose tools to list and import holidays into family chat schedules.
+
 ## Requirements
 ### Requirement: Vietnamese Holiday Definitions Catalog
 The system SHALL define standard Vietnamese holidays, categorizing them into official public paid holidays (theo Điều 112 Bộ luật Lao động) and traditional cultural festivals. Each holiday definition SHALL specify its key, localized title, calendar type ('solar' | 'lunar'), day, month, duration/days of leave where applicable, and whether it is a legally mandated public holiday with paid time off.

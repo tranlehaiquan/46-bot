@@ -1,7 +1,8 @@
 # events-reminders Specification
 
 ## Purpose
-TBD - created by archiving change events-and-reminders. Update Purpose after archive.
+Provide a unified events, appointments, reminders, birthdays, and giỗ (death anniversaries) management system with deterministic Vietnamese lunar calendar conversion, recurrence calculations, and LLM tools.
+
 ## Requirements
 ### Requirement: Unified Event Storage
 The system SHALL persist events in an `events` table in SQLite with fields for `chat_id`, `title`, `kind`, `calendar` ('solar' | 'lunar'), `day`, `month`, `year` (nullable), `is_leap_month`, `recurrence` ('none' | 'yearly' | 'monthly' | 'weekly' | 'daily'), `remind_days_before`, `notes`, `created_by`, and timestamp `ts`. The system SHALL also create a `reminders_sent` table for delivery tracking.
