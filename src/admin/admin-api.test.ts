@@ -392,6 +392,14 @@ describe("Admin REST API", () => {
     assert.equal(routeRes.statusCode, 200);
     assert.match(routeRes.body, /46-Bot Control Center/);
 
+    // 4. Fallback for /admin/chat/UUID
+    const chatRouteRes = await app.inject({
+      method: "GET",
+      url: "/admin/chat/c5b08493-2ce5-4127-94d0-4bf690fa2ba5",
+    });
+    assert.equal(chatRouteRes.statusCode, 200);
+    assert.match(chatRouteRes.body, /46-Bot Control Center/);
+
     await app.close();
   });
 });

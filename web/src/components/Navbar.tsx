@@ -16,55 +16,31 @@ export function Navbar({
   const pendingCount = channels.filter((c) => c.status === "pending").length;
   const activeCount = channels.filter((c) => c.status === "active").length;
 
-  const tabStyle = (active: boolean): React.CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    padding: "0.45rem 0.85rem",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    borderRadius: "var(--radius-md)",
-    background: active ? "rgba(99, 102, 241, 0.15)" : "transparent",
-    color: active ? "var(--accent-primary)" : "var(--text-secondary)",
-    border: active ? "1px solid rgba(99, 102, 241, 0.35)" : "1px solid transparent",
-    cursor: "pointer",
-    transition: "all 0.15s ease",
-  });
+  const tabClasses = (active: boolean) =>
+    `inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-all duration-150 cursor-pointer ${
+      active
+        ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/35"
+        : "text-slate-400 border border-transparent hover:text-slate-200 hover:bg-white/5"
+    }`;
 
   return (
-    <header className="glass-panel" style={{
-      margin: "1rem 1.5rem",
-      padding: "0.75rem 1.5rem",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      borderRadius: "var(--radius-lg)"
-    }}>
+    <header className="glass-panel mx-6 my-4 px-6 py-3 flex items-center justify-between rounded-2xl">
       {/* Brand */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-        <div style={{
-          width: "36px",
-          height: "36px",
-          borderRadius: "10px",
-          background: "linear-gradient(135deg, #6366f1, #3b82f6)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 0 15px rgba(99, 102, 241, 0.4)"
-        }}>
-          <Bot size={22} color="#ffffff" />
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.4)]">
+          <Bot size={22} className="text-white" />
         </div>
-        <h2 style={{ fontSize: "1.1rem", fontWeight: "700", letterSpacing: "-0.01em" }}>
-          46-Bot <span style={{ color: "var(--accent-primary)", fontWeight: "500", fontSize: "0.9rem" }}>Admin</span>
+        <h2 className="text-lg font-bold tracking-tight text-white">
+          46-Bot <span className="text-indigo-400 font-medium text-sm">Admin</span>
         </h2>
       </div>
 
       {/* Page Tabs */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+      <div className="flex items-center gap-2">
         <button
           id="nav-channels"
           onClick={() => onNavigate("channels")}
-          style={tabStyle(currentPage === "channels")}
+          className={tabClasses(currentPage === "channels")}
         >
           <MessageSquare size={15} />
           <span>Channels</span>
@@ -72,7 +48,7 @@ export function Navbar({
         <button
           id="nav-calendar"
           onClick={() => onNavigate("calendar")}
-          style={tabStyle(currentPage === "calendar")}
+          className={tabClasses(currentPage === "calendar")}
         >
           <CalendarDays size={15} />
           <span>Calendar</span>
@@ -80,8 +56,8 @@ export function Navbar({
       </div>
 
       {/* Right side: status + logout */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           {pendingCount > 0 && (
             <span className="badge badge-pending" title="Channels awaiting approval">
               <Clock size={12} />
@@ -99,8 +75,7 @@ export function Navbar({
             api.logout();
             onLogout();
           }}
-          className="btn btn-secondary"
-          style={{ padding: "0.45rem 0.85rem", fontSize: "0.8rem" }}
+          className="btn btn-secondary px-3.5 py-1.5 text-xs"
           title="Logout"
         >
           <LogOut size={14} />

@@ -1,18 +1,26 @@
 import React, { useState, useEffect } from "react";
+import { Router, useLocation, useRoute } from "wouter";
 import { api, type Channel, type ChannelStatus } from "./api";
 import { Login } from "./components/Login";
 import { Navbar } from "./components/Navbar";
 import { ChannelList } from "./components/ChannelList";
 import { ChannelDetail } from "./components/ChannelDetail";
 import { CalendarPage } from "./components/CalendarPage";
-import { MessageSquareOff } from "lucide-react";
+import { MessageSquareOff, AlertCircle } from "lucide-react";
 
-export function App() {
+function AdminApp() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(api.isAuthenticated());
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState<"channels" | "calendar">("channels");
+
+  const [, navigate] = useLocation();
+  const [isChatRoute, chatParams] = useRoute("/chat/:chatId");
+  const [isChannelRoute, channelParams] = useRoute("/channels/:chatId");
+  const [isCalendarRoute] = useRoute("/calendar");
+
+  const routeChatId = chatParams?.chatId || channelParams?.chatId || null;
+  const currentPage: "channels" | "calendar" = isCalendarRoute ? "calendar" : "channels";
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -30,25 +38,54 @@ export function App() {
     }
   }, [isAuthenticated]);
 
+  // Sync routeChatId to selectedChannel whenever route or channel list changes
+  useEffect(() => {
+    if (!channels.length) return;
+
+    if (routeChatId) {
+      const decodedChatId = decodeURIComponent(routeChatId);
+      const found = channels.find((c) => c.chatId === decodedChatId);
+      if (found) {
+        setSelectedChannel(found);
+      } else {
+        setSelectedChannel(null);
+      }
+    } else if (!isCalendarRoute) {
+      // Default /admin or /admin/ route without chatId: select first channel and update URL
+      const first = channels[0];
+      setSelectedChannel(first);
+      navigate(`/chat/${encodeURIComponent(first.chatId)}`, { replace: true });
+    }
+  }, [routeChatId, channels, isCalendarRoute, navigate]);
+
   const loadChannels = async () => {
     setLoading(true);
     try {
       const list = await api.getChannels();
       setChannels(list);
-      // Auto-select first channel or maintain current selection
-      if (list.length > 0) {
-        setSelectedChannel((prev) => {
-          if (!prev) return list[0];
-          const found = list.find((c) => c.chatId === prev.chatId);
-          return found || list[0];
-        });
-      } else {
-        setSelectedChannel(null);
-      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSelectChannel = (channel: Channel) => {
+    setSelectedChannel(channel);
+    navigate(`/chat/${encodeURIComponent(channel.chatId)}`);
+  };
+
+  const handleNavigatePage = (page: "channels" | "calendar") => {
+    if (page === "calendar") {
+      navigate("/calendar");
+    } else {
+      if (selectedChannel) {
+        navigate(`/chat/${encodeURIComponent(selectedChannel.chatId)}`);
+      } else if (channels.length > 0) {
+        navigate(`/chat/${encodeURIComponent(channels[0].chatId)}`);
+      } else {
+        navigate("/");
+      }
     }
   };
 
@@ -60,7 +97,7 @@ export function App() {
         setSelectedChannel(updated);
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Cập nhật trạng thái thất bại");
+      alert(err instanceof Error ? err.message : "Failed to update channel status");
     }
   };
 
@@ -74,31 +111,23 @@ export function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div className="min-h-screen flex flex-col">
       <Navbar
         channels={channels}
         onLogout={() => setIsAuthenticated(false)}
-        currentPage={page}
-        onNavigate={setPage}
+        currentPage={currentPage}
+        onNavigate={handleNavigatePage}
       />
 
-      <main style={{
-        flex: 1,
-        padding: "0 1.5rem 1.5rem 1.5rem",
-      }}>
-        {page === "calendar" ? (
+      <main className="flex-1 px-6 pb-6">
+        {isCalendarRoute ? (
           <CalendarPage channels={channels} />
         ) : (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "360px 1fr",
-            gap: "1.25rem",
-            alignItems: "start",
-          }}>
+          <div className="grid grid-cols-[360px_1fr] gap-5 items-start">
             <ChannelList
               channels={channels}
               selectedChannel={selectedChannel}
-              onSelectChannel={setSelectedChannel}
+              onSelectChannel={handleSelectChannel}
               onUpdateStatus={handleUpdateStatus}
             />
 
@@ -107,18 +136,28 @@ export function App() {
                 channel={selectedChannel}
                 onChannelUpdated={handleChannelUpdated}
               />
+            ) : routeChatId && !loading ? (
+              <div className="glass-panel h-[calc(100vh-120px)] flex flex-col items-center justify-center text-slate-400 gap-4 text-center p-8">
+                <AlertCircle size={48} className="text-amber-500 opacity-80" />
+                <h4 className="text-lg font-semibold text-slate-100">
+                  Channel Not Found
+                </h4>
+                <p className="max-w-md text-sm text-slate-400">
+                  No channel matching ID <code className="font-mono text-indigo-400">{routeChatId}</code> was found.
+                </p>
+                {channels.length > 0 && (
+                  <button
+                    onClick={() => handleSelectChannel(channels[0])}
+                    className="btn btn-secondary mt-2"
+                  >
+                    Go to {channels[0].name}
+                  </button>
+                )}
+              </div>
             ) : (
-              <div className="glass-panel" style={{
-                height: "calc(100vh - 120px)",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--text-muted)",
-                gap: "1rem"
-              }}>
-                <MessageSquareOff size={48} opacity={0.4} />
-                <p>Select a channel on the left to view messages, reminders and memory.</p>
+              <div className="glass-panel h-[calc(100vh-120px)] flex flex-col items-center justify-center text-slate-400 gap-4 text-center p-8">
+                <MessageSquareOff size={48} className="opacity-40" />
+                <p className="text-sm">Select a channel on the left to view messages, reminders and memory.</p>
               </div>
             )}
           </div>
@@ -127,4 +166,13 @@ export function App() {
     </div>
   );
 }
+
+export function App() {
+  return (
+    <Router base="/admin">
+      <AdminApp />
+    </Router>
+  );
+}
+
 export default App;

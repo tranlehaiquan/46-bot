@@ -63,54 +63,34 @@ export function CalendarPage({ channels }: { channels: Channel[] }) {
       : allEvents.filter((e) => e.chatId === channelFilter);
 
   return (
-    <div className="glass-panel" style={{ padding: "1.5rem" }}>
+    <div className="glass-panel p-6">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1.25rem",
-          flexWrap: "wrap",
-          gap: "0.75rem",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-          <CalendarDays size={22} color="var(--accent-primary)" />
-          <h2 style={{ fontSize: "1.2rem", fontWeight: 700 }}>Global Calendar</h2>
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <div className="flex items-center gap-2.5">
+          <CalendarDays size={22} className="text-indigo-400" />
+          <h2 className="text-xl font-bold text-white">Global Calendar</h2>
         </div>
 
         {/* Filter bar */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+        <div className="flex items-center gap-3 flex-wrap">
           {/* Holiday toggle */}
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              cursor: "pointer",
-              fontSize: "0.82rem",
-              color: "var(--text-secondary)",
-              userSelect: "none",
-            }}
-          >
+          <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-300 select-none">
             <input
               type="checkbox"
               checked={showHolidays}
               onChange={(e) => setShowHolidays(e.target.checked)}
-              style={{ accentColor: "var(--accent-primary)" }}
+              className="accent-indigo-500 rounded"
             />
-            🇻🇳 Vietnam Holidays
+            <span>🇻🇳 Vietnam Holidays</span>
           </label>
 
           {/* Channel filter */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <Filter size={14} color="var(--text-muted)" />
+          <div className="flex items-center gap-1.5">
+            <Filter size={14} className="text-slate-400" />
             <select
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
-              className="form-input"
-              style={{ width: "auto", fontSize: "0.82rem", padding: "0.35rem 0.65rem" }}
+              className="form-input w-auto text-xs py-1.5 px-3"
             >
               <option value="all">All Channels</option>
               {channels.map((c) => (
@@ -122,24 +102,24 @@ export function CalendarPage({ channels }: { channels: Channel[] }) {
           </div>
 
           {loading && (
-            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Loading…</span>
+            <span className="text-xs text-slate-400">Loading…</span>
           )}
         </div>
       </div>
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "#f87171" }}>
-          <span style={{ width: 10, height: 10, borderRadius: 2, background: "rgba(239,68,68,0.3)", display: "inline-block" }} />
-          Public Holiday
+      <div className="flex gap-4 mb-4 flex-wrap text-xs">
+        <div className="flex items-center gap-1.5 text-rose-400">
+          <span className="w-2.5 h-2.5 rounded-sm bg-rose-500/30 inline-block border border-rose-500/40" />
+          <span>Public Holiday</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "#c084fc" }}>
-          <span style={{ width: 10, height: 10, borderRadius: 2, background: "rgba(167,139,250,0.3)", display: "inline-block" }} />
-          Cultural Observance
+        <div className="flex items-center gap-1.5 text-purple-400">
+          <span className="w-2.5 h-2.5 rounded-sm bg-purple-500/30 inline-block border border-purple-500/40" />
+          <span>Cultural Observance</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "var(--accent-primary)" }}>
-          <span style={{ width: 10, height: 10, borderRadius: 2, background: "rgba(99,102,241,0.3)", display: "inline-block" }} />
-          Channel Event
+        <div className="flex items-center gap-1.5 text-indigo-400">
+          <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500/30 inline-block border border-indigo-500/40" />
+          <span>Channel Event</span>
         </div>
       </div>
 

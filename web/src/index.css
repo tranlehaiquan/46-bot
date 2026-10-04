@@ -1,3 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-primary: #0a0d14;
+  --color-bg-secondary: #121826;
+  --color-bg-tertiary: #1a2234;
+  --color-bg-glass: rgba(18, 24, 38, 0.85);
+  
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  --color-border-glow: rgba(99, 102, 241, 0.25);
+
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+
+  --color-accent-primary: #6366f1;
+  --color-accent-hover: #4f46e5;
+  --color-accent-glow: rgba(99, 102, 241, 0.4);
+
+  --color-status-active: #10b981;
+  --color-status-pending: #f59e0b;
+  --color-status-disabled: #ef4444;
+
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
 :root {
   --bg-primary: #0a0d14;
   --bg-secondary: #121826;
@@ -32,12 +59,6 @@
   --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-primary);
@@ -49,18 +70,6 @@ body {
     radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
     radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
   background-attachment: fixed;
-}
-
-button {
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  background: none;
-}
-
-input, textarea, select {
-  font-family: inherit;
-  font-size: 0.9rem;
 }
 
 /* Custom Scrollbar */
@@ -79,7 +88,7 @@ input, textarea, select {
   background: var(--text-muted);
 }
 
-/* Base Utility Classes */
+/* Glass panel utility */
 .glass-panel {
   background: var(--bg-glass);
   backdrop-filter: blur(16px);
@@ -88,6 +97,7 @@ input, textarea, select {
   box-shadow: var(--shadow-md);
 }
 
+/* Badges */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -99,25 +109,23 @@ input, textarea, select {
   letter-spacing: 0.025em;
   text-transform: uppercase;
 }
-
 .badge-active {
   background: var(--status-active-bg);
   color: var(--status-active);
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
-
 .badge-pending {
   background: var(--status-pending-bg);
   color: var(--status-pending);
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
-
 .badge-disabled {
   background: var(--status-disabled-bg);
   color: var(--status-disabled);
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -128,8 +136,9 @@ input, textarea, select {
   font-weight: 600;
   border-radius: var(--radius-md);
   transition: all 0.15s ease-in-out;
+  cursor: pointer;
+  border: none;
 }
-
 .btn-primary {
   background: var(--accent-primary);
   color: white;
@@ -139,7 +148,6 @@ input, textarea, select {
   background: var(--accent-hover);
   transform: translateY(-1px);
 }
-
 .btn-secondary {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
@@ -149,7 +157,6 @@ input, textarea, select {
   background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
 }
-
 .btn-success {
   background: var(--status-active);
   color: #064e3b;
@@ -157,7 +164,6 @@ input, textarea, select {
 .btn-success:hover {
   filter: brightness(1.1);
 }
-
 .btn-danger {
   background: var(--status-disabled-bg);
   color: var(--status-disabled);
@@ -168,6 +174,7 @@ input, textarea, select {
   color: white;
 }
 
+/* Form inputs */
 .form-input {
   width: 100%;
   background: var(--bg-primary);

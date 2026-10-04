@@ -355,10 +355,10 @@ describe("Channel Delivery & Runtime Gating", () => {
       assert.equal(res2.statusCode, 200);
       await queue.drain();
 
-      // Bot replied normally
-      assert.equal(zalo.sends.length, 2);
-      assert.equal(zalo.sends[1].chatId, "group-e2e-99");
-      assert.equal(zalo.sends[1].text, CANNED_REPLY);
+      // Bot sent: 1) pending notice, 2) activation announcement, 3) normal reply
+      assert.equal(zalo.sends.length, 3);
+      assert.equal(zalo.sends[2].chatId, "group-e2e-99");
+      assert.equal(zalo.sends[2].text, CANNED_REPLY);
 
       await app.close();
     } finally {

@@ -50,27 +50,15 @@ const KIND_EMOJI: Record<string, string> = {
 
 function HolidayBadge({ holiday }: { holiday: HolidayOccurrence }) {
   const isPublic = holiday.isPublicHoliday;
-  const bg = isPublic ? "rgba(239, 68, 68, 0.18)" : "rgba(167, 139, 250, 0.18)";
-  const color = isPublic ? "#f87171" : "#c084fc";
-  const border = isPublic ? "rgba(239, 68, 68, 0.35)" : "rgba(167, 139, 250, 0.35)";
 
   return (
     <div
       title={`${holiday.name}${holiday.description ? " — " + holiday.description : ""}`}
-      style={{
-        background: bg,
-        color,
-        border: `1px solid ${border}`,
-        borderRadius: "4px",
-        fontSize: "0.65rem",
-        fontWeight: 600,
-        padding: "1px 5px",
-        overflow: "hidden",
-        whiteSpace: "nowrap",
-        textOverflow: "ellipsis",
-        cursor: "default",
-        lineHeight: 1.4,
-      }}
+      className={`rounded text-[10px] font-semibold px-1.5 py-0.5 truncate cursor-default leading-tight border ${
+        isPublic
+          ? "bg-rose-500/20 text-rose-400 border-rose-500/40"
+          : "bg-purple-500/20 text-purple-400 border-purple-500/40"
+      }`}
     >
       {isPublic ? "🇻🇳 " : "🌸 "}
       {holiday.name}
@@ -89,24 +77,11 @@ function EventBadge({
   return (
     <div
       title={`${ev.title}${showChannelLabel ? ` [${ev.channelName}]` : ""}`}
-      style={{
-        background: "rgba(99, 102, 241, 0.15)",
-        color: "var(--accent-primary)",
-        border: "1px solid rgba(99, 102, 241, 0.3)",
-        borderRadius: "4px",
-        fontSize: "0.65rem",
-        fontWeight: 600,
-        padding: "1px 5px",
-        overflow: "hidden",
-        whiteSpace: "nowrap",
-        textOverflow: "ellipsis",
-        cursor: "default",
-        lineHeight: 1.4,
-      }}
+      className="bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 rounded text-[10px] font-semibold px-1.5 py-0.5 truncate cursor-default leading-tight"
     >
       {emoji} {ev.title}
       {showChannelLabel && (
-        <span style={{ opacity: 0.7, marginLeft: "3px" }}>· {ev.channelName}</span>
+        <span className="opacity-70 ml-1">· {ev.channelName}</span>
       )}
     </div>
   );
@@ -148,45 +123,33 @@ function DayCell({
 
   return (
     <div
-      style={{
-        minHeight: "90px",
-        padding: "6px",
-        background: isToday
-          ? "rgba(99, 102, 241, 0.1)"
-          : "rgba(255,255,255,0.01)",
-        border: isToday
-          ? "1px solid rgba(99, 102, 241, 0.4)"
-          : "1px solid rgba(255,255,255,0.04)",
-        borderRadius: "8px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "3px",
-      }}
+      className={`min-h-[90px] p-1.5 rounded-lg flex flex-col gap-1 border transition-colors ${
+        isToday
+          ? "bg-indigo-500/10 border-indigo-500/40"
+          : "bg-white/[0.01] border-white/[0.04] hover:bg-white/[0.03]"
+      }`}
     >
       {/* Day number */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="flex justify-between items-start">
         <span
-          style={{
-            fontSize: "0.9rem",
-            fontWeight: isToday ? 700 : 500,
-            color: isToday ? "var(--accent-primary)" : "var(--text-primary)",
-            lineHeight: 1,
-          }}
+          className={`text-sm leading-none ${
+            isToday ? "font-bold text-indigo-400" : "font-medium text-slate-200"
+          }`}
         >
           {day}
         </span>
         {lunarLabel && (
-          <span style={{ fontSize: "0.58rem", color: "var(--text-muted)", lineHeight: 1 }}>
+          <span className="text-[10px] text-slate-500 leading-none">
             {lunarLabel}
           </span>
         )}
       </div>
 
       {/* Badges */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+      <div className="flex flex-col gap-1">
         {visibleBadges}
         {overflow > 0 && (
-          <div style={{ fontSize: "0.6rem", color: "var(--text-muted)", paddingLeft: "2px" }}>
+          <div className="text-[10px] text-slate-400 pl-0.5">
             +{overflow} more
           </div>
         )}
@@ -248,31 +211,22 @@ export function CalendarMonthGrid({
   return (
     <div>
       {/* Month Nav */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1rem",
-        }}
-      >
+      <div className="flex items-center justify-between mb-4">
         <button
           onClick={onPrevMonth}
-          className="btn btn-secondary"
-          style={{ padding: "0.35rem 0.65rem" }}
+          className="btn btn-secondary px-2.5 py-1.5"
           aria-label="Previous month"
         >
           <ChevronLeft size={16} />
         </button>
 
-        <span style={{ fontWeight: 700, fontSize: "1.05rem" }}>
+        <span className="font-bold text-lg text-white">
           {MONTH_NAMES[month - 1]} {year}
         </span>
 
         <button
           onClick={onNextMonth}
-          className="btn btn-secondary"
-          style={{ padding: "0.35rem 0.65rem" }}
+          className="btn btn-secondary px-2.5 py-1.5"
           aria-label="Next month"
         >
           <ChevronRight size={16} />
@@ -280,26 +234,11 @@ export function CalendarMonthGrid({
       </div>
 
       {/* Day-of-week headers */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
-          gap: "4px",
-          marginBottom: "4px",
-        }}
-      >
+      <div className="grid grid-cols-7 gap-1 mb-1">
         {DAY_NAMES.map((d) => (
           <div
             key={d}
-            style={{
-              textAlign: "center",
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              color: "var(--text-muted)",
-              padding: "4px 0",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
+            className="text-center text-[11px] font-bold text-slate-500 py-1 uppercase tracking-wider"
           >
             {d}
           </div>
@@ -307,16 +246,10 @@ export function CalendarMonthGrid({
       </div>
 
       {/* Day cells grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
-          gap: "4px",
-        }}
-      >
+      <div className="grid grid-cols-7 gap-1">
         {cells.map((day, idx) => {
           if (day === null) {
-            return <div key={`empty-${idx}`} style={{ minHeight: "90px" }} />;
+            return <div key={`empty-${idx}`} className="min-h-[90px]" />;
           }
           const mm = String(month).padStart(2, "0");
           const dd = String(day).padStart(2, "0");

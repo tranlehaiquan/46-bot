@@ -17,82 +17,42 @@ export function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
       await api.login(password);
       onLoginSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Đăng nhập thất bại");
+      setError(err instanceof Error ? err.message : "Authentication failed");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      minHeight: "100vh",
-      padding: "1.5rem"
-    }}>
-      <div className="glass-panel" style={{
-        width: "100%",
-        maxWidth: "420px",
-        padding: "2.5rem 2rem",
-        textAlign: "center"
-      }}>
-        <div style={{
-          width: "56px",
-          height: "56px",
-          borderRadius: "16px",
-          background: "linear-gradient(135deg, #6366f1, #3b82f6)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          margin: "0 auto 1.5rem auto",
-          boxShadow: "0 0 25px rgba(99, 102, 241, 0.4)"
-        }}>
-          <ShieldCheck size={32} color="#ffffff" />
+    <div className="flex items-center justify-center min-h-screen p-6">
+      <div className="glass-panel w-full max-w-[420px] p-10 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center mx-auto mb-6 shadow-[0_0_25px_rgba(99,102,241,0.4)]">
+          <ShieldCheck size={32} className="text-white" />
         </div>
 
-        <h1 style={{ fontSize: "1.5rem", fontWeight: "700", marginBottom: "0.5rem" }}>
+        <h1 className="text-2xl font-bold mb-2 text-white">
           46-Bot Control Center
         </h1>
-        <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: "2rem" }}>
-          Quản lý kênh, tin nhắn, nhắc nhở & bộ nhớ
+        <p className="text-slate-400 text-sm mb-8">
+          Manage channels, messages, reminders & calendar
         </p>
 
         {error && (
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            padding: "0.75rem 1rem",
-            background: "rgba(239, 68, 68, 0.12)",
-            border: "1px solid rgba(239, 68, 68, 0.3)",
-            borderRadius: "var(--radius-md)",
-            color: "var(--status-disabled)",
-            fontSize: "0.85rem",
-            marginBottom: "1.5rem",
-            textAlign: "left"
-          }}>
-            <AlertCircle size={16} style={{ flexShrink: 0 }} />
+          <div className="flex items-center gap-2 p-3 px-4 bg-rose-500/15 border border-rose-500/30 rounded-lg text-rose-400 text-sm mb-6 text-left">
+            <AlertCircle size={16} className="shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
-          <div style={{ position: "relative", marginBottom: "1.5rem" }}>
-            <Lock size={18} style={{
-              position: "absolute",
-              left: "1rem",
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "var(--text-muted)"
-            }} />
+          <div className="relative mb-6">
+            <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="password"
-              placeholder="Nhập ADMIN_PASSWORD..."
+              placeholder="Enter ADMIN_PASSWORD..."
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="form-input"
-              style={{ paddingLeft: "2.75rem" }}
+              className="form-input pl-11"
               autoFocus
               required
             />
@@ -100,13 +60,12 @@ export function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
 
           <button
             type="submit"
-            className="btn btn-primary"
-            style={{ width: "100%", padding: "0.75rem" }}
+            className="btn btn-primary w-full py-3"
             disabled={loading}
           >
-            {loading ? "Đang xác thực..." : (
+            {loading ? "Authenticating..." : (
               <>
-                <span>Vào Dashboard</span>
+                <span>Enter Dashboard</span>
                 <ArrowRight size={16} />
               </>
             )}

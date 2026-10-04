@@ -99,8 +99,8 @@ export function ChannelDetail({
         setMessages(msgs);
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
       } else if (activeTab === "reminders") {
-        const evts = await api.getEvents(channel.chatId);
-        setEvents(evts);
+        const evs = await api.getEvents(channel.chatId);
+        setEvents(evs);
       } else if (activeTab === "memory") {
         const mems = await api.getMemories(channel.chatId);
         setFacts(mems.facts);
@@ -118,10 +118,9 @@ export function ChannelDetail({
       const updated = await api.updateChannel(channel.chatId, { status: newStatus });
       onChannelUpdated(updated);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Cập nhật trạng thái thất bại");
+      alert(err instanceof Error ? err.message : "Failed to update channel status");
     }
   };
-
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,10 +131,10 @@ export function ChannelDetail({
         calendar: eventForm.calendar as "solar" | "lunar",
         day: Number(eventForm.day),
         month: Number(eventForm.month),
-        year: eventForm.year ? Number(eventForm.year) : null,
+        year: eventForm.year ? Number(eventForm.year) : undefined,
         recurrence: eventForm.recurrence,
         remindDaysBefore: Number(eventForm.remindDaysBefore),
-        notes: eventForm.notes || null,
+        notes: eventForm.notes || undefined,
       });
       setShowEventForm(false);
       setEventForm({
@@ -151,17 +150,17 @@ export function ChannelDetail({
       });
       await loadTabData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Tạo sự kiện thất bại");
+      alert(err instanceof Error ? err.message : "Failed to create event");
     }
   };
 
   const handleDeleteEvent = async (id: number) => {
-    if (!confirm("Bạn có chắc muốn xoá nhắc nhở này?")) return;
+    if (!confirm("Are you sure you want to delete this reminder?")) return;
     try {
       await api.deleteEvent(channel.chatId, id);
       await loadTabData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Xoá sự kiện thất bại");
+      alert(err instanceof Error ? err.message : "Failed to delete event");
     }
   };
 
@@ -173,17 +172,17 @@ export function ChannelDetail({
       setFactForm({ subject: "", fact: "" });
       await loadTabData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Tạo ghi nhớ thất bại");
+      alert(err instanceof Error ? err.message : "Failed to create memory fact");
     }
   };
 
   const handleDeleteFact = async (id: number) => {
-    if (!confirm("Bạn có chắc muốn xoá ghi nhớ này?")) return;
+    if (!confirm("Are you sure you want to delete this memory?")) return;
     try {
       await api.deleteFact(channel.chatId, id);
       await loadTabData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Xoá ghi nhớ thất bại");
+      alert(err instanceof Error ? err.message : "Failed to delete fact");
     }
   };
 
@@ -195,168 +194,112 @@ export function ChannelDetail({
       setStoryForm({ title: "", story: "", people: "", happenedOn: "" });
       await loadTabData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Thêm kỷ niệm thất bại");
+      alert(err instanceof Error ? err.message : "Failed to add story");
     }
   };
 
   const handleDeleteStory = async (id: number) => {
-    if (!confirm("Bạn có chắc muốn xoá kỷ niệm này?")) return;
+    if (!confirm("Are you sure you want to delete this story?")) return;
     try {
       await api.deleteStory(channel.chatId, id);
       await loadTabData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Xoá kỷ niệm thất bại");
+      alert(err instanceof Error ? err.message : "Failed to delete story");
     }
   };
 
+  const tabClasses = (tab: "messages" | "reminders" | "memory") =>
+    `py-3.5 px-5 text-sm font-semibold flex items-center gap-2 transition-all duration-150 border-b-2 cursor-pointer ${
+      activeTab === tab
+        ? "text-indigo-400 border-indigo-500"
+        : "text-slate-400 border-transparent hover:text-slate-200"
+    }`;
+
   return (
-    <div className="glass-panel" style={{
-      display: "flex",
-      flexDirection: "column",
-      height: "calc(100vh - 120px)",
-      overflow: "hidden"
-    }}>
+    <div className="glass-panel flex flex-col h-[calc(100vh-120px)] overflow-hidden">
       {/* Channel Header Banner */}
-      <div style={{
-        padding: "1.25rem 1.5rem",
-        borderBottom: "1px solid var(--border-color)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-        gap: "1rem"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <div style={{
-            width: "44px",
-            height: "44px",
-            borderRadius: "12px",
-            background: channel.chatType === "GROUP" ? "rgba(99, 102, 241, 0.15)" : "rgba(16, 185, 129, 0.15)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: "1px solid var(--border-color)"
-          }}>
+      <div className="p-5 px-6 border-b border-white/[0.08] flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center border border-white/[0.08] ${
+            channel.chatType === "GROUP" ? "bg-indigo-500/15" : "bg-emerald-500/15"
+          }`}>
             {channel.chatType === "GROUP" ? (
-              <Users size={22} color="var(--accent-primary)" />
+              <Users size={22} className="text-indigo-400" />
             ) : (
-              <User size={22} color="var(--status-active)" />
+              <User size={22} className="text-emerald-400" />
             )}
           </div>
           <div>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: "700" }}>{channel.name}</h2>
-            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+            <h2 className="text-xl font-bold text-white">{channel.name}</h2>
+            <span className="text-xs text-slate-400 font-mono">
               {channel.chatId} • {channel.chatType}
             </span>
           </div>
         </div>
 
         {/* Status Dropdown Controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>Trạng thái:</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-300 font-medium">Status:</span>
           <select
             value={channel.status}
             onChange={(e) => handleStatusChange(e.target.value as ChannelStatus)}
-            className="form-input"
-            style={{
-              width: "auto",
-              padding: "0.4rem 0.8rem",
-              fontWeight: "600",
-              color: channel.status === "active" ? "var(--status-active)" : channel.status === "pending" ? "var(--status-pending)" : "var(--status-disabled)"
-            }}
+            className={`form-input w-auto py-1.5 px-3 font-semibold text-sm ${
+              channel.status === "active"
+                ? "text-emerald-400"
+                : channel.status === "pending"
+                ? "text-amber-400"
+                : "text-rose-400"
+            }`}
           >
-            <option value="active">Active (Hoạt động)</option>
-            <option value="pending">Pending (Chờ duyệt)</option>
-            <option value="disabled">Disabled (Chặn)</option>
+            <option value="active">Active</option>
+            <option value="pending">Pending</option>
+            <option value="disabled">Disabled</option>
           </select>
 
           <button
             onClick={loadTabData}
-            className="btn btn-secondary"
-            style={{ padding: "0.45rem 0.65rem" }}
-            title="Làm mới dữ liệu"
+            className="btn btn-secondary px-2.5 py-1.5"
+            title="Refresh data"
           >
-            <RefreshCw size={14} className={loading ? "spin" : ""} />
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
       </div>
 
       {/* Tabs Header */}
-      <div style={{
-        display: "flex",
-        borderBottom: "1px solid var(--border-color)",
-        background: "rgba(0,0,0,0.15)",
-        padding: "0 1rem"
-      }}>
+      <div className="flex border-b border-white/[0.08] bg-black/15 px-4">
         <button
           onClick={() => setActiveTab("messages")}
-          style={{
-            padding: "0.85rem 1.25rem",
-            fontSize: "0.9rem",
-            fontWeight: "600",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            color: activeTab === "messages" ? "var(--accent-primary)" : "var(--text-secondary)",
-            borderBottom: activeTab === "messages" ? "2px solid var(--accent-primary)" : "2px solid transparent",
-            transition: "all 0.15s ease"
-          }}
+          className={tabClasses("messages")}
         >
           <MessageSquare size={16} />
-          <span>Tin nhắn ({messages.length})</span>
+          <span>Messages ({messages.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab("reminders")}
-          style={{
-            padding: "0.85rem 1.25rem",
-            fontSize: "0.9rem",
-            fontWeight: "600",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            color: activeTab === "reminders" ? "var(--accent-primary)" : "var(--text-secondary)",
-            borderBottom: activeTab === "reminders" ? "2px solid var(--accent-primary)" : "2px solid transparent",
-            transition: "all 0.15s ease"
-          }}
+          className={tabClasses("reminders")}
         >
           <Calendar size={16} />
-          <span>Nhắc nhở & Sự kiện ({events.length})</span>
+          <span>Reminders & Events ({events.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab("memory")}
-          style={{
-            padding: "0.85rem 1.25rem",
-            fontSize: "0.9rem",
-            fontWeight: "600",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            color: activeTab === "memory" ? "var(--accent-primary)" : "var(--text-secondary)",
-            borderBottom: activeTab === "memory" ? "2px solid var(--accent-primary)" : "2px solid transparent",
-            transition: "all 0.15s ease"
-          }}
+          className={tabClasses("memory")}
         >
           <Brain size={16} />
-          <span>Bộ nhớ & Kỷ niệm ({facts.length + stories.length})</span>
+          <span>Memory & Stories ({facts.length + stories.length})</span>
         </button>
       </div>
 
       {/* Tab 1: Messages Stream */}
       {activeTab === "messages" && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: "1.25rem",
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.85rem"
-          }}>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3.5">
             {messages.length === 0 ? (
-              <div style={{ textAlign: "center", color: "var(--text-muted)", margin: "auto" }}>
-                Chưa có tin nhắn nào được ghi nhận.
+              <div className="text-center text-slate-400 m-auto text-sm">
+                No recorded messages for this channel yet.
               </div>
             ) : (
               messages.map((m) => {
@@ -364,40 +307,23 @@ export function ChannelDetail({
                 return (
                   <div
                     key={m.id}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: isAssistant ? "flex-end" : "flex-start",
-                      maxWidth: "75%",
-                      alignSelf: isAssistant ? "flex-end" : "flex-start"
-                    }}
+                    className={`flex flex-col max-w-[75%] ${
+                      isAssistant ? "items-end self-end" : "items-start self-start"
+                    }`}
                   >
-                    <div style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                      fontSize: "0.75rem",
-                      color: "var(--text-muted)",
-                      marginBottom: "0.25rem"
-                    }}>
-                      <span style={{ fontWeight: "600", color: isAssistant ? "var(--accent-primary)" : "var(--text-secondary)" }}>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
+                      <span className={`font-semibold ${isAssistant ? "text-indigo-400" : "text-slate-300"}`}>
                         {isAssistant ? "🤖 46-Bot" : m.senderName || m.senderId}
                       </span>
                       <span>•</span>
-                      <span>{new Date(m.ts).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span>
+                      <span>{new Date(m.ts).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
 
-                    <div style={{
-                      padding: "0.75rem 1rem",
-                      borderRadius: "var(--radius-lg)",
-                      background: isAssistant ? "var(--accent-primary)" : "var(--bg-tertiary)",
-                      color: isAssistant ? "#ffffff" : "var(--text-primary)",
-                      border: isAssistant ? "none" : "1px solid var(--border-color)",
-                      lineHeight: "1.5",
-                      fontSize: "0.9rem",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word"
-                    }}>
+                    <div className={`p-3 px-4 rounded-2xl leading-relaxed text-sm whitespace-pre-wrap break-words ${
+                      isAssistant
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                        : "bg-slate-800 text-slate-100 border border-white/[0.08]"
+                    }`}>
                       {m.content}
                     </div>
                   </div>
@@ -406,16 +332,14 @@ export function ChannelDetail({
             )}
             <div ref={messagesEndRef} />
           </div>
-
         </div>
       )}
 
       {/* Tab 2: Reminders & Events */}
       {activeTab === "reminders" && (
-        <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem" }}>
-
+        <div className="flex-1 overflow-y-auto p-6">
           {/* Channel Calendar */}
-          <div className="glass-panel" style={{ padding: "1.25rem", marginBottom: "1.5rem" }}>
+          <div className="glass-panel p-5 mb-6">
             <CalendarMonthGrid
               year={calYear}
               month={calMonth}
@@ -430,59 +354,58 @@ export function ChannelDetail({
             />
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-            <h3 style={{ fontSize: "1.1rem", fontWeight: "700" }}>Events & Reminders</h3>
+          <div className="flex justify-between items-center mb-5">
+            <h3 className="text-lg font-bold text-white">Events & Reminders</h3>
             <button
               onClick={() => setShowEventForm(!showEventForm)}
-              className="btn btn-primary"
-              style={{ fontSize: "0.8rem", padding: "0.45rem 0.85rem" }}
+              className="btn btn-primary text-xs px-3.5 py-2"
             >
               <Plus size={14} />
-              <span>{showEventForm ? "Đóng Form" : "Tạo sự kiện mới"}</span>
+              <span>{showEventForm ? "Close Form" : "Create New Event"}</span>
             </button>
           </div>
 
           {showEventForm && (
-            <form onSubmit={handleCreateEvent} className="glass-panel" style={{ padding: "1.25rem", marginBottom: "1.5rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.85rem", marginBottom: "1rem" }}>
+            <form onSubmit={handleCreateEvent} className="glass-panel p-5 mb-6">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3.5 mb-4">
                 <div>
-                  <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Tiêu đề sự kiện *</label>
+                  <label className="text-xs text-slate-400 block mb-1">Event Title *</label>
                   <input
                     type="text"
                     required
-                    placeholder="VD: Sinh nhật Bố..."
+                    placeholder="e.g. Dad's Birthday..."
                     value={eventForm.title}
                     onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
                     className="form-input"
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Loại sự kiện</label>
+                  <label className="text-xs text-slate-400 block mb-1">Event Type</label>
                   <select
                     value={eventForm.kind}
                     onChange={(e) => setEventForm({ ...eventForm, kind: e.target.value })}
                     className="form-input"
                   >
-                    <option value="event">Sự kiện chung</option>
-                    <option value="birthday">Sinh nhật</option>
-                    <option value="anniversary">Kỷ niệm</option>
-                    <option value="gio">Ngày Giỗ</option>
+                    <option value="event">General Event</option>
+                    <option value="birthday">Birthday</option>
+                    <option value="anniversary">Anniversary</option>
+                    <option value="gio">Death Anniversary (Giỗ)</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Lịch</label>
+                  <label className="text-xs text-slate-400 block mb-1">Calendar</label>
                   <select
                     value={eventForm.calendar}
                     onChange={(e) => setEventForm({ ...eventForm, calendar: e.target.value })}
                     className="form-input"
                   >
-                    <option value="solar">Dương lịch</option>
-                    <option value="lunar">Âm lịch</option>
+                    <option value="solar">Solar (Dương lịch)</option>
+                    <option value="lunar">Lunar (Âm lịch)</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Ngày / Tháng</label>
-                  <div style={{ display: "flex", gap: "0.4rem" }}>
+                  <label className="text-xs text-slate-400 block mb-1">Day / Month</label>
+                  <div className="flex gap-2">
                     <input
                       type="number"
                       min={1}
@@ -490,7 +413,7 @@ export function ChannelDetail({
                       value={eventForm.day}
                       onChange={(e) => setEventForm({ ...eventForm, day: Number(e.target.value) })}
                       className="form-input"
-                      placeholder="Ngày"
+                      placeholder="Day"
                     />
                     <input
                       type="number"
@@ -499,24 +422,24 @@ export function ChannelDetail({
                       value={eventForm.month}
                       onChange={(e) => setEventForm({ ...eventForm, month: Number(e.target.value) })}
                       className="form-input"
-                      placeholder="Tháng"
+                      placeholder="Month"
                     />
                   </div>
                 </div>
                 <div>
-                  <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Lặp lại</label>
+                  <label className="text-xs text-slate-400 block mb-1">Recurrence</label>
                   <select
                     value={eventForm.recurrence}
                     onChange={(e) => setEventForm({ ...eventForm, recurrence: e.target.value })}
                     className="form-input"
                   >
-                    <option value="yearly">Hàng năm</option>
-                    <option value="monthly">Hàng tháng</option>
-                    <option value="none">Chỉ 1 lần</option>
+                    <option value="yearly">Yearly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="none">One-time</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Báo trước (ngày)</label>
+                  <label className="text-xs text-slate-400 block mb-1">Remind In Advance (days)</label>
                   <input
                     type="number"
                     min={0}
@@ -528,41 +451,41 @@ export function ChannelDetail({
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button type="submit" className="btn btn-primary" style={{ padding: "0.5rem 1rem" }}>
-                  Lưu sự kiện
+              <div className="flex justify-end">
+                <button type="submit" className="btn btn-primary px-4 py-2 text-sm">
+                  Save Event
                 </button>
               </div>
             </form>
           )}
 
           {events.length === 0 ? (
-            <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>
-              Chưa có sự kiện nào cho kênh này.
+            <div className="text-center text-slate-400 py-8 text-sm">
+              No events or reminders recorded for this channel.
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
               {events.map((ev) => (
-                <div key={ev.id} className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <h4 style={{ fontWeight: "700", fontSize: "0.95rem" }}>{ev.title}</h4>
+                <div key={ev.id} className="glass-panel p-4 flex flex-col gap-2">
+                  <div className="flex justify-between items-start">
+                    <h4 className="font-bold text-sm text-slate-100">{ev.title}</h4>
                     <button
                       onClick={() => handleDeleteEvent(ev.id)}
-                      style={{ color: "var(--text-muted)", padding: "0.2rem" }}
-                      title="Xoá sự kiện"
+                      className="text-slate-400 hover:text-rose-400 p-1 transition-colors"
+                      title="Delete event"
                     >
                       <Trash2 size={15} />
                     </button>
                   </div>
-                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", fontSize: "0.75rem" }}>
-                    <span className="badge" style={{ background: "rgba(99, 102, 241, 0.15)", color: "var(--accent-primary)" }}>
+                  <div className="flex gap-1.5 flex-wrap text-xs">
+                    <span className="badge bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
                       {ev.day}/{ev.month} {ev.calendar === "lunar" ? "(Âm lịch)" : "(Dương lịch)"}
                     </span>
-                    <span className="badge" style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+                    <span className="badge bg-slate-800 text-slate-300">
                       {ev.kind}
                     </span>
                     {ev.remindDaysBefore > 0 && (
-                      <span className="badge badge-pending">Báo trước {ev.remindDaysBefore} ngày</span>
+                      <span className="badge badge-pending">Remind {ev.remindDaysBefore}d before</span>
                     )}
                   </div>
                 </div>
@@ -574,67 +497,70 @@ export function ChannelDetail({
 
       {/* Tab 3: Memory & Stories */}
       {activeTab === "memory" && (
-        <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem" }}>
+        <div className="flex-1 overflow-y-auto p-6">
           {/* Facts Section */}
-          <div style={{ marginBottom: "2.5rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Sparkles size={18} color="var(--accent-primary)" />
-                <h3 style={{ fontSize: "1.1rem", fontWeight: "700" }}>Thông tin ghi nhớ (Facts)</h3>
+          <div className="mb-10">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-indigo-400" />
+                <h3 className="text-lg font-bold text-white">Remembered Facts</h3>
               </div>
               <button
                 onClick={() => setShowFactForm(!showFactForm)}
-                className="btn btn-primary"
-                style={{ fontSize: "0.8rem", padding: "0.45rem 0.85rem" }}
+                className="btn btn-primary text-xs px-3.5 py-2"
               >
                 <Plus size={14} />
-                <span>{showFactForm ? "Đóng Form" : "Thêm ghi nhớ"}</span>
+                <span>{showFactForm ? "Close Form" : "Add Fact"}</span>
               </button>
             </div>
 
             {showFactForm && (
-              <form onSubmit={handleCreateFact} className="glass-panel" style={{ padding: "1.25rem", marginBottom: "1.5rem" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "0.85rem", marginBottom: "1rem" }}>
+              <form onSubmit={handleCreateFact} className="glass-panel p-5 mb-6">
+                <div className="grid grid-cols-[1fr_2fr] gap-3.5 mb-4">
                   <div>
-                    <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Đối tượng (Subject) *</label>
+                    <label className="text-xs text-slate-400 block mb-1">Subject *</label>
                     <input
                       type="text"
                       required
-                      placeholder="VD: Mẹ, Bố, Con..."
+                      placeholder="e.g. Mom, Dad, Alex..."
                       value={factForm.subject}
                       onChange={(e) => setFactForm({ ...factForm, subject: e.target.value })}
                       className="form-input"
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Nội dung ghi nhớ (Fact) *</label>
+                    <label className="text-xs text-slate-400 block mb-1">Fact *</label>
                     <input
                       type="text"
                       required
-                      placeholder="VD: Thích ăn chay ngày rằm, dị ứng tôm..."
+                      placeholder="e.g. Likes vegetarian food on 15th, allergic to shrimp..."
                       value={factForm.fact}
                       onChange={(e) => setFactForm({ ...factForm, fact: e.target.value })}
                       className="form-input"
                     />
                   </div>
                 </div>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button type="submit" className="btn btn-primary" style={{ padding: "0.5rem 1rem" }}>Lưu Fact</button>
+                <div className="flex justify-end">
+                  <button type="submit" className="btn btn-primary px-4 py-2 text-sm">Save Fact</button>
                 </div>
               </form>
             )}
 
             {facts.length === 0 ? (
-              <div style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Chưa có ghi nhớ nào.</div>
+              <div className="text-slate-400 text-sm">No facts recorded yet.</div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "0.85rem" }}>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3.5">
                 {facts.map((f) => (
-                  <div key={f.id} className="glass-panel" style={{ padding: "0.85rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div key={f.id} className="glass-panel p-3.5 px-4 flex justify-between items-start">
                     <div>
-                      <span style={{ fontWeight: "700", color: "var(--accent-primary)", fontSize: "0.85rem" }}>{f.subject}:</span>
-                      <p style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>{f.fact}</p>
+                      <span className="font-bold text-indigo-400 text-sm">{f.subject}:</span>
+                      <p className="text-sm mt-1 text-slate-200">{f.fact}</p>
                     </div>
-                    <button onClick={() => handleDeleteFact(f.id)} style={{ color: "var(--text-muted)" }} title="Xoá">
+                    <button
+                      onClick={() => handleDeleteFact(f.id)}
+                      className="text-slate-400 hover:text-rose-400 p-1 transition-colors"
+                      title="Delete"
+                    >
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -645,40 +571,39 @@ export function ChannelDetail({
 
           {/* Stories Section */}
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <BookOpen size={18} color="var(--status-active)" />
-                <h3 style={{ fontSize: "1.1rem", fontWeight: "700" }}>Sổ Kỷ Niệm (Memory Book)</h3>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <BookOpen size={18} className="text-emerald-400" />
+                <h3 className="text-lg font-bold text-white">Memory Book (Stories)</h3>
               </div>
               <button
                 onClick={() => setShowStoryForm(!showStoryForm)}
-                className="btn btn-primary"
-                style={{ fontSize: "0.8rem", padding: "0.45rem 0.85rem" }}
+                className="btn btn-primary text-xs px-3.5 py-2"
               >
                 <Plus size={14} />
-                <span>{showStoryForm ? "Đóng Form" : "Thêm kỷ niệm"}</span>
+                <span>{showStoryForm ? "Close Form" : "Add Story"}</span>
               </button>
             </div>
 
             {showStoryForm && (
-              <form onSubmit={handleCreateStory} className="glass-panel" style={{ padding: "1.25rem", marginBottom: "1.5rem" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0.85rem", marginBottom: "0.85rem" }}>
+              <form onSubmit={handleCreateStory} className="glass-panel p-5 mb-6">
+                <div className="grid grid-cols-[2fr_1fr] gap-3.5 mb-3.5">
                   <div>
-                    <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Tiêu đề kỷ niệm *</label>
+                    <label className="text-xs text-slate-400 block mb-1">Story Title *</label>
                     <input
                       type="text"
                       required
-                      placeholder="VD: Chuyến du lịch hè Nha Trang 2024..."
+                      placeholder="e.g. Summer vacation trip to Da Nang 2024..."
                       value={storyForm.title}
                       onChange={(e) => setStoryForm({ ...storyForm, title: e.target.value })}
                       className="form-input"
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Những ai tham gia</label>
+                    <label className="text-xs text-slate-400 block mb-1">People Involved</label>
                     <input
                       type="text"
-                      placeholder="Bố, Mẹ, Bon..."
+                      placeholder="Dad, Mom, Alex..."
                       value={storyForm.people}
                       onChange={(e) => setStoryForm({ ...storyForm, people: e.target.value })}
                       className="form-input"
@@ -686,40 +611,44 @@ export function ChannelDetail({
                   </div>
                 </div>
 
-                <div style={{ marginBottom: "1rem" }}>
-                  <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block", marginBottom: "0.25rem" }}>Nội dung câu chuyện *</label>
+                <div className="mb-4">
+                  <label className="text-xs text-slate-400 block mb-1">Story Content *</label>
                   <textarea
                     required
                     rows={3}
-                    placeholder="Kể lại câu chuyện hay kỷ niệm đáng nhớ..."
+                    placeholder="Recount the memorable event or story..."
                     value={storyForm.story}
                     onChange={(e) => setStoryForm({ ...storyForm, story: e.target.value })}
                     className="form-input"
                   />
                 </div>
 
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button type="submit" className="btn btn-primary" style={{ padding: "0.5rem 1rem" }}>Lưu Kỷ Niệm</button>
+                <div className="flex justify-end">
+                  <button type="submit" className="btn btn-primary px-4 py-2 text-sm">Save Story</button>
                 </div>
               </form>
             )}
 
             {stories.length === 0 ? (
-              <div style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Chưa có câu chuyện nào trong sổ kỷ niệm.</div>
+              <div className="text-slate-400 text-sm">No stories in the memory book yet.</div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1rem" }}>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
                 {stories.map((s) => (
-                  <div key={s.id} className="glass-panel" style={{ padding: "1.25rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <h4 style={{ fontWeight: "700", fontSize: "1rem", color: "var(--status-active)" }}>{s.title}</h4>
-                      <button onClick={() => handleDeleteStory(s.id)} style={{ color: "var(--text-muted)" }} title="Xoá">
+                  <div key={s.id} className="glass-panel p-5 flex flex-col gap-2">
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-bold text-base text-emerald-400">{s.title}</h4>
+                      <button
+                        onClick={() => handleDeleteStory(s.id)}
+                        className="text-slate-400 hover:text-rose-400 p-1 transition-colors"
+                        title="Delete"
+                      >
                         <Trash2 size={14} />
                       </button>
                     </div>
-                    <p style={{ fontSize: "0.875rem", color: "var(--text-primary)", lineHeight: "1.5" }}>{s.story}</p>
+                    <p className="text-sm text-slate-200 leading-relaxed">{s.story}</p>
                     {s.people && (
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.5rem" }}>
-                        👥 Người tham gia: {s.people}
+                      <div className="text-xs text-slate-400 mt-2">
+                        👥 People: {s.people}
                       </div>
                     )}
                   </div>
