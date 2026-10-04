@@ -7,15 +7,15 @@ Learn the family group id from a live Zalo mention, then prove the bot can speak
 ## Requirements
 
 ### Requirement: Unset family chat stays silent
-While `FAMILY_CHAT_ID` is empty, the process SHALL log `chat.id`, `chat_type`, sender id, and sender display name for every delivery that has a message id, and SHALL NOT send a Zalo message.
+While `FAMILY_CHAT_ID` is empty, the process SHALL log `chat.id`, `chat_type`, sender id, and sender display name for every delivery that has a message id. A group delivery SHALL NOT be answered.
 
 #### Scenario: Group mention during discovery
 - **WHEN** `FAMILY_CHAT_ID` is empty and a group text message arrives
 - **THEN** the log includes that message's `chat.id` and `chat_type` of `GROUP`, and no Zalo message is sent
 
-#### Scenario: Private message during discovery
-- **WHEN** `FAMILY_CHAT_ID` is empty and a private text message arrives
-- **THEN** the log includes `chat_type` of `PRIVATE`, and no Zalo message is sent
+#### Scenario: Private message is logged during discovery
+- **WHEN** `FAMILY_CHAT_ID` is empty and a person sends a private text message
+- **THEN** the log includes `chat_type` of `PRIVATE`
 
 ### Requirement: Matching group text gets the canned reply
 When `FAMILY_CHAT_ID` is set, the process SHALL send the exact text `Mình nhận được.` for an incoming text message whose `chat_type` is `GROUP`, whose `chat.id` equals `FAMILY_CHAT_ID`, and whose sender is not a bot. The outbound message SHALL contain no other text. The process SHALL send it to `chat.id` and SHALL NOT send it to the sender's user id.
@@ -28,15 +28,22 @@ When `FAMILY_CHAT_ID` is set, the process SHALL send the exact text `Mình nhậ
 - **WHEN** a delivery in the family group has a sender marked as a bot
 - **THEN** no Zalo message is sent
 
-### Requirement: Every other chat stays silent
-When `FAMILY_CHAT_ID` is set, the process SHALL NOT send a message for a delivery whose `chat.id` differs from `FAMILY_CHAT_ID` or whose `chat_type` is not `GROUP`.
+### Requirement: Private text gets the canned reply
+The process SHALL send the exact text `Mình nhận được.` for an incoming text message whose `chat_type` is `PRIVATE` and whose sender is not a bot. The process SHALL send it to that message's `chat.id`. This applies whether or not `FAMILY_CHAT_ID` is set. A private image, sticker, voice, or unsupported event SHALL NOT be answered.
 
-#### Scenario: Different chat id
-- **WHEN** `FAMILY_CHAT_ID` is set and a text message arrives for a different `chat.id`
+#### Scenario: Direct text message
+- **WHEN** a person sends a text message in a private chat
+- **THEN** that chat receives one message whose text is exactly `Mình nhận được.`
+
+#### Scenario: Direct image
+- **WHEN** a private chat delivers an image event
 - **THEN** no Zalo message is sent
 
-#### Scenario: Private chat with the same id string
-- **WHEN** `FAMILY_CHAT_ID` is set and a text message has that id with `chat_type` of `PRIVATE`
+### Requirement: Every other group stays silent
+When `FAMILY_CHAT_ID` is set, the process SHALL NOT send a message for a group delivery whose `chat.id` differs from `FAMILY_CHAT_ID`.
+
+#### Scenario: Different chat id
+- **WHEN** `FAMILY_CHAT_ID` is set and a text message arrives for a different group `chat.id`
 - **THEN** no Zalo message is sent
 
 ### Requirement: Non-text events are not answered

@@ -163,7 +163,7 @@ describe("webhook http", () => {
 });
 
 describe("group discovery", () => {
-  it("logs a group and a private chat during discovery and does not send", async () => {
+  it("logs a group during discovery without sending, and replies to a private chat", async () => {
     const lines: string[] = [];
     const { app, zalo, queue } = testApp("", lines);
     const group = envelope({
@@ -188,7 +188,7 @@ describe("group discovery", () => {
     assert.match(joined, /https:\/\/cdn\.example\/photo\.jpg/);
     assert.equal(joined.includes(secret), false);
     assert.equal(joined.includes(token), false);
-    assert.equal(zalo.sends.length, 0);
+    assert.deepEqual(zalo.sends, [{ chatId: "user-9", text: CANNED_REPLY }]);
     await app.close();
   });
 
@@ -209,17 +209,34 @@ describe("group discovery", () => {
     await app.close();
   });
 
-  it("stays silent for a bot sender, another chat, a private chat, and an image", async () => {
+  it("replies to a private text chat and stays silent for other groups, bot senders, and images", async () => {
     const { app, zalo, queue } = testApp("group-1");
     await post(app, JSON.stringify(envelope({ isBot: true, messageId: "bot-msg" })));
     await post(app, JSON.stringify(envelope({ chatId: "group-2", messageId: "other-group" })));
-    await post(app, JSON.stringify(envelope({ chatId: "group-1", chatType: "PRIVATE", messageId: "private-same" })));
+    await post(
+      app,
+      JSON.stringify(
+        envelope({ chatId: "user-9", chatType: "PRIVATE", messageId: "private-1", senderId: "user-9" }),
+      ),
+    );
     await post(
       app,
       JSON.stringify(envelope({ eventName: "message.image.received", messageId: "image-1", text: "" })),
     );
+    await post(
+      app,
+      JSON.stringify(
+        envelope({
+          chatId: "user-8",
+          chatType: "PRIVATE",
+          eventName: "message.image.received",
+          messageId: "private-image",
+          text: "",
+        }),
+      ),
+    );
     await queue.drain();
-    assert.equal(zalo.sends.length, 0);
+    assert.deepEqual(zalo.sends, [{ chatId: "user-9", text: CANNED_REPLY }]);
     await app.close();
   });
 

@@ -46,25 +46,23 @@ export async function handleDelivery(input: {
       message_id: message.messageId,
       raw: message.raw,
     });
-    return;
+  } else {
+    log.info({
+      event: "delivery",
+      event_name: message.eventName,
+      chat_id: message.chatId,
+      chat_type: message.chatType,
+      sender_id: message.senderId,
+      message_id: message.messageId,
+    });
   }
 
-  log.info({
-    event: "delivery",
-    event_name: message.eventName,
-    chat_id: message.chatId,
-    chat_type: message.chatType,
-    sender_id: message.senderId,
-    message_id: message.messageId,
-  });
-
-  if (message.eventName !== "message.text.received") {
+  if (message.eventName !== "message.text.received" || message.isBot) {
     return;
   }
-  if (message.isBot) {
-    return;
-  }
-  if (message.chatType !== "GROUP" || message.chatId !== config.familyChatId) {
+  const isDirect = message.chatType === "PRIVATE";
+  const isFamilyGroup = message.chatType === "GROUP" && message.chatId === config.familyChatId;
+  if (!isDirect && !isFamilyGroup) {
     return;
   }
   if (seen.has(message.messageId)) {
