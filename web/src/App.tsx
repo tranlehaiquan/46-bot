@@ -133,6 +133,7 @@ function AdminApp() {
 
             {selectedChannel ? (
               <ChannelDetail
+                key={selectedChannel.chatId}
                 channel={selectedChannel}
                 onChannelUpdated={handleChannelUpdated}
               />
