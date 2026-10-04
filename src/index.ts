@@ -1,5 +1,6 @@
 import { ConfigError, loadConfig } from "./config.js";
 import { closeDatabase, openDatabase } from "./db/connection.js";
+import { createListRepository } from "./db/list-repo.js";
 import { createMessageRepository } from "./db/message-repo.js";
 import { migrate } from "./db/migrations.js";
 import { createSeenRepository } from "./db/seen-repo.js";
@@ -46,6 +47,7 @@ async function main(): Promise<void> {
   migrate(db);
   const seenRepo = createSeenRepository(db);
   const messageRepo = createMessageRepository(db);
+  const listRepo = createListRepository(db);
 
   const llmClient = createLlmClient({
     provider: config.llmProvider,
@@ -61,6 +63,7 @@ async function main(): Promise<void> {
     queue,
     seenRepo,
     messageRepo,
+    listRepo,
     llmClient,
   });
 

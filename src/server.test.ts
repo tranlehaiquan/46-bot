@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { loadConfig } from "./config.js";
 import { closeDatabase, openDatabase } from "./db/connection.js";
+import { createListRepository, type ListRepository } from "./db/list-repo.js";
 import { createMessageRepository, type MessageRepository } from "./db/message-repo.js";
 import { migrate } from "./db/migrations.js";
 import { createSeenRepository, type SeenRepository } from "./db/seen-repo.js";
@@ -71,6 +72,7 @@ function testApp(
   options?: {
     seenRepo?: SeenRepository;
     messageRepo?: MessageRepository;
+    listRepo?: ListRepository;
     llmClient?: LlmClient;
   },
 ) {
@@ -86,6 +88,7 @@ function testApp(
     queue,
     seenRepo: options?.seenRepo,
     messageRepo: options?.messageRepo,
+    listRepo: options?.listRepo,
     llmClient: options?.llmClient,
   });
   return { app, zalo, queue };
@@ -429,6 +432,75 @@ describe("LLM conversation and database integration", () => {
     assert.equal(first.zalo.sends.length, 1);
     assert.equal(second.zalo.sends.length, 0);
 
+    closeDatabase(db);
+  });
+
+  it("supports shared lists tools execution through conversational flow", async () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+    const listRepo = createListRepository(db);
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        assert.ok(params.tools, "Tools should be provided to LLM");
+        const tools = params.tools as Record<string, { execute?: (args: any, opt?: any) => Promise<any> }>;
+        assert.ok(tools.list_create, "list_create tool should exist");
+        assert.ok(tools.list_add_item, "list_add_item tool should exist");
+        assert.ok(tools.list_check_item, "list_check_item tool should exist");
+        assert.ok(tools.list_show, "list_show tool should exist");
+
+        // Simulate multi-step tool calls
+        await tools.list_create.execute?.({ name: "Đi chợ" });
+        await tools.list_add_item.execute?.({ listName: "Đi chợ", items: ["Trứng gà", "Sữa tươi"] });
+        await tools.list_check_item.execute?.({ listName: "Đi chợ", itemText: "Trứng", done: true });
+        const listResult = await tools.list_show.execute?.({ listName: "Đi chợ" });
+
+        return `Đã cập nhật danh sách "${listResult.listName}". Còn lại 1 món cần mua.`;
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      listRepo,
+      llmClient: mockLlm,
+    });
+
+    const msg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Thêm trứng gà và sữa tươi vào danh sách Đi chợ rồi đánh dấu đã mua trứng nha",
+      senderId: "user-1",
+      senderName: "Alice",
+      messageId: "msg-list-1",
+    });
+
+    await post(app, JSON.stringify(msg));
+    await queue.drain();
+
+    // Verify response was sent
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: 'Đã cập nhật danh sách "Đi chợ". Còn lại 1 món cần mua.' },
+    ]);
+
+    // Verify list and items in database
+    const list = listRepo.getListByName("group-1", "Đi chợ");
+    assert.ok(list);
+    assert.equal(list.name, "Đi chợ");
+    const items = listRepo.getItems(list.id);
+    assert.equal(items.length, 2);
+    // Uncompleted items come first (done = 0 / false)
+    assert.equal(items[0].text, "Sữa tươi");
+    assert.equal(items[0].done, false);
+    assert.equal(items[0].addedBy, "Alice");
+    // Completed items come next (done = 1 / true)
+    assert.equal(items[1].text, "Trứng gà");
+    assert.equal(items[1].done, true);
+    assert.equal(items[1].addedBy, "Alice");
+
+    await app.close();
     closeDatabase(db);
   });
 });

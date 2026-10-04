@@ -1,6 +1,6 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText } from "ai";
+import { generateText, stepCountIs } from "ai";
 import type { MessageRow } from "../db/message-repo.js";
 
 export const FALLBACK_ERROR_MESSAGE = "Mình chưa làm được việc này, thử lại sau nhé.";
@@ -9,7 +9,11 @@ export const DEFAULT_SYSTEM_PROMPT = `Bạn là Family Bot, trợ lý thân thi�
 - Ngôn ngữ: Mặc định trả lời bằng tiếng Việt. Nếu người dùng viết tiếng Anh, trả lời bằng tiếng Anh.
 - Giọng điệu: Thân thiện, ấm áp, gần gũi như người trong gia đình, ngắn gọn, súc tích.
 - Trung thực: Không bịa đặt thông tin. Nếu không biết thì nói thật là chưa biết.
-- Lịch sử trò chuyện cung cấp tên người gửi để bạn hiểu ngữ cảnh và ai đang nói gì.`;
+- Lịch sử trò chuyện cung cấp tên người gửi để bạn hiểu ngữ cảnh và ai đang nói gì.
+- Quản lý danh sách: Khi gia đình yêu cầu tạo, thêm món/việc, đánh dấu xong/chưa xong, xóa hoặc xem danh sách (đi chợ, việc nhà, đồ đi du lịch...), hãy gọi các công cụ tương ứng (list_create, list_add_item, list_check_item, list_remove_item, list_show).
+- Khi hiển thị danh sách, hãy trình bày rõ ràng, dễ nhìn, dùng ký hiệu [ ] cho món chưa xong và [x] cho món đã xong.`;
+
+export type ToolSet = NonNullable<Parameters<typeof generateText>[0]["tools"]>;
 
 export interface LlmClient {
   generateReply(params: {
@@ -20,6 +24,7 @@ export interface LlmClient {
       senderName: string;
       content: string;
     };
+    tools?: ToolSet;
   }): Promise<string>;
 }
 
@@ -67,6 +72,8 @@ export function createLlmClient(options: LlmClientOptions): LlmClient {
         model,
         system: params.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
         messages,
+        tools: params.tools,
+        stopWhen: stepCountIs(4),
       });
 
       return result.text.trim();
