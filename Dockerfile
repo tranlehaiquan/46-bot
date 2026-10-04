@@ -1,17 +1,19 @@
 FROM node:22-slim AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install -g pnpm@12.9.1
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
-RUN npm run build
+RUN pnpm run build
 
 FROM node:22-slim AS runtime
 WORKDIR /app
-RUN groupadd --gid 10001 bot \
+RUN npm install -g pnpm@12.9.1 \
+  && groupadd --gid 10001 bot \
   && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin bot
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod && pnpm store prune
 COPY --from=build /app/dist ./dist
 RUN mkdir -p /data && chown bot:bot /data
 USER bot
