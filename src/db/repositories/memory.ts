@@ -32,10 +32,12 @@ export type AddStoryInput = {
 export interface MemoryRepository {
   upsertMemory(chatId: string, subject: string, fact: string, createdBy: string): MemoryRow;
   deleteMemory(chatId: string, subject: string): boolean;
+  deleteMemoryById(chatId: string, id: number): boolean;
   listMemories(chatId: string, subject?: string): MemoryRow[];
   getMemory(chatId: string, subject: string): MemoryRow | undefined;
 
   addStory(input: AddStoryInput): MemoryBookRow;
+  deleteStory(chatId: string, id: number): boolean;
   searchStories(chatId: string, query: string, limit?: number): MemoryBookRow[];
   listStories(chatId: string, limit?: number): MemoryBookRow[];
   getStoryById(chatId: string, id: number): MemoryBookRow | undefined;
@@ -69,6 +71,16 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
   const deleteMemoryStmt = db.prepare(`
     DELETE FROM memories
     WHERE chat_id = ? AND LOWER(TRIM(subject)) = LOWER(TRIM(?))
+  `);
+
+  const deleteMemoryByIdStmt = db.prepare(`
+    DELETE FROM memories
+    WHERE chat_id = ? AND id = ?
+  `);
+
+  const deleteStoryStmt = db.prepare(`
+    DELETE FROM memory_book
+    WHERE chat_id = ? AND id = ?
   `);
 
   const listMemoriesByChatStmt = db.prepare(`
@@ -146,6 +158,11 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
       return result.changes > 0;
     },
 
+    deleteMemoryById(chatId: string, id: number): boolean {
+      const result = deleteMemoryByIdStmt.run(chatId, id);
+      return result.changes > 0;
+    },
+
     listMemories(chatId: string, subject?: string): MemoryRow[] {
       if (subject && subject.trim()) {
         return listMemoriesBySubjectStmt.all(chatId, subject.trim()) as MemoryRow[];
@@ -183,6 +200,11 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
         createdBy: input.createdBy,
         ts: now,
       };
+    },
+
+    deleteStory(chatId: string, id: number): boolean {
+      const result = deleteStoryStmt.run(chatId, id);
+      return result.changes > 0;
     },
 
     searchStories(chatId: string, query: string, limit = 10): MemoryBookRow[] {

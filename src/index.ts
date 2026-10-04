@@ -5,6 +5,7 @@ import { createMessageRepository } from "./db/message-repo.js";
 import { migrate } from "./db/migrations.js";
 import { createEventsRepository } from "./db/repositories/events.js";
 import { createMemoryRepository } from "./db/repositories/memory.js";
+import { createChannelRepository } from "./db/repositories/channels.js";
 import { createSeenRepository } from "./db/seen-repo.js";
 import { createLlmClient } from "./llm/client.js";
 import { createLogger } from "./logger.js";
@@ -53,6 +54,10 @@ async function main(): Promise<void> {
   const listRepo = createListRepository(db);
   const eventsRepo = createEventsRepository(db);
   const memoryRepo = createMemoryRepository(db);
+  const channelRepo = createChannelRepository(db);
+  if (config.familyChatIds.length > 0) {
+    channelRepo.seedChannels(config.familyChatIds);
+  }
 
   const llmClient = createLlmClient({
     provider: config.llmProvider,
@@ -71,6 +76,7 @@ async function main(): Promise<void> {
     listRepo,
     eventsRepo,
     memoryRepo,
+    channelRepo,
     llmClient,
   });
 

@@ -4,6 +4,7 @@ import type { ListRepository } from "./db/list-repo.js";
 import type { MessageRepository } from "./db/message-repo.js";
 import type { EventsRepository } from "./db/repositories/events.js";
 import type { MemoryRepository } from "./db/repositories/memory.js";
+import type { ChannelRepository } from "./db/repositories/channels.js";
 import type { SeenRepository } from "./db/seen-repo.js";
 import type { LlmClient } from "./llm/client.js";
 import { handleDelivery } from "./delivery.js";
@@ -11,6 +12,10 @@ import type { Logger } from "./logger.js";
 import { WorkQueue } from "./queue.js";
 import { secretsMatch } from "./secrets.js";
 import type { ZaloClient } from "./zalo-client.js";
+import fastifyStatic from "@fastify/static";
+import path from "node:path";
+import fs from "node:fs";
+import { registerAdminRoutes } from "./admin/routes.js";
 
 export const BODY_LIMIT = 64 * 1024;
 
@@ -24,6 +29,7 @@ export type ServerDeps = {
   listRepo?: ListRepository;
   eventsRepo?: EventsRepository;
   memoryRepo?: MemoryRepository;
+  channelRepo?: ChannelRepository;
   llmClient?: LlmClient;
 };
 
@@ -62,11 +68,33 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         listRepo: deps.listRepo,
         eventsRepo: deps.eventsRepo,
         memoryRepo: deps.memoryRepo,
+        channelRepo: deps.channelRepo,
         llmClient: deps.llmClient,
         seen,
       }),
     );
   });
+
+  registerAdminRoutes(app, deps);
+
+  const webDistPath = path.resolve(process.cwd(), "web/dist");
+  if (fs.existsSync(webDistPath)) {
+    app.register(fastifyStatic, {
+      root: webDistPath,
+      prefix: "/admin/",
+    });
+
+    app.get("/admin", async (_req, reply) => {
+      return reply.redirect("/admin/");
+    });
+
+    app.setNotFoundHandler(async (request, reply) => {
+      if (request.url.startsWith("/admin")) {
+        return reply.sendFile("index.html", webDistPath);
+      }
+      return reply.code(404).send({ message: "Not Found" });
+    });
+  }
 
   return app;
 }

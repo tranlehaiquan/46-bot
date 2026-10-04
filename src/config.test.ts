@@ -90,6 +90,14 @@ describe("loadConfig", () => {
     assert.equal(config.dbPath, "./test.db");
   });
 
+  it("defaults ADMIN_PASSWORD to admin123 when unspecified, and accepts custom value", () => {
+    const defaultConfig = loadConfig(validEnv());
+    assert.equal(defaultConfig.adminPassword, "admin123");
+
+    const customConfig = loadConfig(validEnv({ ADMIN_PASSWORD: "secret-admin-pass" }));
+    assert.equal(customConfig.adminPassword, "secret-admin-pass");
+  });
+
   it("refuses MODE=polling", () => {
     assert.throws(
       () => loadConfig(validEnv({ MODE: "polling" })),

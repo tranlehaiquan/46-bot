@@ -9,7 +9,8 @@
     "pnpm": ">=12"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm --dir web build && tsc -p tsconfig.build.json",
+    "build:web": "pnpm --dir web build",
     "start": "node dist/index.js",
     "test": "node --experimental-strip-types --import ./scripts/register-ts.mjs --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
@@ -17,6 +18,7 @@
   "dependencies": {
     "@ai-sdk/deepseek": "^3.0.58",
     "@ai-sdk/google": "^4.0.87",
+    "@fastify/static": "^10.1.5",
     "@tavily/core": "^0.7.13",
     "ai": "^7.0.127",
     "better-sqlite3": "^13.0.3",
@@ -28,5 +30,11 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.18.6",
     "typescript": "^5.9.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
   }
 }

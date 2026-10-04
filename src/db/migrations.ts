@@ -91,5 +91,16 @@ export function migrate(db: SqliteDatabase): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_memory_book_chat ON memory_book(chat_id, ts DESC);
+
+    CREATE TABLE IF NOT EXISTS channels (
+      chat_id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      chat_type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at INTEGER NOT NULL,
+      last_active_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_channels_status ON channels(status);
   `);
 }

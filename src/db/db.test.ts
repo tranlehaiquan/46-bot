@@ -67,9 +67,9 @@ describe("SQLite database layer", () => {
       migrate(db); // Idempotency check
 
       const tables = db
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('memories', 'memory_book')")
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('memories', 'memory_book', 'channels')")
         .all() as Array<{ name: string }>;
-      assert.equal(tables.length, 2);
+      assert.equal(tables.length, 3);
     } finally {
       closeDatabase(db);
     }

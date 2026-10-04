@@ -79,6 +79,7 @@ const envSchema = z.object({
     z.string().min(1),
   ),
   BOT_ID: z.preprocess((value) => (value === undefined ? "" : value), z.string()),
+  ADMIN_PASSWORD: z.preprocess((value) => (value === undefined || value === "" ? "admin123" : value), z.string()),
   TAVILY_API_KEY: z.preprocess(
     (value) => (value === undefined || value === "" ? undefined : value),
     z.string().optional(),
@@ -129,6 +130,7 @@ export type AppConfig = {
   port: number;
   dbPath: string;
   botId: string;
+  adminPassword: string;
   llmProvider: "gemini" | "deepseek";
   llmApiKey: string;
   llmModel: string;
@@ -177,6 +179,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     port: parsed.data.PORT,
     dbPath: parsed.data.DB_PATH,
     botId: parsed.data.BOT_ID,
+    adminPassword: parsed.data.ADMIN_PASSWORD,
     llmProvider: provider,
     llmApiKey: apiKey,
     llmModel: model,

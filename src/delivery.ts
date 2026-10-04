@@ -3,6 +3,7 @@ import type { ListRepository } from "./db/list-repo.js";
 import type { MessageRepository } from "./db/message-repo.js";
 import type { EventsRepository } from "./db/repositories/events.js";
 import type { MemoryRepository } from "./db/repositories/memory.js";
+import type { ChannelRepository } from "./db/repositories/channels.js";
 import type { SeenRepository } from "./db/seen-repo.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
 import type { Logger } from "./logger.js";
@@ -20,6 +21,9 @@ export const ONBOARDING_MESSAGE_PREFIX = "Nhóm này chưa nằm trong danh sác
 export function getOnboardingMessage(chatId: string): string {
   return `Nhóm này chưa nằm trong danh sách cho phép. Vui lòng thêm chat ID "${chatId}" vào FAMILY_CHAT_IDS để kích hoạt bot nhé.`;
 }
+export function getPendingApprovalMessage(chatId: string): string {
+  return `Kênh/nhóm này đang chờ quản trị viên phê duyệt trên Dashboard (chat ID "${chatId}").`;
+}
 
 export type DeliveryDependencies = {
   payload: Buffer | undefined;
@@ -31,12 +35,13 @@ export type DeliveryDependencies = {
   listRepo?: ListRepository;
   eventsRepo?: EventsRepository;
   memoryRepo?: MemoryRepository;
+  channelRepo?: ChannelRepository;
   llmClient?: LlmClient;
   seen?: Set<string>;
 };
 
 export async function handleDelivery(input: DeliveryDependencies): Promise<void> {
-  const { payload, config, log, zalo, seenRepo, messageRepo, listRepo, eventsRepo, memoryRepo, llmClient, seen } = input;
+  const { payload, config, log, zalo, seenRepo, messageRepo, listRepo, eventsRepo, memoryRepo, channelRepo, llmClient, seen } = input;
   if (!payload || payload.length === 0) {
     log.info({ event: "unrecognized_delivery" });
     return;
@@ -58,6 +63,17 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       log.info({ event: "unrecognized_delivery" });
     }
     return;
+  }
+
+  if (channelRepo) {
+    const initialStatus = config.familyChatIds.includes(message.chatId) ? "active" : "pending";
+    const chatType = message.chatType === "PRIVATE" ? "PRIVATE" : "GROUP";
+    channelRepo.upsertDiscovery({
+      chatId: message.chatId,
+      name: message.senderName || message.chatId,
+      chatType,
+      status: initialStatus,
+    });
   }
 
   if (config.familyChatIds.length === 0) {
@@ -112,11 +128,24 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     seen.add(message.messageId);
   }
 
-  // If group is not in familyChatIds (new or unlisted group), reply with onboarding notice
-  const isAllowedGroup = isGroup && config.familyChatIds.includes(message.chatId);
-  if (isGroup && !isAllowedGroup) {
-    await zalo.sendMessage(message.chatId, getOnboardingMessage(message.chatId));
-    return;
+  // Channel status gating
+  if (channelRepo) {
+    const channel = channelRepo.getChannel(message.chatId);
+    const status = channel?.status ?? (config.familyChatIds.includes(message.chatId) ? "active" : "pending");
+    if (status === "disabled") {
+      return;
+    }
+    if (status === "pending") {
+      await zalo.sendMessage(message.chatId, getPendingApprovalMessage(message.chatId));
+      return;
+    }
+  } else {
+    // If group is not in familyChatIds (new or unlisted group), reply with onboarding notice
+    const isAllowedGroup = isGroup && config.familyChatIds.includes(message.chatId);
+    if (isGroup && !isAllowedGroup) {
+      await zalo.sendMessage(message.chatId, getOnboardingMessage(message.chatId));
+      return;
+    }
   }
 
   // Reply generation
