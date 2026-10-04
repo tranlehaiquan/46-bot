@@ -29,7 +29,13 @@ async function main(): Promise<void> {
     throw error;
   }
 
-  const secrets = [config.zaloBotToken, config.webhookSecret, config.deepseekApiKey];
+  const secrets = [
+    config.zaloBotToken,
+    config.webhookSecret,
+    config.llmApiKey,
+    config.geminiApiKey,
+    config.deepseekApiKey,
+  ].filter((s): s is string => typeof s === "string" && s.length > 0);
   const log = createLogger({ secrets });
   const queue = new WorkQueue((error) => {
     const message = error instanceof Error ? error.message : String(error);
@@ -42,8 +48,9 @@ async function main(): Promise<void> {
   const messageRepo = createMessageRepository(db);
 
   const llmClient = createLlmClient({
-    apiKey: config.deepseekApiKey,
-    modelName: config.deepseekModel,
+    provider: config.llmProvider,
+    apiKey: config.llmApiKey,
+    modelName: config.llmModel,
   });
 
   const zalo = createZaloClient(config.zaloBotToken);

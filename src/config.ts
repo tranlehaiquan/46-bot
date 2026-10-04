@@ -53,12 +53,22 @@ const envSchema = z.object({
     (value) => (value === undefined || value === "" ? 3000 : value),
     z.coerce.number({ invalid_type_error: "PORT must be a positive integer" }).int().positive("PORT must be a positive integer"),
   ),
-  DEEPSEEK_API_KEY: z
-    .string({
-      required_error: "DEEPSEEK_API_KEY is required",
-      invalid_type_error: "DEEPSEEK_API_KEY is required",
-    })
-    .min(1, "DEEPSEEK_API_KEY is required"),
+  LLM_PROVIDER: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.enum(["gemini", "deepseek"]).optional(),
+  ),
+  GEMINI_API_KEY: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
+  GEMINI_MODEL: z.preprocess(
+    (value) => (value === undefined || value === "" ? "gemini-2.0-flash" : value),
+    z.string().min(1),
+  ),
+  DEEPSEEK_API_KEY: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
   DEEPSEEK_MODEL: z.preprocess(
     (value) => (value === undefined || value === "" ? "deepseek-chat" : value),
     z.string().min(1),
@@ -68,6 +78,30 @@ const envSchema = z.object({
     z.string().min(1),
   ),
   BOT_ID: z.preprocess((value) => (value === undefined ? "" : value), z.string()),
+}).superRefine((data, ctx) => {
+  const chosenProvider = data.LLM_PROVIDER ?? (data.GEMINI_API_KEY ? "gemini" : data.DEEPSEEK_API_KEY ? "deepseek" : undefined);
+  if (!chosenProvider) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["LLM_API_KEY"],
+      message: "Either GEMINI_API_KEY or DEEPSEEK_API_KEY is required",
+    });
+    return;
+  }
+  if (chosenProvider === "gemini" && !data.GEMINI_API_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["GEMINI_API_KEY"],
+      message: "GEMINI_API_KEY is required when LLM_PROVIDER is gemini",
+    });
+  }
+  if (chosenProvider === "deepseek" && !data.DEEPSEEK_API_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["DEEPSEEK_API_KEY"],
+      message: "DEEPSEEK_API_KEY is required when LLM_PROVIDER is deepseek",
+    });
+  }
 });
 
 export class ConfigError extends Error {
@@ -87,10 +121,15 @@ export type AppConfig = {
   webhookSecret: string;
   mode: "webhook";
   port: number;
-  deepseekApiKey: string;
-  deepseekModel: string;
   dbPath: string;
   botId: string;
+  llmProvider: "gemini" | "deepseek";
+  llmApiKey: string;
+  llmModel: string;
+  geminiApiKey?: string;
+  geminiModel: string;
+  deepseekApiKey?: string;
+  deepseekModel: string;
 };
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
@@ -108,6 +147,10 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     throw new ConfigError(variables, message);
   }
 
+  const provider = parsed.data.LLM_PROVIDER ?? (parsed.data.GEMINI_API_KEY ? "gemini" : "deepseek");
+  const apiKey = provider === "gemini" ? parsed.data.GEMINI_API_KEY! : parsed.data.DEEPSEEK_API_KEY!;
+  const model = provider === "gemini" ? parsed.data.GEMINI_MODEL : parsed.data.DEEPSEEK_MODEL;
+
   return {
     zaloBotToken: parsed.data.ZALO_BOT_TOKEN,
     familyChatId: parsed.data.FAMILY_CHAT_ID,
@@ -115,9 +158,14 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     webhookSecret: parsed.data.WEBHOOK_SECRET,
     mode: "webhook",
     port: parsed.data.PORT,
-    deepseekApiKey: parsed.data.DEEPSEEK_API_KEY,
-    deepseekModel: parsed.data.DEEPSEEK_MODEL,
     dbPath: parsed.data.DB_PATH,
     botId: parsed.data.BOT_ID,
+    llmProvider: provider,
+    llmApiKey: apiKey,
+    llmModel: model,
+    geminiApiKey: parsed.data.GEMINI_API_KEY,
+    geminiModel: parsed.data.GEMINI_MODEL,
+    deepseekApiKey: parsed.data.DEEPSEEK_API_KEY,
+    deepseekModel: parsed.data.DEEPSEEK_MODEL,
   };
 }

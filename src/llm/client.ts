@@ -1,4 +1,5 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import type { MessageRow } from "../db/message-repo.js";
 
@@ -22,12 +23,17 @@ export interface LlmClient {
   }): Promise<string>;
 }
 
-export function createLlmClient(options: {
+export type LlmClientOptions = {
+  provider?: "gemini" | "deepseek";
   apiKey: string;
   modelName: string;
-}): LlmClient {
-  const deepseek = createDeepSeek({ apiKey: options.apiKey });
-  const model = deepseek(options.modelName);
+};
+
+export function createLlmClient(options: LlmClientOptions): LlmClient {
+  const model =
+    options.provider === "gemini"
+      ? createGoogleGenerativeAI({ apiKey: options.apiKey })(options.modelName)
+      : createDeepSeek({ apiKey: options.apiKey })(options.modelName);
 
   return {
     async generateReply(params): Promise<string> {

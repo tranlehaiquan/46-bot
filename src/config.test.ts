@@ -34,25 +34,49 @@ describe("loadConfig", () => {
     );
   });
 
-  it("names DEEPSEEK_API_KEY when it is missing", () => {
+  it("names LLM_API_KEY when neither Gemini nor DeepSeek key is provided", () => {
     const env = validEnv();
     delete env.DEEPSEEK_API_KEY;
+    delete env.GEMINI_API_KEY;
     assert.throws(
       () => loadConfig(env),
       (error: unknown) => {
         assert.ok(error instanceof ConfigError);
-        assert.ok(error.variables.includes("DEEPSEEK_API_KEY"));
-        assert.match(error.message, /DEEPSEEK_API_KEY/);
+        assert.ok(error.variables.includes("LLM_API_KEY"));
         return true;
       },
     );
+  });
+
+  it("configures Gemini provider when GEMINI_API_KEY is provided", () => {
+    const env = validEnv({
+      GEMINI_API_KEY: "test-gemini-key",
+      DEEPSEEK_API_KEY: undefined,
+    });
+    delete env.DEEPSEEK_API_KEY;
+    const config = loadConfig(env);
+    assert.equal(config.llmProvider, "gemini");
+    assert.equal(config.llmApiKey, "test-gemini-key");
+    assert.equal(config.llmModel, "gemini-2.0-flash");
+  });
+
+  it("accepts custom GEMINI_MODEL", () => {
+    const config = loadConfig({
+      ...validEnv(),
+      DEEPSEEK_API_KEY: undefined,
+      GEMINI_API_KEY: "test-gemini-key",
+      GEMINI_MODEL: "gemini-2.5-flash",
+    });
+    assert.equal(config.llmProvider, "gemini");
+    assert.equal(config.llmModel, "gemini-2.5-flash");
   });
 
   it("defaults DEEPSEEK_MODEL and DB_PATH when unspecified", () => {
     const config = loadConfig(validEnv());
     assert.equal(config.deepseekModel, "deepseek-chat");
     assert.equal(config.dbPath, "/data/family.db");
-    assert.equal(config.deepseekApiKey, "test-deepseek-key");
+    assert.equal(config.llmProvider, "deepseek");
+    assert.equal(config.llmApiKey, "test-deepseek-key");
   });
 
   it("accepts custom DEEPSEEK_MODEL and DB_PATH", () => {
