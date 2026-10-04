@@ -160,3 +160,19 @@ README.md
 - Tests pass, and the README explains setup, configuration, and operations.
 
 If something in these requirements conflicts with what the Zalo API or Dokploy actually does, tell me what you found and propose the closest alternative instead of silently changing the design. Ask me questions only when you are truly blocked.
+
+## Deploy the verify slice on Dokploy
+
+This section is the first deploy only. The container acknowledges webhooks and, once `FAMILY_CHAT_ID` is set, replies with the exact sentence `Mình nhận được.` It does not call DeepSeek and it does not open a database. `MODE=polling` exits before it can call `deleteWebhook`, so use the family bot token with `MODE=webhook` only.
+
+1. In Dokploy, create a project, connect this repo, and choose the Docker Compose project type.
+2. Set environment variables in the Dokploy UI. Dokploy writes them to `.env`. The compose file loads that file with `env_file: .env`. Do not commit a real `.env`. Start from `.env.example`.
+3. Leave `FAMILY_CHAT_ID` empty on the first boot. Set `MODE=webhook`. Set `WEBHOOK_SECRET` to a random string of 8 to 256 characters. Set `PORT=3000` (the container listens there; do not publish a host port).
+4. Under Domains, set the service name to `bot`, the container port to `3000`, and turn HTTPS on. Traefik terminates TLS.
+5. Set `WEBHOOK_URL` to the exact public URL, including the path and with no trailing slash: `https://<that-domain>/webhooks/zalo`. A different slash makes every boot call `setWebhook` again.
+6. Deploy. In the logs, confirm the process is listening, then look for `setWebhook` or `testWebhook` and a verification outcome. The bot token and the webhook secret are not logged.
+7. In the family group, @mention the bot once. Copy `chat.id` from the log line whose `chat_type` is `GROUP`. A line with `chat_type` `PRIVATE` is a direct message. Leave that id out of `FAMILY_CHAT_ID`.
+8. Set `FAMILY_CHAT_ID` to the group id and redeploy. @mention the bot once. The group receives `Mình nhận được.`
+9. Rollback: redeploy the previous image, or stop the service. Zalo keeps the stored webhook URL. This slice does not call `deleteWebhook`. There is no database to restore.
+
+The named volume `bot-data` is mounted at `/data` and is unused in this slice. Later slices store SQLite there without changing the compose mount.
