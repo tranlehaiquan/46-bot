@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { AppConfig } from "./config.js";
 import type { ListRepository } from "./db/list-repo.js";
 import type { MessageRepository } from "./db/message-repo.js";
+import type { EventsRepository } from "./db/repositories/events.js";
 import type { SeenRepository } from "./db/seen-repo.js";
 import type { LlmClient } from "./llm/client.js";
 import { handleDelivery } from "./delivery.js";
@@ -20,6 +21,7 @@ export type ServerDeps = {
   seenRepo?: SeenRepository;
   messageRepo?: MessageRepository;
   listRepo?: ListRepository;
+  eventsRepo?: EventsRepository;
   llmClient?: LlmClient;
 };
 
@@ -56,6 +58,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         seenRepo: deps.seenRepo,
         messageRepo: deps.messageRepo,
         listRepo: deps.listRepo,
+        eventsRepo: deps.eventsRepo,
         llmClient: deps.llmClient,
         seen,
       }),

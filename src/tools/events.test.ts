@@ -1,0 +1,122 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { closeDatabase, openDatabase } from "../db/connection.js";
+import { migrate } from "../db/migrations.js";
+import { createEventsRepository } from "../db/repositories/events.js";
+import { createEventTools } from "./events.js";
+
+describe("Event tools", () => {
+  it("executes event_add, event_list_upcoming, event_update, and event_delete", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      migrate(db);
+      const repo = createEventsRepository(db);
+      const tools = createEventTools(repo, { chatId: "chat-events", senderName: "Bố" });
+
+      // 1. event_add (solar birthday)
+      const addRes = (await tools.event_add.execute?.(
+        {
+          title: "Sinh nhật Con gái",
+          kind: "birthday",
+          calendar: "solar",
+          day: 20,
+          month: 11,
+          isLeapMonth: false,
+          recurrence: "yearly",
+          remindDaysBefore: 2,
+        },
+        {} as any,
+      )) as any;
+
+      assert.ok(addRes);
+      assert.equal(addRes.success, true);
+      assert.equal(addRes.event.title, "Sinh nhật Con gái");
+      assert.equal(addRes.event.calendar, "solar");
+      assert.equal(addRes.event.recurrence, "yearly");
+      const eventId = addRes.event.id;
+
+      // 2. event_add (lunar death anniversary / giỗ)
+      const addLunarRes = (await tools.event_add.execute?.(
+        {
+          title: "Giỗ Cụ",
+          kind: "gio",
+          calendar: "lunar",
+          day: 15,
+          month: 8,
+          isLeapMonth: false,
+          recurrence: "yearly",
+          remindDaysBefore: 0,
+        },
+        {} as any,
+      )) as any;
+      assert.ok(addLunarRes);
+      assert.equal(addLunarRes.success, true);
+      assert.equal(addLunarRes.event.calendar, "lunar");
+
+      // 3. event_list_upcoming
+      const listRes = (await tools.event_list_upcoming.execute?.(
+        { windowDays: 365 },
+        {} as any,
+      )) as any;
+      assert.ok(listRes);
+      assert.equal(listRes.success, true);
+      assert.equal(listRes.total, 2);
+
+      // 4. event_update
+      const updateRes = (await tools.event_update.execute?.(
+        {
+          id: eventId,
+          title: "Sinh nhật Con gái yêu",
+          remindDaysBefore: 3,
+        },
+        {} as any,
+      )) as any;
+      assert.ok(updateRes);
+      assert.equal(updateRes.success, true);
+      assert.equal(updateRes.event.title, "Sinh nhật Con gái yêu");
+
+      // 5. event_delete
+      const deleteRes = (await tools.event_delete.execute?.(
+        { id: eventId },
+        {} as any,
+      )) as any;
+      assert.ok(deleteRes);
+      assert.equal(deleteRes.success, true);
+
+      // Verify list after delete
+      const listAfterDelete = (await tools.event_list_upcoming.execute?.(
+        { windowDays: 365 },
+        {} as any,
+      )) as any;
+      assert.equal(listAfterDelete.total, 1);
+      assert.equal(listAfterDelete.events[0].title, "Giỗ Cụ");
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
+  it("handles non-existent event updates and deletes gracefully", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      migrate(db);
+      const repo = createEventsRepository(db);
+      const tools = createEventTools(repo, { chatId: "chat-events", senderName: "Mẹ" });
+
+      const updateRes = (await tools.event_update.execute?.(
+        { id: 9999, title: "Sự kiện ảo" },
+        {} as any,
+      )) as any;
+      assert.ok(updateRes);
+      assert.equal(updateRes.success, false);
+
+      const deleteRes = (await tools.event_delete.execute?.(
+        { id: 9999 },
+        {} as any,
+      )) as any;
+      assert.ok(deleteRes);
+      assert.equal(deleteRes.success, false);
+    } finally {
+      closeDatabase(db);
+    }
+  });
+});

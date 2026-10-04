@@ -5,6 +5,7 @@ import { closeDatabase, openDatabase } from "./db/connection.js";
 import { createListRepository, type ListRepository } from "./db/list-repo.js";
 import { createMessageRepository, type MessageRepository } from "./db/message-repo.js";
 import { migrate } from "./db/migrations.js";
+import { createEventsRepository, type EventsRepository } from "./db/repositories/events.js";
 import { createSeenRepository, type SeenRepository } from "./db/seen-repo.js";
 import { CANNED_REPLY } from "./delivery.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
@@ -73,6 +74,7 @@ function testApp(
     seenRepo?: SeenRepository;
     messageRepo?: MessageRepository;
     listRepo?: ListRepository;
+    eventsRepo?: EventsRepository;
     llmClient?: LlmClient;
   },
 ) {
@@ -89,6 +91,7 @@ function testApp(
     seenRepo: options?.seenRepo,
     messageRepo: options?.messageRepo,
     listRepo: options?.listRepo,
+    eventsRepo: options?.eventsRepo,
     llmClient: options?.llmClient,
   });
   return { app, zalo, queue };
@@ -499,6 +502,129 @@ describe("LLM conversation and database integration", () => {
     assert.equal(items[1].text, "Trứng gà");
     assert.equal(items[1].done, true);
     assert.equal(items[1].addedBy, "Alice");
+
+    await app.close();
+    closeDatabase(db);
+  });
+
+  it("supports event and reminder tools execution through conversational flow", async () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+    const eventsRepo = createEventsRepository(db);
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        assert.ok(params.tools, "Tools should be provided to LLM");
+        const tools = params.tools as Record<string, { execute?: (args: any, opt?: any) => Promise<any> }>;
+        assert.ok(tools.event_add, "event_add tool should exist");
+        assert.ok(tools.event_list_upcoming, "event_list_upcoming tool should exist");
+        assert.ok(tools.event_update, "event_update tool should exist");
+        assert.ok(tools.event_delete, "event_delete tool should exist");
+
+        // Simulate tool call: add a lunar death anniversary
+        await tools.event_add.execute?.({
+          title: "Giỗ Ông Nội",
+          kind: "gio",
+          calendar: "lunar",
+          day: 10,
+          month: 3,
+          recurrence: "yearly",
+          remindDaysBefore: 1,
+        });
+
+        // Simulate tool call: list upcoming events
+        const upcomingRes = await tools.event_list_upcoming.execute?.({ windowDays: 365 });
+
+        return `Đã lưu ngày giỗ Ông Nội (10/3 âm lịch). Tìm thấy ${upcomingRes.total} sự kiện sắp tới.`;
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      eventsRepo,
+      llmClient: mockLlm,
+    });
+
+    const msg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Nhắc ngày giỗ Ông Nội vào mùng 10 tháng 3 âm lịch hàng năm nha",
+      senderId: "user-2",
+      senderName: "Bố",
+      messageId: "msg-event-1",
+    });
+
+    await post(app, JSON.stringify(msg));
+    await queue.drain();
+
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: "Đã lưu ngày giỗ Ông Nội (10/3 âm lịch). Tìm thấy 1 sự kiện sắp tới." },
+    ]);
+
+    const events = eventsRepo.getEventsByChat("group-1");
+    assert.equal(events.length, 1);
+    assert.equal(events[0].title, "Giỗ Ông Nội");
+    assert.equal(events[0].calendar, "lunar");
+    assert.equal(events[0].day, 10);
+    assert.equal(events[0].month, 3);
+    assert.equal(events[0].recurrence, "yearly");
+    assert.equal(events[0].createdBy, "Bố");
+
+    await app.close();
+    closeDatabase(db);
+  });
+
+  it("supports holiday tools execution through conversational flow", async () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+    const eventsRepo = createEventsRepository(db);
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        assert.ok(params.tools, "Tools should be provided to LLM");
+        const tools = params.tools as Record<string, { execute?: (args: any, opt?: any) => Promise<any> }>;
+        assert.ok(tools.holiday_list_upcoming, "holiday_list_upcoming tool should exist");
+        assert.ok(tools.holiday_import, "holiday_import tool should exist");
+
+        // Simulate listing holidays
+        const holidayRes = await tools.holiday_list_upcoming.execute?.({ publicOnly: true, windowDays: 365 });
+        // Simulate importing holidays into group events
+        const importRes = await tools.holiday_import.execute?.({ includeTraditional: false });
+
+        return `Có ${holidayRes.total} ngày nghỉ lễ chính thức. Đã thêm ${importRes.addedCount} ngày lễ vào lịch nhóm.`;
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      eventsRepo,
+      llmClient: mockLlm,
+    });
+
+    const msg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Thêm các ngày nghỉ lễ năm nay vào lịch nhóm nha",
+      senderId: "user-1",
+      senderName: "Mẹ",
+      messageId: "msg-holiday-1",
+    });
+
+    await post(app, JSON.stringify(msg));
+    await queue.drain();
+
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: "Có 7 ngày nghỉ lễ chính thức. Đã thêm 7 ngày lễ vào lịch nhóm." },
+    ]);
+
+    const events = eventsRepo.getEventsByChat("group-1");
+    assert.equal(events.length, 7);
 
     await app.close();
     closeDatabase(db);

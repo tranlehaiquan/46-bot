@@ -39,5 +39,33 @@ export function migrate(db: SqliteDatabase): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_list_items_list ON list_items(list_id, done, ts ASC);
+
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      calendar TEXT NOT NULL,
+      day INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      year INTEGER,
+      is_leap_month INTEGER NOT NULL DEFAULT 0,
+      recurrence TEXT NOT NULL DEFAULT 'none',
+      remind_days_before INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_by TEXT NOT NULL,
+      ts INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_events_chat ON events(chat_id);
+
+    CREATE TABLE IF NOT EXISTS reminders_sent (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      occurrence_date TEXT NOT NULL,
+      sent_at INTEGER NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_reminders_sent_event_date ON reminders_sent(event_id, occurrence_date);
   `);
 }

@@ -1,10 +1,13 @@
 import type { AppConfig } from "./config.js";
 import type { ListRepository } from "./db/list-repo.js";
 import type { MessageRepository } from "./db/message-repo.js";
+import type { EventsRepository } from "./db/repositories/events.js";
 import type { SeenRepository } from "./db/seen-repo.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
 import type { Logger } from "./logger.js";
 import { isMentionedOrReplied, normalizeDelivery } from "./normalize.js";
+import { createEventTools } from "./tools/events.js";
+import { createHolidayTools } from "./tools/holidays.js";
 import { createListTools } from "./tools/lists.js";
 import { createWebSearchTool } from "./tools/web-search.js";
 import { splitText } from "./utils/split-text.js";
@@ -20,12 +23,13 @@ export type DeliveryDependencies = {
   seenRepo?: SeenRepository;
   messageRepo?: MessageRepository;
   listRepo?: ListRepository;
+  eventsRepo?: EventsRepository;
   llmClient?: LlmClient;
   seen?: Set<string>;
 };
 
 export async function handleDelivery(input: DeliveryDependencies): Promise<void> {
-  const { payload, config, log, zalo, seenRepo, messageRepo, listRepo, llmClient, seen } = input;
+  const { payload, config, log, zalo, seenRepo, messageRepo, listRepo, eventsRepo, llmClient, seen } = input;
   if (!payload || payload.length === 0) {
     log.info({ event: "unrecognized_delivery" });
     return;
@@ -130,12 +134,26 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
         })
       : undefined;
 
+    const eventTools = eventsRepo
+      ? createEventTools(eventsRepo, {
+          chatId: message.chatId,
+          senderName: message.senderName || message.senderId,
+        })
+      : undefined;
+
+    const holidayTools = createHolidayTools(eventsRepo, {
+      chatId: message.chatId,
+      senderName: message.senderName || message.senderId,
+    });
+
     const searchTools = config.tavilyApiKey
       ? createWebSearchTool(config.tavilyApiKey)
       : undefined;
 
     const tools =
-      listTools || searchTools ? { ...listTools, ...searchTools } : undefined;
+      listTools || eventTools || holidayTools || searchTools
+        ? { ...listTools, ...eventTools, ...holidayTools, ...searchTools }
+        : undefined;
 
     let replyText: string;
     try {
