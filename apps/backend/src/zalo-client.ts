@@ -61,7 +61,13 @@ export function createZaloClient(token: string): ZaloClient {
     },
     async sendPhoto(chatId, photo, caption = "") {
       if (typeof bot.sendPhoto === "function") {
-        await bot.sendPhoto(chatId, caption, photo);
+        const res = await bot.sendPhoto(chatId, caption, photo);
+        if (res && typeof res === "object" && "messageId" in res) {
+          const msgId = String((res as { messageId?: string }).messageId ?? "");
+          if (msgId.startsWith("local-")) {
+            throw new Error(`Zalo API rejected photo URL: ${photo}`);
+          }
+        }
       }
     },
   };

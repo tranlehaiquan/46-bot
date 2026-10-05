@@ -22,6 +22,7 @@ import { createWeatherTool } from "./tools/weather.js";
 import { createWebSearchTool } from "./tools/web-search.js";
 import { splitText } from "./utils/split-text.js";
 import type { ZaloClient } from "./zalo-client.js";
+import { getEventsImageDir } from "./server.js";
 
 export const CANNED_REPLY = "Mình nhận được.";
 export const ONBOARDING_MESSAGE_PREFIX = "Nhóm này chưa nằm trong danh sách cho phép. Vui lòng thêm chat ID";
@@ -201,6 +202,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
           senderName: message.senderName || message.senderId,
           zalo,
           publicBaseUrl,
+          outputDir: getEventsImageDir(config.dbPath),
         })
       : undefined;
 

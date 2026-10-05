@@ -410,7 +410,7 @@ export async function saveCalendarImage(
   options: RenderCalendarImageOptions & { outputDir?: string; filename?: string },
 ): Promise<{ filePath: string; filename: string; buffer: Buffer }> {
   const buffer = await renderCalendarPng(options);
-  const dir = options.outputDir ?? getEventsImageDir();
+  const dir = options.outputDir ?? getEventsImageDir(process.env.DB_PATH);
   await fs.mkdir(dir, { recursive: true });
 
   const safeChatId = options.chatId.replace(/[^a-zA-Z0-9_-]/g, "_");

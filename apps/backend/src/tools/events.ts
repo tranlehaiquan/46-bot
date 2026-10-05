@@ -321,14 +321,24 @@ export function createEventTools(
         `Lịch sự kiện ${scope === "week" ? "tuần này" : scope === "year" ? `năm ${targetYear}` : `tháng ${targetMonth}/${targetYear}`}`;
 
       let sentToChannel = false;
-      if (context.zalo && typeof context.zalo.sendPhoto === "function" && baseUrl) {
+      let sendError: string | undefined;
+
+      if (!baseUrl) {
+        sendError = "Thiếu cấu hình URL công khai (WEBHOOK_URL) để Zalo tải ảnh.";
+        console.warn(`[event_send_image] Cannot send photo: baseUrl is empty`);
+      } else if (context.zalo && typeof context.zalo.sendPhoto === "function") {
         try {
           await context.zalo.sendPhoto(chatId, photoUrl, finalCaption);
           sentToChannel = true;
-        } catch {
-          // Photo sending failure shouldn't throw unhandled error to LLM
+        } catch (err) {
+          sendError = err instanceof Error ? err.message : String(err);
+          console.error(`[event_send_image] Failed to send photo to ${chatId}:`, sendError);
         }
       }
+
+      const message = sentToChannel
+        ? `Đã tạo và gửi thành công ảnh lịch sự kiện (${occurrences.length} sự kiện) vào nhóm chat.`
+        : `Đã tạo ảnh lịch sự kiện (${occurrences.length} sự kiện), nhưng không thể gửi ảnh vào nhóm (Lý do: ${sendError ?? "Không có client gửi ảnh"}).`;
 
       return {
         success: true,
@@ -336,7 +346,7 @@ export function createEventTools(
         totalEvents: occurrences.length,
         imageUrl: photoUrl,
         sentToChannel,
-        message: `Đã tạo và gửi ảnh lịch sự kiện (${occurrences.length} sự kiện) vào nhóm chat.`,
+        message,
       };
     },
   });
