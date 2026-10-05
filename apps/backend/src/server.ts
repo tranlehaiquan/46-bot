@@ -80,7 +80,15 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   registerAdminRoutes(app, deps);
 
-  const webDistPath = path.resolve(process.cwd(), "web/dist");
+  const candidateDistPaths = [
+    path.resolve(process.cwd(), "apps/admin/dist"),
+    path.resolve(process.cwd(), "../admin/dist"),
+    path.resolve(process.cwd(), "web/dist"),
+    path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../admin/dist"),
+    path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../../apps/admin/dist"),
+  ];
+  const webDistPath = candidateDistPaths.find((p) => fs.existsSync(p)) ?? candidateDistPaths[0];
+
   if (fs.existsSync(webDistPath)) {
     app.register(fastifyStatic, {
       root: webDistPath,

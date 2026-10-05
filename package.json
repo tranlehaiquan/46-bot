@@ -1,5 +1,5 @@
 {
-  "name": "family-bot",
+  "name": "family-bot-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,32 +9,18 @@
     "pnpm": ">=12"
   },
   "scripts": {
-    "build": "pnpm --dir web build && tsc -p tsconfig.build.json",
-    "build:web": "pnpm --dir web build",
-    "start": "node dist/index.js",
-    "test": "node --experimental-strip-types --import ./scripts/register-ts.mjs --test \"src/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@ai-sdk/deepseek": "^3.0.58",
-    "@ai-sdk/google": "^4.0.87",
-    "@fastify/static": "^10.1.5",
-    "@tavily/core": "^0.7.13",
-    "ai": "^7.0.127",
-    "better-sqlite3": "^13.0.3",
-    "fastify": "^5.6.1",
-    "zalo-bot-js": "^0.2.3",
-    "zod": "^3.25.76"
+    "dev": "concurrently -n backend,admin -c green,cyan \"pnpm --filter @bot/backend dev\" \"pnpm --filter @bot/admin dev\"",
+    "dev:backend": "pnpm --filter @bot/backend dev",
+    "dev:admin": "pnpm --filter @bot/admin dev",
+    "build": "pnpm --filter @bot/admin build && pnpm --filter @bot/backend build",
+    "build:admin": "pnpm --filter @bot/admin build",
+    "build:backend": "pnpm --filter @bot/backend build",
+    "start": "pnpm --filter @bot/backend start",
+    "test": "pnpm --filter @bot/backend test",
+    "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^22.18.6",
+    "concurrently": "^9.1.2",
     "typescript": "^5.9.2"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "esbuild"
-    ]
   }
 }

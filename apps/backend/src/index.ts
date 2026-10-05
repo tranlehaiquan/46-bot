@@ -17,8 +17,32 @@ import { syncWebhook } from "./register.js";
 import { buildServer } from "./server.js";
 import { createZaloClient } from "./zalo-client.js";
 import { startScheduler } from "./scheduler/index.js";
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+
+function loadEnvIfAvailable(): void {
+  const envCandidates = [
+    path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), "../../.env"),
+    path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../../.env"),
+    path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../.env"),
+  ];
+  for (const envPath of envCandidates) {
+    if (fs.existsSync(envPath)) {
+      try {
+        if (typeof (process as unknown as { loadEnvFile?: (path?: string) => void }).loadEnvFile === "function") {
+          (process as unknown as { loadEnvFile: (path: string) => void }).loadEnvFile(envPath);
+        }
+      } catch {
+        // ignore if already loaded or parsing error
+      }
+    }
+  }
+}
 
 async function main(): Promise<void> {
+  loadEnvIfAvailable();
   const startupLog = createLogger();
   let config;
   try {
