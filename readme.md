@@ -83,6 +83,108 @@ Dưới đây là bảng tổng hợp chi tiết các công cụ (tools) đượ
 
 ---
 
+## 🗄️ Sơ đồ thực thể–quan hệ (ERD)
+
+SQLite (`/data/family.db`) lưu dữ liệu theo nhóm chat. `channels.chat_id` là khóa logic của hầu hết bảng. Chỉ `list_items.list_id` và `reminders_sent.event_id` là khóa ngoại khai báo (`ON DELETE CASCADE`). `seen_messages` đứng riêng để chống xử lý trùng webhook.
+
+```mermaid
+erDiagram
+    channels ||--o{ messages : "chat_id"
+    channels ||--o{ lists : "chat_id"
+    lists ||--o{ list_items : contains
+    channels ||--o{ events : "chat_id"
+    events ||--o{ reminders_sent : tracks
+    channels ||--o{ memories : "chat_id"
+    channels ||--o{ memory_book : "chat_id"
+
+    seen_messages {
+        TEXT message_id PK
+        INTEGER ts
+    }
+
+    channels {
+        TEXT chat_id PK
+        TEXT name
+        TEXT chat_type
+        TEXT status
+        INTEGER created_at
+        INTEGER last_active_at
+    }
+
+    messages {
+        INTEGER id PK
+        TEXT chat_id
+        TEXT sender_id
+        TEXT sender_name
+        TEXT role
+        TEXT content
+        INTEGER ts
+    }
+
+    lists {
+        INTEGER id PK
+        TEXT chat_id
+        TEXT name
+        TEXT normalized_name
+        INTEGER created_at
+    }
+
+    list_items {
+        INTEGER id PK
+        INTEGER list_id FK
+        TEXT text
+        INTEGER done
+        TEXT added_by
+        INTEGER ts
+    }
+
+    events {
+        INTEGER id PK
+        TEXT chat_id
+        TEXT title
+        TEXT kind
+        TEXT calendar
+        INTEGER day
+        INTEGER month
+        INTEGER year
+        INTEGER is_leap_month
+        TEXT recurrence
+        INTEGER remind_days_before
+        TEXT notes
+        TEXT created_by
+        INTEGER ts
+    }
+
+    reminders_sent {
+        INTEGER id PK
+        INTEGER event_id FK
+        TEXT occurrence_date
+        INTEGER sent_at
+    }
+
+    memories {
+        INTEGER id PK
+        TEXT chat_id
+        TEXT subject
+        TEXT fact
+        TEXT created_by
+        INTEGER ts
+    }
+
+    memory_book {
+        INTEGER id PK
+        TEXT chat_id
+        TEXT title
+        TEXT story
+        TEXT people
+        TEXT happened_on
+        TEXT created_by
+        INTEGER ts
+    }
+```
+
+---
+
 ## ⚙️ Cấu hình môi trường (.env)
 
 Tạo file `.env` (tham khảo file mẫu `.env.example`) với các thông số cấu hình:
