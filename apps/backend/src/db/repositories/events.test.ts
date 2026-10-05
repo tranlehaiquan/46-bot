@@ -351,4 +351,154 @@ describe("EventsRepository", () => {
       assert.ok(dueAll.some((d) => d.event.id === ev4.id));
     });
   });
+
+  describe("Timeframe and Range Occurrence Queries", () => {
+    it("retrieves one-off, recurring solar, and recurring lunar events for a date range", () => {
+      // 1. One-off solar in range
+      repo.createEvent({
+        chatId: "chat-1",
+        title: "Đám cưới bạn",
+        day: 15,
+        month: 10,
+        year: 2026,
+        recurrence: "none",
+        createdBy: "user-1",
+      });
+
+      // 2. One-off solar outside range
+      repo.createEvent({
+        chatId: "chat-1",
+        title: "Sự kiện tháng 11",
+        day: 15,
+        month: 11,
+        year: 2026,
+        recurrence: "none",
+        createdBy: "user-1",
+      });
+
+      // 3. Yearly solar birthday falling in October
+      repo.createEvent({
+        chatId: "chat-1",
+        title: "Sinh nhật Chị",
+        kind: "birthday",
+        day: 20,
+        month: 10,
+        recurrence: "yearly",
+        createdBy: "user-1",
+      });
+
+      // 4. Yearly lunar giỗ on 1st day of 9th lunar month (1/9 âm lịch in 2026 corresponds to 2026-10-10 dương lịch)
+      repo.createEvent({
+        chatId: "chat-1",
+        title: "Giỗ Ông Nội",
+        kind: "gio",
+        calendar: "lunar",
+        day: 1,
+        month: 9,
+        recurrence: "yearly",
+        createdBy: "user-1",
+      });
+
+      // 5. Weekly event (every Wednesday)
+      // 2026-10-07 is Wednesday
+      repo.createEvent({
+        chatId: "chat-1",
+        title: "Họp tuần",
+        day: 7,
+        month: 10,
+        year: 2026,
+        recurrence: "weekly",
+        createdBy: "user-1",
+      });
+
+      const startDate = createUtc7Date(2026, 10, 1);
+      const endDate = createUtc7Date(2026, 10, 31);
+      const occurrences = repo.getEventsForRange("chat-1", startDate, endDate);
+
+      // Verify occurrences in October 2026
+      assert.ok(occurrences.length >= 4);
+
+      // Verify "Đám cưới bạn" on 2026-10-15
+      const wedding = occurrences.find((o) => o.event.title === "Đám cưới bạn");
+      assert.ok(wedding);
+      assert.equal(wedding.occurrenceDateStr, "2026-10-15");
+      assert.equal(wedding.solarDay, 15);
+
+      // Verify "Sinh nhật Chị" on 2026-10-20
+      const birthday = occurrences.find((o) => o.event.title === "Sinh nhật Chị");
+      assert.ok(birthday);
+      assert.equal(birthday.occurrenceDateStr, "2026-10-20");
+
+      // Verify "Giỗ Ông Nội" on 2026-10-10 (1/9 âm lịch 2026 is 10/10/2026)
+      const gio = occurrences.find((o) => o.event.title === "Giỗ Ông Nội");
+      assert.ok(gio);
+      assert.equal(gio.occurrenceDateStr, "2026-10-10");
+      assert.equal(gio.lunarDay, 1);
+      assert.equal(gio.lunarMonth, 9);
+
+      // Verify outside event is excluded
+      assert.ok(!occurrences.some((o) => o.event.title === "Sự kiện tháng 11"));
+    });
+
+    it("retrieves events for a specific week via getEventsForWeek", () => {
+      // 2026-10-05 is Monday, 2026-10-11 is Sunday
+      repo.createEvent({
+        chatId: "chat-1",
+        title: "Ăn tối thứ Tư",
+        day: 7,
+        month: 10,
+        year: 2026,
+        recurrence: "none",
+        createdBy: "user-1",
+      });
+      repo.createEvent({
+        chatId: "chat-1",
+        title: "Sự kiện tuần sau",
+        day: 14,
+        month: 10,
+        year: 2026,
+        recurrence: "none",
+        createdBy: "user-1",
+      });
+
+      const refDate = createUtc7Date(2026, 10, 8); // Thursday
+      const weekEvents = repo.getEventsForWeek("chat-1", refDate);
+
+      assert.equal(weekEvents.length, 1);
+      assert.equal(weekEvents[0]?.event.title, "Ăn tối thứ Tư");
+      assert.equal(weekEvents[0]?.occurrenceDateStr, "2026-10-07");
+    });
+
+    it("retrieves events for a month and a full year", () => {
+      repo.createEvent({
+        chatId: "chat-1",
+        title: "Tết Dương Lịch",
+        day: 1,
+        month: 1,
+        year: 2026,
+        recurrence: "none",
+        createdBy: "user-1",
+      });
+      repo.createEvent({
+        chatId: "chat-1",
+        title: "Sinh nhật Ba",
+        day: 25,
+        month: 12,
+        recurrence: "yearly",
+        createdBy: "user-1",
+      });
+
+      const monthJan = repo.getEventsForMonth("chat-1", 2026, 1);
+      assert.equal(monthJan.length, 1);
+      assert.equal(monthJan[0]?.event.title, "Tết Dương Lịch");
+
+      const monthDec = repo.getEventsForMonth("chat-1", 2026, 12);
+      assert.equal(monthDec.length, 1);
+      assert.equal(monthDec[0]?.event.title, "Sinh nhật Ba");
+
+      const yearEvents = repo.getEventsForYear("chat-1", 2026);
+      assert.equal(yearEvents.length, 2);
+    });
+  });
 });
+

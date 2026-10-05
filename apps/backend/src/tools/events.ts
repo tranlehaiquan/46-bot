@@ -2,8 +2,15 @@ import { tool } from "ai";
 import { z } from "zod";
 import {
   getNextOccurrence,
+  getUtc7Parts,
+  createUtc7Date,
+  getDaysInSolarMonth,
+  getStartOfWeekUtc7,
+  getEndOfWeekUtc7,
   type EventsRepository,
 } from "../db/repositories/events.js";
+import type { ZaloClient } from "../zalo-client.js";
+import { saveCalendarImage } from "./calendar-image-renderer.js";
 
 const eventKindSchema = z.enum([
   "event",
@@ -24,9 +31,17 @@ const eventRecurrenceSchema = z.enum([
   "daily",
 ]);
 
+export type EventToolsContext = {
+  chatId: string;
+  senderName: string;
+  zalo?: ZaloClient;
+  publicBaseUrl?: string;
+  outputDir?: string;
+};
+
 export function createEventTools(
   repo: EventsRepository,
-  context: { chatId: string; senderName: string },
+  context: EventToolsContext,
 ) {
   const { chatId, senderName } = context;
 
@@ -213,10 +228,124 @@ export function createEventTools(
     },
   });
 
+  const event_send_image = tool({
+    description:
+      "Tạo ảnh đồ họa tổng hợp các sự kiện, nhắc nhở, sinh nhật, giỗ chạp cho tuần (week), tháng (month) hoặc cả năm (year) và gửi trực tiếp vào nhóm chat.",
+    inputSchema: z.object({
+      scope: z
+        .enum(["week", "month", "year"])
+        .optional()
+        .default("month")
+        .describe("Khung thời gian xem lịch: 'week' (tuần), 'month' (tháng), hoặc 'year' (cả năm). Mặc định là 'month'."),
+      date: z
+        .string()
+        .optional()
+        .describe("Ngày tham chiếu định dạng YYYY-MM-DD (dùng khi hỏi về tuần cụ thể hoặc ngày cụ thể). Mặc định là ngày hiện tại."),
+      month: z
+        .number()
+        .int()
+        .min(1)
+        .max(12)
+        .optional()
+        .describe("Tháng (1-12) cần tạo ảnh. Mặc định là tháng hiện tại."),
+      year: z
+        .number()
+        .int()
+        .optional()
+        .describe("Năm cần tạo ảnh. Mặc định là năm hiện tại."),
+      caption: z
+        .string()
+        .optional()
+        .describe("Chú thích tùy chọn kèm theo ảnh gửi vào nhóm chat."),
+    }),
+    execute: async ({ scope = "month", date, month, year, caption }) => {
+      let refDate = new Date();
+      if (date) {
+        const parts = date.split("-").map(Number);
+        if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+          refDate = createUtc7Date(parts[0], parts[1], parts[2]);
+        }
+      } else if (year && month) {
+        refDate = createUtc7Date(year, month, 1);
+      }
+
+      const refParts = getUtc7Parts(refDate);
+      const targetYear = year ?? refParts.year;
+      const targetMonth = month ?? refParts.month;
+
+      let startDate: Date;
+      let endDate: Date;
+      let occurrences;
+      let title: string;
+      let subtitle: string;
+
+      if (scope === "week") {
+        startDate = getStartOfWeekUtc7(refDate);
+        endDate = getEndOfWeekUtc7(refDate);
+        occurrences = repo.getEventsForRange(chatId, startDate, endDate);
+        const sP = getUtc7Parts(startDate);
+        const eP = getUtc7Parts(endDate);
+        title = "LỊCH SỰ KIỆN TUẦN";
+        subtitle = `Từ ngày ${sP.day}/${sP.month}/${sP.year} đến ngày ${eP.day}/${eP.month}/${eP.year}`;
+      } else if (scope === "year") {
+        startDate = createUtc7Date(targetYear, 1, 1);
+        endDate = createUtc7Date(targetYear, 12, 31);
+        occurrences = repo.getEventsForYear(chatId, targetYear);
+        title = `TỔNG HỢP SỰ KIỆN NĂM ${targetYear}`;
+        subtitle = `Danh sách các sự kiện quan trọng trong cả năm ${targetYear}`;
+      } else {
+        startDate = createUtc7Date(targetYear, targetMonth, 1);
+        endDate = createUtc7Date(targetYear, targetMonth, getDaysInSolarMonth(targetYear, targetMonth));
+        occurrences = repo.getEventsForMonth(chatId, targetYear, targetMonth);
+        title = `LỊCH SỰ KIỆN THÁNG ${targetMonth}/${targetYear}`;
+        subtitle = `Danh sách sự kiện, sinh nhật, giỗ chạp trong tháng ${targetMonth}`;
+      }
+
+      const { filename } = await saveCalendarImage({
+        scope,
+        chatId,
+        title,
+        subtitle,
+        events: occurrences,
+        startDate,
+        endDate,
+        referenceDate: refDate,
+        outputDir: context.outputDir,
+      });
+
+      const baseUrl = context.publicBaseUrl ? context.publicBaseUrl.replace(/\/+$/, "") : "";
+      const photoUrl = baseUrl ? `${baseUrl}/images/events/${filename}` : `/images/events/${filename}`;
+
+      const finalCaption =
+        caption ??
+        `Lịch sự kiện ${scope === "week" ? "tuần này" : scope === "year" ? `năm ${targetYear}` : `tháng ${targetMonth}/${targetYear}`}`;
+
+      let sentToChannel = false;
+      if (context.zalo && typeof context.zalo.sendPhoto === "function" && baseUrl) {
+        try {
+          await context.zalo.sendPhoto(chatId, photoUrl, finalCaption);
+          sentToChannel = true;
+        } catch {
+          // Photo sending failure shouldn't throw unhandled error to LLM
+        }
+      }
+
+      return {
+        success: true,
+        scope,
+        totalEvents: occurrences.length,
+        imageUrl: photoUrl,
+        sentToChannel,
+        message: `Đã tạo và gửi ảnh lịch sự kiện (${occurrences.length} sự kiện) vào nhóm chat.`,
+      };
+    },
+  });
+
   return {
     event_add,
     event_list_upcoming,
     event_update,
     event_delete,
+    event_send_image,
   };
 }

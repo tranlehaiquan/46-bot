@@ -1,3 +1,4 @@
+import os from "node:os";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { AppConfig } from "./config.js";
 import type { ListRepository } from "./db/list-repo.js";
@@ -38,12 +39,42 @@ export type ServerDeps = {
   llmClient?: LlmClient;
 };
 
+export function getEventsImageDir(dbPath?: string): string {
+  const candidates: string[] = [];
+  if (dbPath && dbPath !== ":memory:" && !dbPath.startsWith(":memory:")) {
+    candidates.push(path.join(path.dirname(dbPath), "images", "events"));
+  }
+  candidates.push(path.resolve(process.cwd(), "data", "images", "events"));
+  candidates.push(path.join(os.tmpdir(), "family-bot", "images", "events"));
+
+  for (const candidate of candidates) {
+    try {
+      fs.mkdirSync(candidate, { recursive: true });
+      return candidate;
+    } catch {
+      // try next candidate
+    }
+  }
+  const fallback = path.join(os.tmpdir(), "family-bot", "images", "events");
+  fs.mkdirSync(fallback, { recursive: true });
+  return fallback;
+}
+
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const queue = deps.queue ?? new WorkQueue();
   const seen = new Set<string>();
   const app = Fastify({
     logger: false,
     bodyLimit: BODY_LIMIT,
+  });
+
+  const eventsImageDir = getEventsImageDir(deps.config.dbPath);
+  fs.mkdirSync(eventsImageDir, { recursive: true });
+
+  app.register(fastifyStatic, {
+    root: eventsImageDir,
+    prefix: "/images/events/",
+    decorateReply: false,
   });
 
   app.removeContentTypeParser("application/json");

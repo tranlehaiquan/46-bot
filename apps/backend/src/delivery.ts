@@ -188,10 +188,19 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
         })
       : undefined;
 
+    let publicBaseUrl: string | undefined;
+    try {
+      publicBaseUrl = new URL(config.webhookUrl).origin;
+    } catch {
+      // ignore
+    }
+
     const eventTools = eventsRepo
       ? createEventTools(eventsRepo, {
           chatId: message.chatId,
           senderName: message.senderName || message.senderId,
+          zalo,
+          publicBaseUrl,
         })
       : undefined;
 

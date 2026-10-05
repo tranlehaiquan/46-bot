@@ -9,6 +9,7 @@ export type ZaloClient = {
   testWebhook(): Promise<{ outcome: string }>;
   sendMessage(chatId: string, text: string): Promise<void>;
   sendChatAction?(chatId: string, action: string): Promise<void>;
+  sendPhoto?(chatId: string, photo: string, caption?: string): Promise<void>;
 };
 
 type SdkBot = {
@@ -17,6 +18,7 @@ type SdkBot = {
   testWebhook(): Promise<{ outcome?: string } | undefined>;
   sendMessage(chatId: string, text: string): Promise<unknown>;
   sendChatAction?(chatId: string, action: string): Promise<unknown>;
+  sendPhoto?(chatId: string, caption: string, photo: string, options?: unknown): Promise<unknown>;
 };
 
 type BotConstructor = new (config: {
@@ -55,6 +57,11 @@ export function createZaloClient(token: string): ZaloClient {
     async sendChatAction(chatId, action) {
       if (typeof bot.sendChatAction === "function") {
         await bot.sendChatAction(chatId, action);
+      }
+    },
+    async sendPhoto(chatId, photo, caption = "") {
+      if (typeof bot.sendPhoto === "function") {
+        await bot.sendPhoto(chatId, caption, photo);
       }
     },
   };

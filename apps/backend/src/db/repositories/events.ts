@@ -1,5 +1,5 @@
 import type { SqliteDatabase } from "../connection.js";
-import { lunarToSolar } from "../../lunar/index.js";
+import { lunarToSolar, solarToLunar } from "../../lunar/index.js";
 
 export type EventKind = "event" | "reminder" | "birthday" | "anniversary" | "gio" | "appointment";
 export type EventCalendar = "solar" | "lunar";
@@ -65,6 +65,20 @@ export type DueReminder = {
   isAdvanceNotice: boolean;
 };
 
+export type EventOccurrence = {
+  event: EventRow;
+  occurrenceDate: Date;
+  occurrenceDateStr: string;
+  dayOfWeek: number;
+  solarDay: number;
+  solarMonth: number;
+  solarYear: number;
+  lunarDay: number;
+  lunarMonth: number;
+  lunarYear: number;
+  isLunarLeap: boolean;
+};
+
 export interface EventsRepository {
   createEvent(input: CreateEventInput): EventRow;
   getEventById(id: number): EventRow | undefined;
@@ -73,6 +87,10 @@ export interface EventsRepository {
   updateEvent(id: number, updates: UpdateEventInput): EventRow | undefined;
   deleteEvent(id: number): boolean;
   listUpcomingEvents(chatId: string, windowDays?: number, referenceDate?: Date): UpcomingEvent[];
+  getEventsForRange(chatId: string, startDate: Date, endDate: Date): EventOccurrence[];
+  getEventsForWeek(chatId: string, referenceDate?: Date): EventOccurrence[];
+  getEventsForMonth(chatId: string, year: number, month: number): EventOccurrence[];
+  getEventsForYear(chatId: string, year: number): EventOccurrence[];
   isReminderSent(eventId: number, occurrenceDate: string): boolean;
   recordReminderSent(eventId: number, occurrenceDate: string, sentAt?: number): void;
   findEventsDueForReminder(referenceDate?: Date, chatId?: string): DueReminder[];
@@ -113,10 +131,23 @@ export function formatUtc7DateStr(date: Date): string {
   return `${parts.year}-${mm}-${dd}`;
 }
 
-function getUtc7DayOfWeek(date: Date): number {
+export function getUtc7DayOfWeek(date: Date): number {
   const parts = getUtc7Parts(date);
   const d = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
   return d.getUTCDay();
+}
+
+export function getStartOfWeekUtc7(date: Date): Date {
+  const parts = getUtc7Parts(date);
+  const dow = getUtc7DayOfWeek(date);
+  const diffToMonday = dow === 0 ? -6 : 1 - dow;
+  return createUtc7Date(parts.year, parts.month, parts.day + diffToMonday);
+}
+
+export function getEndOfWeekUtc7(date: Date): Date {
+  const monday = getStartOfWeekUtc7(date);
+  const mParts = getUtc7Parts(monday);
+  return createUtc7Date(mParts.year, mParts.month, mParts.day + 6);
 }
 
 export function getNextOccurrence(
@@ -424,6 +455,145 @@ export function createEventsRepository(db: SqliteDatabase): EventsRepository {
       });
 
       return upcoming;
+    },
+
+    getEventsForRange(chatId: string, startDate: Date, endDate: Date): EventOccurrence[] {
+      const startParts = getUtc7Parts(startDate);
+      const endParts = getUtc7Parts(endDate);
+      const startMid = Date.UTC(startParts.year, startParts.month - 1, startParts.day);
+      const endMid = Date.UTC(endParts.year, endParts.month - 1, endParts.day);
+
+      if (startMid > endMid) {
+        return [];
+      }
+
+      const events = repo.getEventsByChat(chatId);
+      const occurrences: EventOccurrence[] = [];
+      const seenKey = new Set<string>();
+
+      const addOccurrence = (event: EventRow, date: Date) => {
+        const dateStr = formatUtc7DateStr(date);
+        const key = `${event.id}_${dateStr}`;
+        if (seenKey.has(key)) return;
+        seenKey.add(key);
+
+        const parts = getUtc7Parts(date);
+        const lunar = solarToLunar(parts.day, parts.month, parts.year);
+
+        occurrences.push({
+          event,
+          occurrenceDate: date,
+          occurrenceDateStr: dateStr,
+          dayOfWeek: getUtc7DayOfWeek(date),
+          solarDay: parts.day,
+          solarMonth: parts.month,
+          solarYear: parts.year,
+          lunarDay: lunar.day,
+          lunarMonth: lunar.month,
+          lunarYear: lunar.year,
+          isLunarLeap: lunar.isLeap,
+        });
+      };
+
+      for (const event of events) {
+        if (event.calendar === "lunar") {
+          let candYears: number[] = [];
+          if (event.recurrence === "none" && event.year !== null) {
+            candYears = [event.year];
+          } else {
+            for (let y = startParts.year - 1; y <= endParts.year + 1; y++) {
+              candYears.push(y);
+            }
+          }
+
+          for (const candYear of candYears) {
+            const solar = lunarToSolar(event.day, event.month, candYear, event.isLeapMonth);
+            const targetMid = Date.UTC(solar.year, solar.month - 1, solar.day);
+            if (targetMid >= startMid && targetMid <= endMid) {
+              addOccurrence(event, createUtc7Date(solar.year, solar.month, solar.day));
+            }
+          }
+        } else {
+          // Solar events
+          if (event.recurrence === "none") {
+            if (event.year !== null) {
+              const targetMid = Date.UTC(event.year, event.month - 1, event.day);
+              if (targetMid >= startMid && targetMid <= endMid) {
+                addOccurrence(event, createUtc7Date(event.year, event.month, event.day));
+              }
+            } else {
+              for (let y = startParts.year; y <= endParts.year; y++) {
+                const targetMid = Date.UTC(y, event.month - 1, event.day);
+                if (targetMid >= startMid && targetMid <= endMid) {
+                  addOccurrence(event, createUtc7Date(y, event.month, event.day));
+                }
+              }
+            }
+          } else if (event.recurrence === "yearly") {
+            for (let y = startParts.year; y <= endParts.year; y++) {
+              const targetMid = Date.UTC(y, event.month - 1, event.day);
+              if (targetMid >= startMid && targetMid <= endMid) {
+                addOccurrence(event, createUtc7Date(y, event.month, event.day));
+              }
+            }
+          } else if (event.recurrence === "monthly") {
+            for (let y = startParts.year; y <= endParts.year; y++) {
+              const mStart = y === startParts.year ? startParts.month : 1;
+              const mEnd = y === endParts.year ? endParts.month : 12;
+              for (let m = mStart; m <= mEnd; m++) {
+                const daysInM = getDaysInSolarMonth(y, m);
+                const day = Math.min(event.day, daysInM);
+                const targetMid = Date.UTC(y, m - 1, day);
+                if (targetMid >= startMid && targetMid <= endMid) {
+                  addOccurrence(event, createUtc7Date(y, m, day));
+                }
+              }
+            }
+          } else if (event.recurrence === "weekly") {
+            const baseDate = createUtc7Date(event.year ?? startParts.year, event.month, event.day);
+            const targetDow = getUtc7DayOfWeek(baseDate);
+            for (let t = startMid; t <= endMid; t += 24 * 60 * 60 * 1000) {
+              const cur = new Date(t);
+              if (getUtc7DayOfWeek(cur) === targetDow) {
+                const parts = getUtc7Parts(cur);
+                addOccurrence(event, createUtc7Date(parts.year, parts.month, parts.day));
+              }
+            }
+          } else if (event.recurrence === "daily") {
+            for (let t = startMid; t <= endMid; t += 24 * 60 * 60 * 1000) {
+              const cur = new Date(t);
+              const parts = getUtc7Parts(cur);
+              addOccurrence(event, createUtc7Date(parts.year, parts.month, parts.day));
+            }
+          }
+        }
+      }
+
+      occurrences.sort((a, b) => {
+        const timeDiff = a.occurrenceDate.getTime() - b.occurrenceDate.getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return a.event.id - b.event.id;
+      });
+
+      return occurrences;
+    },
+
+    getEventsForWeek(chatId: string, referenceDate: Date = new Date()): EventOccurrence[] {
+      const start = getStartOfWeekUtc7(referenceDate);
+      const end = getEndOfWeekUtc7(referenceDate);
+      return repo.getEventsForRange(chatId, start, end);
+    },
+
+    getEventsForMonth(chatId: string, year: number, month: number): EventOccurrence[] {
+      const start = createUtc7Date(year, month, 1);
+      const end = createUtc7Date(year, month, getDaysInSolarMonth(year, month));
+      return repo.getEventsForRange(chatId, start, end);
+    },
+
+    getEventsForYear(chatId: string, year: number): EventOccurrence[] {
+      const start = createUtc7Date(year, 1, 1);
+      const end = createUtc7Date(year, 12, 31);
+      return repo.getEventsForRange(chatId, start, end);
     },
     getAllEvents(): EventRow[] {
       const rows = db.prepare("SELECT * FROM events ORDER BY id ASC").all();
