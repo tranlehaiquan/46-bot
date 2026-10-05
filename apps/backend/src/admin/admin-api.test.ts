@@ -538,4 +538,106 @@ describe("Admin REST API", () => {
       closeDatabase(db);
     }
   });
+
+  it("exports database snapshot and structured JSON", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      migrate(db);
+      const channelRepo = createChannelRepository(db);
+      const messageRepo = createMessageRepository(db);
+      const eventsRepo = createEventsRepository(db);
+      const memoryRepo = createMemoryRepository(db);
+      const lookupsRepo = createLookupRepository(db);
+
+      channelRepo.upsertDiscovery({
+        chatId: "group-1",
+        name: "Gia đình",
+        chatType: "GROUP",
+        status: "active",
+      });
+      eventsRepo.createEvent({
+        chatId: "group-1",
+        title: "Sinh nhật",
+        kind: "birthday",
+        calendar: "solar",
+        day: 15,
+        month: 10,
+        year: 1990,
+        createdBy: "user-1",
+      });
+      memoryRepo.upsertMemory("group-1", "Ba", "thích uống trà xanh", "user-1");
+
+      const app = buildServer({
+        config: mockConfig(),
+        log: createLogger(),
+        zalo: fakeZalo(),
+        db,
+        channelRepo,
+        messageRepo,
+        eventsRepo,
+        memoryRepo,
+        lookupsRepo,
+      });
+
+      // 1. Unauthorized export -> 401
+      const unauthJson = await app.inject({
+        method: "GET",
+        url: "/api/admin/export/json",
+      });
+      assert.equal(unauthJson.statusCode, 401);
+
+      const unauthDb = await app.inject({
+        method: "GET",
+        url: "/api/admin/export/db",
+      });
+      assert.equal(unauthDb.statusCode, 401);
+
+      // Login to get token
+      const loginRes = await app.inject({
+        method: "POST",
+        url: "/api/admin/login",
+        payload: JSON.stringify({ password: adminPassword }),
+      });
+      const { token } = JSON.parse(loginRes.body) as { token: string };
+      const authHeaders = { authorization: `Bearer ${token}` };
+
+      // 2. Export JSON
+      const jsonRes = await app.inject({
+        method: "GET",
+        url: "/api/admin/export/json",
+        headers: authHeaders,
+      });
+      assert.equal(jsonRes.statusCode, 200);
+      assert.match(jsonRes.headers["content-type"] || "", /application\/json/);
+      assert.match(jsonRes.headers["content-disposition"] || "", /attachment; filename="46bot-backup-.*\.json"/);
+
+      const exportBody = JSON.parse(jsonRes.body) as any;
+      assert.equal(exportBody.version, 1);
+      assert.ok(exportBody.stats);
+      assert.equal(exportBody.stats.channels, 1);
+      assert.equal(exportBody.stats.events, 1);
+      assert.equal(exportBody.stats.facts, 1);
+      assert.equal(exportBody.data.channels[0].chat_id, "group-1");
+      assert.equal(exportBody.data.events[0].title, "Sinh nhật");
+
+      // 3. Export DB
+      const dbRes = await app.inject({
+        method: "GET",
+        url: "/api/admin/export/db",
+        headers: authHeaders,
+      });
+      assert.equal(dbRes.statusCode, 200);
+      assert.match(dbRes.headers["content-type"] || "", /application\/x-sqlite3/);
+      assert.match(dbRes.headers["content-disposition"] || "", /attachment; filename="46bot-backup-.*\.sqlite"/);
+      assert.ok(dbRes.rawPayload.length > 0);
+
+      const headerStr = dbRes.rawPayload.subarray(0, 16).toString("utf8");
+      assert.equal(headerStr, "SQLite format 3\0");
+
+      await app.close();
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });
+

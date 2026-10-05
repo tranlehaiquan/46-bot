@@ -96,6 +96,7 @@ async function main(): Promise<void> {
     config,
     log,
     zalo,
+    db,
     queue,
     seenRepo,
     messageRepo,

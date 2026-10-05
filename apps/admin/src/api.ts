@@ -266,4 +266,55 @@ export const api = {
       method: "DELETE",
     });
   },
+
+  async downloadExport(format: "json" | "db"): Promise<void> {
+    const endpoint = format === "json" ? "/api/admin/export/json" : "/api/admin/export/db";
+    const response = await fetch(endpoint, {
+      headers: {
+        ...getAuthHeader(),
+      },
+    });
+
+    if (response.status === 401) {
+      localStorage.removeItem("bot_admin_token");
+      window.dispatchEvent(new Event("auth-expired"));
+      throw new Error("Phiên làm việc hết hạn hoặc mật khẩu không đúng.");
+    }
+
+    if (!response.ok) {
+      let errorMsg = "Tải dữ liệu thất bại";
+      try {
+        const err = await response.json();
+        if (err && typeof err.error === "string") {
+          errorMsg = err.error;
+        }
+      } catch {
+        // fallback to default errorMsg
+      }
+      throw new Error(errorMsg);
+    }
+
+    const blob = await response.blob();
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const defaultFilename = format === "json" ? `46bot-backup-${dateStr}.json` : `46bot-backup-${dateStr}.sqlite`;
+
+    let filename = defaultFilename;
+    const disposition = response.headers.get("Content-Disposition");
+    if (disposition) {
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      if (match && match[1]) {
+        filename = match[1];
+      }
+    }
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+  },
 };
+

@@ -399,5 +399,74 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       const success = deps.lookupsRepo.cancelLookup(lookupId);
       return reply.send({ ok: success });
     });
+
+    // 9. Export & Backup Routes
+    adminScope.get("/api/admin/export/json", async (_request, reply) => {
+      if (!deps.db) {
+        return reply.code(503).send({ error: "Database unavailable for export" });
+      }
+
+      const channels = deps.db.prepare("SELECT * FROM channels ORDER BY created_at ASC").all();
+      const events = deps.db.prepare("SELECT * FROM events ORDER BY month ASC, day ASC").all();
+      const facts = deps.db.prepare("SELECT * FROM memories ORDER BY ts ASC").all();
+      const stories = deps.db.prepare("SELECT * FROM memory_book ORDER BY ts ASC").all();
+      const lists = deps.db.prepare("SELECT * FROM lists ORDER BY created_at ASC").all();
+      const listItems = deps.db.prepare("SELECT * FROM list_items ORDER BY ts ASC").all();
+      const lookups = deps.db.prepare("SELECT * FROM scheduled_lookups ORDER BY created_at ASC").all();
+      const lookupRuns = deps.db.prepare("SELECT * FROM scheduled_lookup_runs ORDER BY id DESC LIMIT 500").all();
+      const messages = deps.db.prepare("SELECT * FROM messages ORDER BY ts DESC LIMIT 1000").all();
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        version: 1,
+        stats: {
+          channels: channels.length,
+          events: events.length,
+          facts: facts.length,
+          stories: stories.length,
+          lists: lists.length,
+          listItems: listItems.length,
+          lookups: lookups.length,
+          lookupRuns: lookupRuns.length,
+          messages: messages.length,
+        },
+        data: {
+          channels,
+          events,
+          facts,
+          stories,
+          lists,
+          listItems,
+          lookups,
+          lookupRuns,
+          messages,
+        },
+      };
+
+      return reply
+        .header("Content-Type", "application/json; charset=utf-8")
+        .header("Content-Disposition", `attachment; filename="46bot-backup-${dateStr}.json"`)
+        .send(payload);
+    });
+
+    adminScope.get("/api/admin/export/db", async (_request, reply) => {
+      if (!deps.db) {
+        return reply.code(503).send({ error: "Database unavailable for export" });
+      }
+
+      try {
+        deps.db.pragma("wal_checkpoint(PASSIVE)");
+      } catch {
+        // Best-effort checkpoint
+      }
+
+      const buffer = deps.db.serialize();
+      const dateStr = new Date().toISOString().slice(0, 10);
+      return reply
+        .header("Content-Type", "application/x-sqlite3")
+        .header("Content-Disposition", `attachment; filename="46bot-backup-${dateStr}.sqlite"`)
+        .send(buffer);
+    });
   });
 }

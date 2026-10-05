@@ -3,6 +3,7 @@ import { Bot, LogOut, Radio, Clock, CalendarDays, MessageSquare } from "lucide-r
 import { api, type Channel } from "../api";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { BackupExportDialog } from "./BackupExportDialog";
 
 export function Navbar({
   channels,
@@ -57,9 +58,9 @@ export function Navbar({
         </button>
       </div>
 
-      {/* Right side: status + logout */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
+      {/* Right side: status + backup + logout */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 mr-1">
           {pendingCount > 0 && (
             <Badge variant="pending" title="Channels awaiting approval">
               <Clock size={12} />
@@ -71,6 +72,8 @@ export function Navbar({
             <span>{activeCount} Active</span>
           </Badge>
         </div>
+
+        <BackupExportDialog />
 
         <Button
           variant="secondary"

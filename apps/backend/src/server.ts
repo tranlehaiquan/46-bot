@@ -18,12 +18,15 @@ import path from "node:path";
 import fs from "node:fs";
 import { registerAdminRoutes } from "./admin/routes.js";
 
+import type { SqliteDatabase } from "./db/connection.js";
+
 export const BODY_LIMIT = 64 * 1024;
 
 export type ServerDeps = {
   config: AppConfig;
   log: Logger;
   zalo: ZaloClient;
+  db?: SqliteDatabase;
   queue?: WorkQueue;
   seenRepo?: SeenRepository;
   messageRepo?: MessageRepository;
