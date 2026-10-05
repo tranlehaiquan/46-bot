@@ -74,4 +74,35 @@ describe("SQLite database layer", () => {
       closeDatabase(db);
     }
   });
+
+  it("migrates scheduled_lookups and scheduled_lookup_runs, accepting lookups and rejecting duplicate runs for same lookup and fire_date", () => {
+    const db = openDatabase(":memory:");
+    try {
+      migrate(db);
+
+      const now = Date.now();
+      const insertLookup = db.prepare(`
+        INSERT INTO scheduled_lookups (chat_id, instruction, recurrence, hour, minute, weekday, day_of_month, active, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const info = insertLookup.run("chat-1", "Báo thời tiết TP.HCM", "daily", 7, 0, null, null, 1, "user-1", now, now);
+      const lookupId = Number(info.lastInsertRowid);
+      assert.ok(lookupId > 0);
+
+      const insertRun = db.prepare(`
+        INSERT INTO scheduled_lookup_runs (lookup_id, fire_date, status, attempt_count, last_error, sent_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      insertRun.run(lookupId, "2026-10-05", "running", 1, null, null);
+
+      assert.throws(() => {
+        insertRun.run(lookupId, "2026-10-05", "running", 1, null, null);
+      }, /UNIQUE constraint failed/);
+
+      // Different fire_date succeeds
+      insertRun.run(lookupId, "2026-10-06", "running", 1, null, null);
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });

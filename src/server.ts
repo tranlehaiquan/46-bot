@@ -5,6 +5,7 @@ import type { MessageRepository } from "./db/message-repo.js";
 import type { EventsRepository } from "./db/repositories/events.js";
 import type { MemoryRepository } from "./db/repositories/memory.js";
 import type { ChannelRepository } from "./db/repositories/channels.js";
+import type { LookupRepository } from "./db/repositories/lookups.js";
 import type { SeenRepository } from "./db/seen-repo.js";
 import type { LlmClient } from "./llm/client.js";
 import { handleDelivery } from "./delivery.js";
@@ -30,6 +31,7 @@ export type ServerDeps = {
   eventsRepo?: EventsRepository;
   memoryRepo?: MemoryRepository;
   channelRepo?: ChannelRepository;
+  lookupsRepo?: LookupRepository;
   llmClient?: LlmClient;
 };
 
@@ -69,6 +71,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         eventsRepo: deps.eventsRepo,
         memoryRepo: deps.memoryRepo,
         channelRepo: deps.channelRepo,
+        lookupsRepo: deps.lookupsRepo,
         llmClient: deps.llmClient,
         seen,
       }),

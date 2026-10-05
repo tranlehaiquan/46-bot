@@ -75,6 +75,36 @@ export type CalendarEventOccurrence = {
   occurrenceDateStr: string;
 };
 
+export type LookupRecurrence = "daily" | "weekly" | "monthly";
+export type RunStatus = "running" | "sent" | "failed";
+
+export type ScheduledLookupRun = {
+  id: number;
+  lookupId: number;
+  fireDate: string;
+  status: RunStatus;
+  attemptCount: number;
+  lastError: string | null;
+  sentAt: number | null;
+  startedAt: number;
+};
+
+export type ScheduledLookup = {
+  id: number;
+  chatId: string;
+  instruction: string;
+  recurrence: LookupRecurrence;
+  hour: number;
+  minute: number;
+  weekday: number | null;
+  dayOfMonth: number | null;
+  active: boolean;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+  lastRun?: ScheduledLookupRun;
+};
+
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem("bot_admin_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -216,5 +246,24 @@ export const api = {
     const url = chatId ? `${base}&chatId=${encodeURIComponent(chatId)}` : base;
     const res = await request<{ events: CalendarEventOccurrence[] }>(url);
     return res.events;
+  },
+
+  async getLookups(chatId: string): Promise<ScheduledLookup[]> {
+    const res = await request<{ lookups: ScheduledLookup[] }>(`/api/admin/channels/${encodeURIComponent(chatId)}/lookups`);
+    return res.lookups;
+  },
+
+  async updateLookup(chatId: string, id: number, updates: { active?: boolean; instruction?: string }): Promise<ScheduledLookup> {
+    const res = await request<{ ok: boolean; lookup: ScheduledLookup }>(`/api/admin/channels/${encodeURIComponent(chatId)}/lookups/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+    return res.lookup;
+  },
+
+  async deleteLookup(chatId: string, id: number): Promise<void> {
+    await request(`/api/admin/channels/${encodeURIComponent(chatId)}/lookups/${id}`, {
+      method: "DELETE",
+    });
   },
 };

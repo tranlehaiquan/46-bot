@@ -1,14 +1,29 @@
 import type { AppConfig } from "../config.js";
+import type { ChannelRepository } from "../db/repositories/channels.js";
 import type { DueReminder, EventsRepository } from "../db/repositories/events.js";
 import { formatUtc7DateStr, getUtc7Parts } from "../db/repositories/events.js";
+import type { LookupRepository } from "../db/repositories/lookups.js";
 import { getUpcomingHolidays } from "../holidays/index.js";
+import type { LlmClient, ToolSet } from "../llm/client.js";
+import { detectPromptInjection } from "../llm/prompt-security.js";
 import type { Logger } from "../logger.js";
+import { createHolidayTools } from "../tools/holidays.js";
+import { createWeatherTool } from "../tools/weather.js";
+import { createWebSearchTool } from "../tools/web-search.js";
+import { splitText } from "../utils/split-text.js";
 import type { ZaloClient } from "../zalo-client.js";
 import {
   formatEventReminder,
   formatMorningBriefing,
   formatWeeklyOutlook,
 } from "./formatters.js";
+
+export const SCHEDULED_LOOKUP_SYSTEM_PROMPT = `Bạn là trợ lý báo tin định kỳ cho gia đình.
+- Nhiệm vụ: Thực hiện và trả lời chỉ dẫn tra cứu được yêu cầu một cách ngắn gọn, súc tích, chính xác.
+- Ngôn ngữ: Mặc định tiếng Việt.
+- Định dạng: Văn bản thuần (plain text), KHÔNG dùng Markdown (không dùng **, __, ##, *, _, ~~).
+- Không đặt câu hỏi ngược lại người dùng, không thêm phần chào hỏi thừa thãi hoặc hỏi tiếp.
+- Chỉ sử dụng các công cụ tra cứu được cung cấp.`;
 
 export type Clock = {
   now(): Date;
@@ -20,6 +35,9 @@ export type SchedulerDependencies = {
   zalo: ZaloClient;
   log?: Logger;
   clock?: Clock;
+  lookupsRepo?: LookupRepository;
+  channelsRepo?: ChannelRepository;
+  llm?: LlmClient;
 };
 
 export type SchedulerInstance = {
@@ -29,10 +47,11 @@ export type SchedulerInstance = {
   runMorningBriefing(date?: Date): Promise<void>;
   runWeeklySummary(date?: Date): Promise<void>;
   runEventReminders(date?: Date): Promise<void>;
+  runDueLookups(date?: Date): Promise<void>;
 };
 
 export function createScheduler(deps: SchedulerDependencies): SchedulerInstance {
-  const { config, eventsRepo, zalo, log, clock = { now: () => new Date() } } = deps;
+  const { config, eventsRepo, zalo, log, clock = { now: () => new Date() }, lookupsRepo, channelsRepo, llm } = deps;
 
   let timer: NodeJS.Timeout | null = null;
   const sentMorningBriefings = new Set<string>(); // key: `${chatId}:${dateStr}`
@@ -173,9 +192,107 @@ export function createScheduler(deps: SchedulerDependencies): SchedulerInstance 
     }
   }
 
+  async function runDueLookups(referenceDate = clock.now()): Promise<void> {
+    if (!lookupsRepo || !llm) {
+      return;
+    }
+
+    const { dateStr } = getLocalTimeInfo(referenceDate);
+    const dueLookups = lookupsRepo.findDueLookups(referenceDate);
+
+    for (const lookup of dueLookups) {
+      if (channelsRepo) {
+        const channel = channelsRepo.getChannel(lookup.chatId);
+        if (channel && channel.status !== "active") {
+          log?.info({
+            event: "scheduler_lookup_skipped_channel",
+            chatId: lookup.chatId,
+            status: channel.status,
+          });
+          continue;
+        }
+      }
+
+      const injectionCheck = detectPromptInjection(lookup.instruction);
+      if (injectionCheck.isInjection) {
+        const claim = lookupsRepo.claimRun(lookup.id, dateStr, referenceDate.getTime());
+        if (claim.claimed) {
+          lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
+          // Mark directly as failed since injection shouldn't be retried
+          lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
+          lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
+        }
+        continue;
+      }
+
+      const claim = lookupsRepo.claimRun(lookup.id, dateStr, referenceDate.getTime());
+      if (!claim.claimed) {
+        continue;
+      }
+
+      const run = claim.run;
+
+      const weatherTool = createWeatherTool();
+      const holidayTools = createHolidayTools();
+      const tools: ToolSet = {
+        weather_check: weatherTool.weather_check,
+        holiday_list_upcoming: holidayTools.holiday_list_upcoming,
+      };
+
+      if (config.tavilyApiKey) {
+        const webSearchTool = createWebSearchTool(config.tavilyApiKey);
+        tools.web_search = webSearchTool.web_search;
+      }
+
+      try {
+        const reply = await llm.generateReply({
+          systemPrompt: SCHEDULED_LOOKUP_SYSTEM_PROMPT,
+          history: [],
+          incomingMessage: {
+            senderId: lookup.createdBy,
+            senderName: "Family Member",
+            content: lookup.instruction,
+          },
+          tools,
+        });
+
+        if (!reply || reply.trim().length === 0) {
+          throw new Error("Empty reply from LLM for scheduled lookup");
+        }
+
+        const chunks = splitText(reply, 2000);
+        for (const chunk of chunks) {
+          await zalo.sendMessage(lookup.chatId, chunk);
+        }
+
+        lookupsRepo.recordRunSuccess(run.id, clock.now().getTime());
+        log?.info({
+          event: "scheduler_lookup_sent",
+          lookupId: lookup.id,
+          chatId: lookup.chatId,
+          fireDate: dateStr,
+        });
+      } catch (error) {
+        const err = error instanceof Error ? error.message : String(error);
+        lookupsRepo.recordRunFailure(run.id, err);
+        log?.error({
+          event: "scheduler_lookup_error",
+          lookupId: lookup.id,
+          chatId: lookup.chatId,
+          fireDate: dateStr,
+          attemptCount: run.attemptCount,
+          error: err,
+        });
+      }
+    }
+  }
+
   async function runCatchUp(): Promise<void> {
     const now = clock.now();
     const { hour } = getLocalTimeInfo(now);
+
+    // Due lookups catch-up
+    await runDueLookups(now);
 
     // Morning briefing window catch-up: between 07:00 and 09:00 (within 2 hours of 07:00)
     if (hour >= 7 && hour < 9) {
@@ -191,6 +308,9 @@ export function createScheduler(deps: SchedulerDependencies): SchedulerInstance 
   async function tick(): Promise<void> {
     const now = clock.now();
     const { hour, minute, dayOfWeek } = getLocalTimeInfo(now);
+
+    // Always check for due lookups on every tick
+    await runDueLookups(now);
 
     // 07:00 daily morning briefing
     if (hour === 7 && minute === 0) {
@@ -222,6 +342,7 @@ export function createScheduler(deps: SchedulerDependencies): SchedulerInstance 
     runMorningBriefing,
     runWeeklySummary,
     runEventReminders,
+    runDueLookups,
   };
 }
 

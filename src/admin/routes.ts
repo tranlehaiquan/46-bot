@@ -347,5 +347,57 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
 
       return reply.send({ events });
     });
+
+    // 8. Lookups: List, Pause/Resume, Delete
+    adminScope.get("/api/admin/channels/:chatId/lookups", async (request, reply) => {
+      const { chatId } = request.params as { chatId: string };
+      if (!deps.lookupsRepo) {
+        return reply.send({ lookups: [] });
+      }
+      const lookups = deps.lookupsRepo.listLookups(chatId);
+      return reply.send({ lookups });
+    });
+
+    adminScope.patch("/api/admin/channels/:chatId/lookups/:id", async (request, reply) => {
+      const { chatId, id } = request.params as { chatId: string; id: string };
+      const body = parseJsonBody(request.body);
+
+      if (!deps.lookupsRepo) {
+        return reply.code(503).send({ error: "Lookup repository unavailable" });
+      }
+
+      const lookupId = Number(id);
+      const existing = deps.lookupsRepo.getLookupById(lookupId);
+      if (!existing || existing.chatId !== chatId) {
+        return reply.code(404).send({ error: "Lookup not found" });
+      }
+
+      const active = typeof body.active === "boolean" ? body.active : undefined;
+      const instruction = typeof body.instruction === "string" ? body.instruction : undefined;
+
+      const updated = deps.lookupsRepo.updateLookup(lookupId, {
+        active,
+        instruction,
+      });
+
+      return reply.send({ ok: true, lookup: updated });
+    });
+
+    adminScope.delete("/api/admin/channels/:chatId/lookups/:id", async (request, reply) => {
+      const { chatId, id } = request.params as { chatId: string; id: string };
+
+      if (!deps.lookupsRepo) {
+        return reply.code(503).send({ error: "Lookup repository unavailable" });
+      }
+
+      const lookupId = Number(id);
+      const existing = deps.lookupsRepo.getLookupById(lookupId);
+      if (!existing || existing.chatId !== chatId) {
+        return reply.code(404).send({ error: "Lookup not found" });
+      }
+
+      const success = deps.lookupsRepo.cancelLookup(lookupId);
+      return reply.send({ ok: success });
+    });
   });
 }

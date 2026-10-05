@@ -4,6 +4,7 @@ import type { MessageRepository } from "./db/message-repo.js";
 import type { EventsRepository } from "./db/repositories/events.js";
 import type { MemoryRepository } from "./db/repositories/memory.js";
 import type { ChannelRepository } from "./db/repositories/channels.js";
+import type { LookupRepository } from "./db/repositories/lookups.js";
 import type { SeenRepository } from "./db/seen-repo.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
 import {
@@ -15,6 +16,7 @@ import { isMentionedOrReplied, normalizeDelivery } from "./normalize.js";
 import { createEventTools } from "./tools/events.js";
 import { createHolidayTools } from "./tools/holidays.js";
 import { createListTools } from "./tools/lists.js";
+import { createLookupTools } from "./tools/lookups.js";
 import { createMemoryTools } from "./tools/memory.js";
 import { createWeatherTool } from "./tools/weather.js";
 import { createWebSearchTool } from "./tools/web-search.js";
@@ -44,12 +46,13 @@ export type DeliveryDependencies = {
   eventsRepo?: EventsRepository;
   memoryRepo?: MemoryRepository;
   channelRepo?: ChannelRepository;
+  lookupsRepo?: LookupRepository;
   llmClient?: LlmClient;
   seen?: Set<string>;
 };
 
 export async function handleDelivery(input: DeliveryDependencies): Promise<void> {
-  const { payload, config, log, zalo, seenRepo, messageRepo, listRepo, eventsRepo, memoryRepo, channelRepo, llmClient, seen } = input;
+  const { payload, config, log, zalo, seenRepo, messageRepo, listRepo, eventsRepo, memoryRepo, channelRepo, lookupsRepo, llmClient, seen } = input;
   if (!payload || payload.length === 0) {
     log.info({ event: "unrecognized_delivery" });
     return;
@@ -210,9 +213,16 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
 
     const weatherTools = createWeatherTool();
 
+    const lookupTools = lookupsRepo
+      ? createLookupTools(lookupsRepo, {
+          chatId: message.chatId,
+          senderName: message.senderName || message.senderId,
+        })
+      : undefined;
+
     const tools =
-      listTools || eventTools || holidayTools || searchTools || memoryTools || weatherTools
-        ? { ...listTools, ...eventTools, ...holidayTools, ...searchTools, ...memoryTools, ...weatherTools }
+      listTools || eventTools || holidayTools || searchTools || memoryTools || weatherTools || lookupTools
+        ? { ...listTools, ...eventTools, ...holidayTools, ...searchTools, ...memoryTools, ...weatherTools, ...lookupTools }
         : undefined;
 
     const memories = memoryRepo ? memoryRepo.listMemories(message.chatId) : undefined;

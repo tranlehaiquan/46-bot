@@ -6,6 +6,7 @@ import { createChannelRepository } from "../db/repositories/channels.js";
 import { createMessageRepository } from "../db/message-repo.js";
 import { createEventsRepository } from "../db/repositories/events.js";
 import { createMemoryRepository } from "../db/repositories/memory.js";
+import { createLookupRepository } from "../db/repositories/lookups.js";
 import { buildServer } from "../server.js";
 import { createLogger } from "../logger.js";
 import type { ZaloClient } from "../zalo-client.js";
@@ -415,5 +416,126 @@ describe("Admin REST API", () => {
     assert.match(chatRouteRes.body, /46-Bot Control Center/);
 
     await app.close();
+  });
+
+  it("covers channel lookups API: list with failed last run, pause, resume, delete, and HTTP 401 without session", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      migrate(db);
+      const channelRepo = createChannelRepository(db);
+      const lookupsRepo = createLookupRepository(db);
+
+      channelRepo.upsertDiscovery({
+        chatId: "group-1",
+        name: "Gia đình",
+        chatType: "GROUP",
+        status: "active",
+      });
+
+      const app = buildServer({
+        config: mockConfig(),
+        log: createLogger(),
+        zalo: fakeZalo(),
+        channelRepo,
+        lookupsRepo,
+      });
+
+      // 1. HTTP 401 without session/auth token
+      const unauthRes = await app.inject({
+        method: "GET",
+        url: "/api/admin/channels/group-1/lookups",
+      });
+      assert.equal(unauthRes.statusCode, 401);
+
+      // Authenticate
+      const loginRes = await app.inject({
+        method: "POST",
+        url: "/api/admin/login",
+        payload: JSON.stringify({ password: adminPassword }),
+      });
+      const { token: authToken } = JSON.parse(loginRes.body) as { token: string };
+      const authHeaders = { authorization: `Bearer ${authToken}` };
+
+      // 2. Create a lookup and record a failed run
+      const lookup = lookupsRepo.createLookup({
+        chatId: "group-1",
+        instruction: "Giá vàng SJC",
+        recurrence: "daily",
+        hour: 8,
+        minute: 0,
+        createdBy: "user-1",
+      });
+
+      // Claim and fail 3 attempts to produce a 'failed' last run
+      for (let i = 0; i < 3; i++) {
+        const claim = lookupsRepo.claimRun(lookup.id, "2026-10-05");
+        if (claim.claimed) {
+          lookupsRepo.recordRunFailure(claim.run.id, "Connection failed");
+        }
+      }
+
+      // 3. List lookups and verify failed last-run status
+      const listRes = await app.inject({
+        method: "GET",
+        url: "/api/admin/channels/group-1/lookups",
+        headers: authHeaders,
+      });
+      assert.equal(listRes.statusCode, 200);
+      const listBody = JSON.parse(listRes.body) as { lookups: any[] };
+      assert.equal(listBody.lookups.length, 1);
+      assert.equal(listBody.lookups[0].id, lookup.id);
+      assert.equal(listBody.lookups[0].active, true);
+      assert.equal(listBody.lookups[0].lastRun?.status, "failed");
+
+      // 4. Pause lookup (PATCH active: false)
+      const pauseRes = await app.inject({
+        method: "PATCH",
+        url: `/api/admin/channels/group-1/lookups/${lookup.id}`,
+        headers: authHeaders,
+        payload: JSON.stringify({ active: false }),
+      });
+      assert.equal(pauseRes.statusCode, 200);
+      const pauseBody = JSON.parse(pauseRes.body) as { ok: boolean; lookup: any };
+      assert.equal(pauseBody.ok, true);
+      assert.equal(pauseBody.lookup.active, false);
+      assert.equal(lookupsRepo.getLookupById(lookup.id)?.active, false);
+
+      // 5. Resume lookup (PATCH active: true)
+      const resumeRes = await app.inject({
+        method: "PATCH",
+        url: `/api/admin/channels/group-1/lookups/${lookup.id}`,
+        headers: authHeaders,
+        payload: JSON.stringify({ active: true }),
+      });
+      assert.equal(resumeRes.statusCode, 200);
+      const resumeBody = JSON.parse(resumeRes.body) as { ok: boolean; lookup: any };
+      assert.equal(resumeBody.ok, true);
+      assert.equal(resumeBody.lookup.active, true);
+      assert.equal(lookupsRepo.getLookupById(lookup.id)?.active, true);
+
+      // 6. Delete lookup
+      const deleteRes = await app.inject({
+        method: "DELETE",
+        url: `/api/admin/channels/group-1/lookups/${lookup.id}`,
+        headers: authHeaders,
+      });
+      assert.equal(deleteRes.statusCode, 200);
+      const deleteBody = JSON.parse(deleteRes.body) as { ok: boolean };
+      assert.equal(deleteBody.ok, true);
+      assert.equal(lookupsRepo.getLookupById(lookup.id), undefined);
+
+      // Verify list is now empty
+      const afterDeleteRes = await app.inject({
+        method: "GET",
+        url: "/api/admin/channels/group-1/lookups",
+        headers: authHeaders,
+      });
+      const afterDeleteBody = JSON.parse(afterDeleteRes.body) as { lookups: any[] };
+      assert.equal(afterDeleteBody.lookups.length, 0);
+
+      await app.close();
+    } finally {
+      closeDatabase(db);
+    }
   });
 });

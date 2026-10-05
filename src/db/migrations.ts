@@ -102,5 +102,35 @@ export function migrate(db: SqliteDatabase): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_channels_status ON channels(status);
+
+    CREATE TABLE IF NOT EXISTS scheduled_lookups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      instruction TEXT NOT NULL,
+      recurrence TEXT NOT NULL,
+      hour INTEGER NOT NULL,
+      minute INTEGER NOT NULL,
+      weekday INTEGER,
+      day_of_month INTEGER,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_scheduled_lookups_chat ON scheduled_lookups(chat_id);
+
+    CREATE TABLE IF NOT EXISTS scheduled_lookup_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lookup_id INTEGER NOT NULL REFERENCES scheduled_lookups(id) ON DELETE CASCADE,
+      fire_date TEXT NOT NULL,
+      status TEXT NOT NULL,
+      attempt_count INTEGER NOT NULL DEFAULT 1,
+      last_error TEXT,
+      sent_at INTEGER,
+      started_at INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_lookup_runs_lookup_fire ON scheduled_lookup_runs(lookup_id, fire_date);
   `);
 }

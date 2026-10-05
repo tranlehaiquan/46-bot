@@ -67,6 +67,10 @@ Dưới đây là bảng tổng hợp chi tiết các công cụ (tools) đượ
 | `holiday_list_upcoming`| **Ngày lễ Việt Nam (Holidays)** | Tra cứu các ngày nghỉ lễ chính thức hoặc lễ hội truyền thống sắp tới tại Việt Nam. | • `windowDays` *(number, 1–365, mặc định `365`)*: Khoảng thời gian tra cứu.<br>• `publicOnly` *(boolean, mặc định `false`)*: Chỉ lọc các ngày nghỉ lễ chính thức hưởng nguyên lương theo luật. | *"Sắp tới có ngày nghỉ lễ nào không?"*<br>*"Năm nay Tết Nguyên Đán rơi vào ngày nào dương lịch?"*<br>*"Bao giờ đến Tết Trung Thu?"* |
 | `holiday_import` | **Ngày lễ Việt Nam (Holidays)** | Tự động thêm các ngày nghỉ lễ chính thức hoặc toàn bộ lễ hội truyền thống vào lịch sự kiện của nhóm. | • `includeTraditional` *(boolean, mặc định `false`)*: `true` nếu muốn thêm cả các lễ truyền thống (Trung Thu, Vu Lan, Ông Táo...). | *"Lưu các ngày nghỉ lễ năm nay vào lịch nhóm"*<br>*"Nhập tất cả ngày lễ truyền thống vào lịch"* |
 | `web_search` | **Tìm kiếm Web (Search)** | Tìm kiếm thông tin thời gian thực từ Internet qua Tavily Search API. | • `query` *(string, bắt buộc)*: Từ khóa hoặc câu hỏi cần tra cứu.<br>• `maxResults` *(number, 1–5, mặc định `3`)*: Số kết quả tối đa cần trả về. | *"Thời tiết Đà Lạt cuối tuần này thế nào?"*<br>*"Giá vàng hôm nay bao nhiêu?"*<br>*"Tìm công thức nấu bò kho ngon"* |
+| `lookup_schedule_create` | **Lịch tra cứu định kỳ (Lookups)** | Đặt lịch tra cứu thông tin Internet định kỳ hàng ngày, hàng tuần hoặc hàng tháng (ví dụ: báo thời tiết mỗi sáng, cập nhật giá vàng). Tự động dùng 07:00 nếu yêu cầu buổi sáng không nói giờ cụ thể. Tháng ngắn hơn tự động chuyển về ngày cuối tháng. | • `instruction` *(string, bắt buộc)*: Nội dung tra cứu.<br>• `recurrence` *(enum: `daily`, `weekly`, `monthly`)*.<br>• `time` *(string, định dạng HH:mm)*.<br>• `isMorning` *(boolean)*.<br>• `weekday` *(number, 0–6 cho weekly)*.<br>• `dayOfMonth` *(number, 1–31 cho monthly)*. | *"Mỗi ngày lúc 7:00 sáng báo thời tiết TP.HCM"*<br>*"Hàng ngày 08:30 cập nhật giá vàng SJC"*<br>*"Sáng thứ 2 hàng tuần lúc 08:00 điểm tin tài chính"* |
+| `lookup_schedule_list` | **Lịch tra cứu định kỳ (Lookups)** | Xem danh sách các lịch tra cứu Internet định kỳ hiện có trong nhóm chat kèm trạng thái và kết quả lần chạy gần nhất. | Không có tham số. | *"Xem danh sách lịch tra cứu của nhóm"*<br>*"Nhóm mình đang có những lịch hẹn tra cứu nào?"* |
+| `lookup_schedule_update` | **Lịch tra cứu định kỳ (Lookups)** | Cập nhật chỉ dẫn, giờ thực hiện hoặc tạm dừng/bật lại một lịch tra cứu định kỳ theo ID. | • `id` *(number, bắt buộc)*.<br>• Các trường tùy chọn: `instruction`, `recurrence`, `time`, `weekday`, `dayOfMonth`, `active`. | *"Đổi lịch tra cứu số 1 sang 07:30"*<br>*"Tạm dừng lịch tra cứu ID 2"* |
+| `lookup_schedule_cancel` | **Lịch tra cứu định kỳ (Lookups)** | Hủy và xóa hoàn toàn một lịch tra cứu định kỳ khỏi nhóm chat theo ID. | • `id` *(number, bắt buộc)*: ID của lịch tra cứu cần hủy. | *"Hủy lịch tra cứu số 3"*<br>*"Xóa lịch báo thời tiết ID 1"* |
 
 ---
 
@@ -96,6 +100,8 @@ erDiagram
     events ||--o{ reminders_sent : tracks
     channels ||--o{ memories : "chat_id"
     channels ||--o{ memory_book : "chat_id"
+    channels ||--o{ scheduled_lookups : "chat_id"
+    scheduled_lookups ||--o{ scheduled_lookup_runs : "lookup_id"
 
     seen_messages {
         TEXT message_id PK
@@ -180,6 +186,32 @@ erDiagram
         TEXT happened_on
         TEXT created_by
         INTEGER ts
+    }
+
+    scheduled_lookups {
+        INTEGER id PK
+        TEXT chat_id
+        TEXT instruction
+        TEXT recurrence
+        INTEGER hour
+        INTEGER minute
+        INTEGER weekday
+        INTEGER day_of_month
+        INTEGER active
+        TEXT created_by
+        INTEGER created_at
+        INTEGER updated_at
+    }
+
+    scheduled_lookup_runs {
+        INTEGER id PK
+        INTEGER lookup_id FK
+        TEXT fire_date
+        TEXT status
+        INTEGER attempt_count
+        TEXT last_error
+        INTEGER sent_at
+        INTEGER started_at
     }
 ```
 
