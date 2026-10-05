@@ -1,6 +1,7 @@
 import React from "react";
 import { Users, User, RefreshCw } from "lucide-react";
 import type { Channel, ChannelStatus } from "../../api";
+import { Button } from "../ui/button";
 
 interface ChannelHeaderProps {
   channel: Channel;
@@ -57,13 +58,14 @@ export function ChannelHeader({
           <option value="disabled">Disabled</option>
         </select>
 
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onRefresh}
-          className="btn btn-secondary px-2.5 py-1.5"
           title="Refresh data"
         >
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-        </button>
+        </Button>
       </div>
     </div>
   );

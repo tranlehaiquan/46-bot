@@ -1,9 +1,26 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Pencil, X } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { CalendarMonthGrid } from "../CalendarMonthGrid";
 import type { EventItem, HolidayOccurrence, CalendarEventOccurrence } from "../../api";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
+import { ConfirmDialog } from "../ui/confirm-dialog";
+import {
+  useCreateEvent,
+  useUpdateEvent,
+  useDeleteEvent,
+} from "../../hooks/useAdminQueries";
 
 interface ChannelRemindersTabProps {
+  chatId: string;
   events: EventItem[];
   calYear: number;
   calMonth: number;
@@ -11,22 +28,10 @@ interface ChannelRemindersTabProps {
   calEvents: CalendarEventOccurrence[];
   onPrevMonth: () => void;
   onNextMonth: () => void;
-  onCreateEvent: (eventData: {
-    title: string;
-    kind: string;
-    calendar: "solar" | "lunar";
-    day: number;
-    month: number;
-    year?: number;
-    recurrence: string;
-    remindDaysBefore: number;
-    notes?: string;
-  }) => Promise<void>;
-  onUpdateEvent: (id: number, eventData: Partial<EventItem>) => Promise<void>;
-  onDeleteEvent: (id: number) => Promise<void>;
 }
 
 export function ChannelRemindersTab({
+  chatId,
   events,
   calYear,
   calMonth,
@@ -34,12 +39,14 @@ export function ChannelRemindersTab({
   calEvents,
   onPrevMonth,
   onNextMonth,
-  onCreateEvent,
-  onUpdateEvent,
-  onDeleteEvent,
 }: ChannelRemindersTabProps) {
-  const [showEventForm, setShowEventForm] = useState(false);
+  const createEventMutation = useCreateEvent(chatId);
+  const updateEventMutation = useUpdateEvent(chatId);
+  const deleteEventMutation = useDeleteEvent(chatId);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+  const [eventToDelete, setEventToDelete] = useState<number | null>(null);
 
   const [eventForm, setEventForm] = useState({
     title: "",
@@ -54,23 +61,19 @@ export function ChannelRemindersTab({
   });
 
   const handleStartCreate = () => {
-    if (showEventForm && !editingEvent) {
-      setShowEventForm(false);
-    } else {
-      setEditingEvent(null);
-      setEventForm({
-        title: "",
-        kind: "event",
-        calendar: "solar",
-        day: 1,
-        month: 1,
-        year: "",
-        recurrence: "yearly",
-        remindDaysBefore: 0,
-        notes: "",
-      });
-      setShowEventForm(true);
-    }
+    setEditingEvent(null);
+    setEventForm({
+      title: "",
+      kind: "event",
+      calendar: "solar",
+      day: 1,
+      month: 1,
+      year: "",
+      recurrence: "yearly",
+      remindDaysBefore: 0,
+      notes: "",
+    });
+    setDialogOpen(true);
   };
 
   const handleStartEdit = (ev: EventItem) => {
@@ -86,23 +89,7 @@ export function ChannelRemindersTab({
       remindDaysBefore: ev.remindDaysBefore,
       notes: ev.notes || "",
     });
-    setShowEventForm(true);
-  };
-
-  const handleCancelForm = () => {
-    setEditingEvent(null);
-    setShowEventForm(false);
-    setEventForm({
-      title: "",
-      kind: "event",
-      calendar: "solar",
-      day: 1,
-      month: 1,
-      year: "",
-      recurrence: "yearly",
-      remindDaysBefore: 0,
-      notes: "",
-    });
+    setDialogOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -119,13 +106,27 @@ export function ChannelRemindersTab({
       notes: eventForm.notes || undefined,
     };
 
-    if (editingEvent) {
-      await onUpdateEvent(editingEvent.id, payload);
-    } else {
-      await onCreateEvent(payload);
+    try {
+      if (editingEvent) {
+        await updateEventMutation.mutateAsync({ id: editingEvent.id, updates: payload });
+      } else {
+        await createEventMutation.mutateAsync(payload);
+      }
+      setDialogOpen(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to save event");
     }
+  };
 
-    handleCancelForm();
+  const handleDelete = async () => {
+    if (!eventToDelete) return;
+    try {
+      await deleteEventMutation.mutateAsync(eventToDelete);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete event");
+    } finally {
+      setEventToDelete(null);
+    }
   };
 
   const filteredMonthHolidays = calHolidays.filter((h) => {
@@ -154,161 +155,19 @@ export function ChannelRemindersTab({
 
       {/* Events List Header */}
       <div className="flex justify-between items-center mb-5">
-        <h3 className="text-lg font-bold text-white">Events & Reminders</h3>
-        <button
-          onClick={handleStartCreate}
-          className="btn btn-primary text-xs px-3.5 py-2"
-        >
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-bold text-white">Events & Reminders</h3>
+          <Badge variant="indigo">{events.length}</Badge>
+        </div>
+        <Button size="sm" onClick={handleStartCreate}>
           <Plus size={14} />
-          <span>{showEventForm && !editingEvent ? "Close Form" : "Create New Event"}</span>
-        </button>
+          <span>Create New Event</span>
+        </Button>
       </div>
-
-      {/* Event Form (Create or Edit) */}
-      {showEventForm && (
-        <form onSubmit={handleSubmit} className="glass-panel p-5 mb-6 border border-indigo-500/40 shadow-lg">
-          <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/[0.08]">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-white">
-                {editingEvent ? `Edit Event: ${editingEvent.title}` : "Create New Event"}
-              </span>
-              {editingEvent && (
-                <span className="badge badge-pending text-[10px]">Editing</span>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={handleCancelForm}
-              className="text-slate-400 hover:text-slate-200 p-1"
-            >
-              <X size={16} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3.5 mb-4">
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Event Title *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Dad's Birthday..."
-                value={eventForm.title}
-                onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-                className="form-input"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Event Type</label>
-              <select
-                value={eventForm.kind}
-                onChange={(e) => setEventForm({ ...eventForm, kind: e.target.value })}
-                className="form-input"
-              >
-                <option value="event">General Event</option>
-                <option value="birthday">Birthday</option>
-                <option value="anniversary">Anniversary</option>
-                <option value="gio">Death Anniversary (Giỗ)</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Calendar</label>
-              <select
-                value={eventForm.calendar}
-                onChange={(e) => setEventForm({ ...eventForm, calendar: e.target.value as "solar" | "lunar" })}
-                className="form-input"
-              >
-                <option value="solar">Solar (Dương lịch)</option>
-                <option value="lunar">Lunar (Âm lịch)</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Day / Month</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={eventForm.day}
-                  onChange={(e) => setEventForm({ ...eventForm, day: Number(e.target.value) })}
-                  className="form-input"
-                  placeholder="Day"
-                />
-                <input
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={eventForm.month}
-                  onChange={(e) => setEventForm({ ...eventForm, month: Number(e.target.value) })}
-                  className="form-input"
-                  placeholder="Month"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Year (Optional)</label>
-              <input
-                type="number"
-                min={1900}
-                max={2100}
-                placeholder="e.g. 1990"
-                value={eventForm.year}
-                onChange={(e) => setEventForm({ ...eventForm, year: e.target.value })}
-                className="form-input"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Recurrence</label>
-              <select
-                value={eventForm.recurrence}
-                onChange={(e) => setEventForm({ ...eventForm, recurrence: e.target.value })}
-                className="form-input"
-              >
-                <option value="yearly">Yearly</option>
-                <option value="monthly">Monthly</option>
-                <option value="none">One-time</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Remind In Advance (days)</label>
-              <input
-                type="number"
-                min={0}
-                max={30}
-                value={eventForm.remindDaysBefore}
-                onChange={(e) => setEventForm({ ...eventForm, remindDaysBefore: Number(e.target.value) })}
-                className="form-input"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Notes (Optional)</label>
-              <input
-                type="text"
-                placeholder="Additional details..."
-                value={eventForm.notes}
-                onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
-                className="form-input"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={handleCancelForm}
-              className="btn btn-secondary px-4 py-2 text-sm"
-            >
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary px-4 py-2 text-sm">
-              {editingEvent ? "Update Event" : "Save Event"}
-            </button>
-          </div>
-        </form>
-      )}
 
       {/* Events List */}
       {events.length === 0 ? (
-        <div className="text-center text-slate-400 py-8 text-sm">
+        <div className="text-center text-slate-400 py-8 text-sm glass-panel">
           No events or reminders recorded for this channel.
         </div>
       ) : (
@@ -316,42 +175,39 @@ export function ChannelRemindersTab({
           {events.map((ev) => (
             <div
               key={ev.id}
-              className={`glass-panel p-4 flex flex-col gap-2 transition-all ${
-                editingEvent?.id === ev.id ? "border-indigo-500/80 shadow-[0_0_15px_rgba(99,102,241,0.25)]" : ""
-              }`}
+              className="glass-panel p-4 flex flex-col gap-2 transition-all hover:border-white/20"
             >
               <div className="flex justify-between items-start gap-2">
                 <h4 className="font-bold text-sm text-slate-100 flex-1">{ev.title}</h4>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() => handleStartEdit(ev)}
-                    className="text-slate-400 hover:text-indigo-400 p-1 transition-colors"
                     title="Edit event"
                   >
                     <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={() => onDeleteEvent(ev.id)}
-                    className="text-slate-400 hover:text-rose-400 p-1 transition-colors"
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setEventToDelete(ev.id)}
+                    className="text-slate-400 hover:text-rose-400"
                     title="Delete event"
                   >
                     <Trash2 size={14} />
-                  </button>
+                  </Button>
                 </div>
               </div>
               <div className="flex gap-1.5 flex-wrap text-xs">
-                <span className="badge bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                <Badge variant="indigo">
                   {ev.day}/{ev.month} {ev.calendar === "lunar" ? "(Âm lịch)" : "(Dương lịch)"}
                   {ev.year ? `/${ev.year}` : ""}
-                </span>
-                <span className="badge bg-slate-800 text-slate-300">
-                  {ev.kind}
-                </span>
-                <span className="badge bg-slate-800/80 text-slate-400">
-                  {ev.recurrence}
-                </span>
+                </Badge>
+                <Badge variant="default">{ev.kind}</Badge>
+                <Badge variant="default" className="text-slate-400">{ev.recurrence}</Badge>
                 {ev.remindDaysBefore > 0 && (
-                  <span className="badge badge-pending">Remind {ev.remindDaysBefore}d before</span>
+                  <Badge variant="pending">Remind {ev.remindDaysBefore}d before</Badge>
                 )}
               </div>
               {ev.notes && (
@@ -363,6 +219,152 @@ export function ChannelRemindersTab({
           ))}
         </div>
       )}
+
+      {/* Create / Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {editingEvent ? `Edit Event: ${editingEvent.title}` : "Create New Event"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3.5">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Event Title *</label>
+                <Input
+                  required
+                  placeholder="e.g. Dad's Birthday..."
+                  value={eventForm.title}
+                  onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Event Type</label>
+                <select
+                  value={eventForm.kind}
+                  onChange={(e) => setEventForm({ ...eventForm, kind: e.target.value })}
+                  className="form-input"
+                >
+                  <option value="event">General Event</option>
+                  <option value="birthday">Birthday</option>
+                  <option value="anniversary">Anniversary</option>
+                  <option value="gio">Death Anniversary (Giỗ)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Calendar</label>
+                <select
+                  value={eventForm.calendar}
+                  onChange={(e) =>
+                    setEventForm({
+                      ...eventForm,
+                      calendar: e.target.value as "solar" | "lunar",
+                    })
+                  }
+                  className="form-input"
+                >
+                  <option value="solar">Solar (Dương lịch)</option>
+                  <option value="lunar">Lunar (Âm lịch)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Day / Month</label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={eventForm.day}
+                    onChange={(e) => setEventForm({ ...eventForm, day: Number(e.target.value) })}
+                    placeholder="Day"
+                  />
+                  <Input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={eventForm.month}
+                    onChange={(e) => setEventForm({ ...eventForm, month: Number(e.target.value) })}
+                    placeholder="Month"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Year (Optional)</label>
+                <Input
+                  type="number"
+                  min={1900}
+                  max={2100}
+                  placeholder="e.g. 1990"
+                  value={eventForm.year}
+                  onChange={(e) => setEventForm({ ...eventForm, year: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Recurrence</label>
+                <select
+                  value={eventForm.recurrence}
+                  onChange={(e) => setEventForm({ ...eventForm, recurrence: e.target.value })}
+                  className="form-input"
+                >
+                  <option value="yearly">Yearly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="none">One-time</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Remind In Advance (days)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={30}
+                  value={eventForm.remindDaysBefore}
+                  onChange={(e) =>
+                    setEventForm({ ...eventForm, remindDaysBefore: Number(e.target.value) })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Notes (Optional)</label>
+                <Input
+                  placeholder="Additional details..."
+                  value={eventForm.notes}
+                  onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                loading={createEventMutation.isPending || updateEventMutation.isPending}
+              >
+                {editingEvent ? "Update Event" : "Save Event"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        open={eventToDelete !== null}
+        onOpenChange={(open) => !open && setEventToDelete(null)}
+        title="Delete Event"
+        description="Are you sure you want to delete this event? This action will remove all upcoming reminders for this event."
+        confirmText="Delete Event"
+        variant="destructive"
+        loading={deleteEventMutation.isPending}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

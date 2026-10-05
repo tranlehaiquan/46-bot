@@ -1,11 +1,15 @@
 import React, { useState } from "react";
-import { Search, Pause, Play, Trash2, Clock, CheckCircle2, AlertCircle, Calendar } from "lucide-react";
+import { Search, Pause, Play, Trash2, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import type { ScheduledLookup } from "../../api";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { ConfirmDialog } from "../ui/confirm-dialog";
+import { useUpdateLookup, useDeleteLookup } from "../../hooks/useAdminQueries";
 
 interface ChannelLookupsTabProps {
+  chatId: string;
   lookups: ScheduledLookup[];
-  onToggleActive: (lookup: ScheduledLookup) => Promise<void>;
-  onDelete: (id: number) => Promise<void>;
+  isLoading?: boolean;
 }
 
 const WEEKDAYS = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
@@ -29,32 +33,34 @@ function formatSchedule(lookup: ScheduledLookup): string {
 }
 
 export function ChannelLookupsTab({
+  chatId,
   lookups,
-  onToggleActive,
-  onDelete,
+  isLoading = false,
 }: ChannelLookupsTabProps) {
-  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const updateLookupMutation = useUpdateLookup(chatId);
+  const deleteLookupMutation = useDeleteLookup(chatId);
+
+  const [lookupToDelete, setLookupToDelete] = useState<number | null>(null);
 
   const handleToggle = async (lookup: ScheduledLookup) => {
     try {
-      setLoadingId(lookup.id);
-      await onToggleActive(lookup);
+      await updateLookupMutation.mutateAsync({
+        id: lookup.id,
+        updates: { active: !lookup.active },
+      });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to update lookup");
-    } finally {
-      setLoadingId(null);
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Bạn có chắc chắn muốn xoá lịch tra cứu này không?")) return;
+  const handleDelete = async () => {
+    if (!lookupToDelete) return;
     try {
-      setLoadingId(id);
-      await onDelete(id);
+      await deleteLookupMutation.mutateAsync(lookupToDelete);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete lookup");
     } finally {
-      setLoadingId(null);
+      setLookupToDelete(null);
     }
   };
 
@@ -64,9 +70,7 @@ export function ChannelLookupsTab({
         <div className="flex items-center gap-2">
           <Search size={18} className="text-indigo-400" />
           <h3 className="text-lg font-bold text-white">Scheduled Lookups</h3>
-          <span className="badge bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
-            {lookups.length}
-          </span>
+          <Badge variant="indigo">{lookups.length}</Badge>
         </div>
       </div>
 
@@ -81,7 +85,10 @@ export function ChannelLookupsTab({
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
           {lookups.map((item) => {
-            const isLoading = loadingId === item.id;
+            const isUpdating =
+              updateLookupMutation.isPending &&
+              updateLookupMutation.variables?.id === item.id;
+
             return (
               <div
                 key={item.id}
@@ -90,15 +97,11 @@ export function ChannelLookupsTab({
                 }`}
               >
                 <div>
-                  {/* Top row: Status badge & Recurrence badge */}
+                  {/* Top row: Status badge & Recurrence */}
                   <div className="flex justify-between items-center gap-2 mb-2.5">
-                    <span
-                      className={`badge ${
-                        item.active ? "badge-active" : "badge-pending"
-                      }`}
-                    >
+                    <Badge variant={item.active ? "active" : "pending"}>
                       {item.active ? "Active" : "Paused"}
-                    </span>
+                    </Badge>
                     <span className="text-xs text-slate-400 flex items-center gap-1 font-mono">
                       <Clock size={12} />
                       {formatSchedule(item)}
@@ -116,17 +119,17 @@ export function ChannelLookupsTab({
                       <span>Lần chạy gần nhất:</span>
                       {item.lastRun ? (
                         item.lastRun.status === "sent" ? (
-                          <span className="badge badge-active py-0.5 px-2 text-[11px] flex items-center gap-1">
-                            <CheckCircle2 size={11} /> Sent ({item.lastRun.fireDate})
-                          </span>
+                          <Badge variant="active" className="text-[11px] py-0.5">
+                            <CheckCircle2 size={11} className="mr-1 inline" /> Sent ({item.lastRun.fireDate})
+                          </Badge>
                         ) : item.lastRun.status === "running" ? (
-                          <span className="badge badge-pending py-0.5 px-2 text-[11px] flex items-center gap-1">
-                            <Clock size={11} /> Running (lần {item.lastRun.attemptCount})
-                          </span>
+                          <Badge variant="pending" className="text-[11px] py-0.5">
+                            <Clock size={11} className="mr-1 inline" /> Running (lần {item.lastRun.attemptCount})
+                          </Badge>
                         ) : (
-                          <span className="badge badge-disabled py-0.5 px-2 text-[11px] flex items-center gap-1">
-                            <AlertCircle size={11} /> Failed ({item.lastRun.fireDate})
-                          </span>
+                          <Badge variant="disabled" className="text-[11px] py-0.5">
+                            <AlertCircle size={11} className="mr-1 inline" /> Failed ({item.lastRun.fireDate})
+                          </Badge>
                         )
                       ) : (
                         <span className="text-slate-500 italic">Chưa chạy</span>
@@ -141,18 +144,14 @@ export function ChannelLookupsTab({
                   </div>
                 </div>
 
-                {/* Bottom action buttons: Pause/Resume & Delete */}
+                {/* Bottom actions */}
                 <div className="flex justify-end items-center gap-2 pt-2 border-t border-white/[0.04]">
-                  <button
-                    type="button"
-                    disabled={isLoading}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={isUpdating}
                     onClick={() => handleToggle(item)}
-                    className={`btn btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 ${
-                      item.active
-                        ? "text-amber-400 hover:text-amber-300"
-                        : "text-emerald-400 hover:text-emerald-300"
-                    }`}
-                    title={item.active ? "Tạm dừng" : "Tiếp tục"}
+                    className={item.active ? "text-amber-400 hover:text-amber-300" : "text-emerald-400 hover:text-emerald-300"}
                   >
                     {item.active ? (
                       <>
@@ -165,24 +164,34 @@ export function ChannelLookupsTab({
                         <span>Kích hoạt</span>
                       </>
                     )}
-                  </button>
+                  </Button>
 
-                  <button
-                    type="button"
-                    disabled={isLoading}
-                    onClick={() => handleDelete(item.id)}
-                    className="btn btn-danger text-xs px-3 py-1.5 flex items-center gap-1.5"
-                    title="Xoá"
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setLookupToDelete(item.id)}
                   >
                     <Trash2 size={13} />
                     <span>Xoá</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* Accessible Confirmation Dialog */}
+      <ConfirmDialog
+        open={lookupToDelete !== null}
+        onOpenChange={(open) => !open && setLookupToDelete(null)}
+        title="Xoá lịch tra cứu"
+        description="Bạn có chắc chắn muốn xoá lịch tra cứu tự động này không? Hành động này không thể hoàn tác."
+        confirmText="Xoá lịch"
+        variant="destructive"
+        loading={deleteLookupMutation.isPending}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

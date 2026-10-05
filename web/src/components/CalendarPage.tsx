@@ -1,34 +1,25 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { CalendarDays, Filter } from "lucide-react";
 import { CalendarMonthGrid } from "./CalendarMonthGrid";
-import { api, type HolidayOccurrence, type CalendarEventOccurrence, type Channel } from "../api";
+import type { Channel } from "../api";
+import { Switch } from "./ui/switch";
+import { useHolidays, useCalendarEvents } from "../hooks/useAdminQueries";
 
 export function CalendarPage({ channels }: { channels: Channel[] }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
 
-  const [holidays, setHolidays] = useState<HolidayOccurrence[]>([]);
-  const [allEvents, setAllEvents] = useState<CalendarEventOccurrence[]>([]);
-  const [loading, setLoading] = useState(false);
-
   const [showHolidays, setShowHolidays] = useState(true);
   const [channelFilter, setChannelFilter] = useState<string>("all");
 
-  // Fetch holidays whenever year changes
-  useEffect(() => {
-    api.getHolidays(year).then(setHolidays).catch(console.error);
-  }, [year]);
+  // TanStack Query hooks
+  const holidaysQuery = useHolidays(year);
+  const calendarEventsQuery = useCalendarEvents(year, month);
 
-  // Fetch events whenever year/month changes
-  useEffect(() => {
-    setLoading(true);
-    api
-      .getCalendarEvents(year, month)
-      .then(setAllEvents)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [year, month]);
+  const holidays = holidaysQuery.data ?? [];
+  const allEvents = calendarEventsQuery.data ?? [];
+  const loading = holidaysQuery.isLoading || calendarEventsQuery.isLoading;
 
   const handlePrevMonth = () => {
     if (month === 1) {
@@ -49,7 +40,7 @@ export function CalendarPage({ channels }: { channels: Channel[] }) {
   };
 
   // Filter holidays to current month
-  const filteredHolidays: HolidayOccurrence[] = showHolidays
+  const filteredHolidays = showHolidays
     ? holidays.filter((h) => {
         const [hy, hm] = h.occurrenceDateStr.split("-").map(Number);
         return hy === year && hm === month;
@@ -57,7 +48,7 @@ export function CalendarPage({ channels }: { channels: Channel[] }) {
     : [];
 
   // Filter events by selected channel
-  const filteredEvents: CalendarEventOccurrence[] =
+  const filteredEvents =
     channelFilter === "all"
       ? allEvents
       : allEvents.filter((e) => e.chatId === channelFilter);
@@ -72,17 +63,21 @@ export function CalendarPage({ channels }: { channels: Channel[] }) {
         </div>
 
         {/* Filter bar */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Holiday toggle */}
-          <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-300 select-none">
-            <input
-              type="checkbox"
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Holiday switch */}
+          <div className="flex items-center gap-2">
+            <Switch
+              id="vietnam-holidays-toggle"
               checked={showHolidays}
-              onChange={(e) => setShowHolidays(e.target.checked)}
-              className="accent-indigo-500 rounded"
+              onCheckedChange={setShowHolidays}
             />
-            <span>🇻🇳 Vietnam Holidays</span>
-          </label>
+            <label
+              htmlFor="vietnam-holidays-toggle"
+              className="text-xs text-slate-300 cursor-pointer select-none font-medium"
+            >
+              🇻🇳 Vietnam Holidays
+            </label>
+          </div>
 
           {/* Channel filter */}
           <div className="flex items-center gap-1.5">
@@ -102,7 +97,7 @@ export function CalendarPage({ channels }: { channels: Channel[] }) {
           </div>
 
           {loading && (
-            <span className="text-xs text-slate-400">Loading…</span>
+            <span className="text-xs text-slate-400 animate-pulse">Loading…</span>
           )}
         </div>
       </div>

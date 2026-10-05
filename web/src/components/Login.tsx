@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Lock, ArrowRight, ShieldCheck, AlertCircle } from "lucide-react";
 import { api } from "../api";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 export function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [password, setPassword] = useState("");
@@ -46,30 +48,26 @@ export function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
 
         <form onSubmit={handleSubmit}>
           <div className="relative mb-6">
-            <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
+            <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+            <Input
               type="password"
               placeholder="Enter ADMIN_PASSWORD..."
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="form-input pl-11"
+              className="pl-11"
               autoFocus
               required
             />
           </div>
 
-          <button
+          <Button
             type="submit"
-            className="btn btn-primary w-full py-3"
-            disabled={loading}
+            className="w-full py-3"
+            loading={loading}
           >
-            {loading ? "Authenticating..." : (
-              <>
-                <span>Enter Dashboard</span>
-                <ArrowRight size={16} />
-              </>
-            )}
-          </button>
+            <span>Enter Dashboard</span>
+            {!loading && <ArrowRight size={16} />}
+          </Button>
         </form>
       </div>
     </div>

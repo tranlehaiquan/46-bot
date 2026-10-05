@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Router, useLocation, useRoute } from "wouter";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { api, type Channel, type ChannelStatus } from "./api";
 import { Login } from "./components/Login";
 import { Navbar } from "./components/Navbar";
@@ -7,36 +8,46 @@ import { ChannelList } from "./components/ChannelList";
 import { ChannelDetail } from "./components/ChannelDetail";
 import { CalendarPage } from "./components/CalendarPage";
 import { MessageSquareOff, AlertCircle } from "lucide-react";
+import { Button } from "./components/ui/button";
+import { useChannels, useUpdateChannel } from "./hooks/useAdminQueries";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 30,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function AdminApp() {
+  const qc = useQueryClient();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(api.isAuthenticated());
-  const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const [, navigate] = useLocation();
-  const [isChatRoute, chatParams] = useRoute("/chat/:chatId");
-  const [isChannelRoute, channelParams] = useRoute("/channels/:chatId");
+  const [, chatParams] = useRoute("/chat/:chatId");
+  const [, channelParams] = useRoute("/channels/:chatId");
   const [isCalendarRoute] = useRoute("/calendar");
 
   const routeChatId = chatParams?.chatId || channelParams?.chatId || null;
   const currentPage: "channels" | "calendar" = isCalendarRoute ? "calendar" : "channels";
 
+  // TanStack Query for channels
+  const channelsQuery = useChannels();
+  const channels = channelsQuery.data ?? [];
+  const updateChannelMutation = useUpdateChannel();
+
   useEffect(() => {
     const handleAuthExpired = () => {
       setIsAuthenticated(false);
-      setChannels([]);
       setSelectedChannel(null);
+      qc.clear();
     };
     window.addEventListener("auth-expired", handleAuthExpired);
     return () => window.removeEventListener("auth-expired", handleAuthExpired);
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadChannels();
-    }
-  }, [isAuthenticated]);
+  }, [qc]);
 
   // Sync routeChatId to selectedChannel whenever route or channel list changes
   useEffect(() => {
@@ -57,18 +68,6 @@ function AdminApp() {
       navigate(`/chat/${encodeURIComponent(first.chatId)}`, { replace: true });
     }
   }, [routeChatId, channels, isCalendarRoute, navigate]);
-
-  const loadChannels = async () => {
-    setLoading(true);
-    try {
-      const list = await api.getChannels();
-      setChannels(list);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSelectChannel = (channel: Channel) => {
     setSelectedChannel(channel);
@@ -91,8 +90,10 @@ function AdminApp() {
 
   const handleUpdateStatus = async (chatId: string, status: ChannelStatus) => {
     try {
-      const updated = await api.updateChannel(chatId, { status });
-      setChannels((prev) => prev.map((c) => (c.chatId === chatId ? updated : c)));
+      const updated = await updateChannelMutation.mutateAsync({
+        chatId,
+        updates: { status },
+      });
       if (selectedChannel?.chatId === chatId) {
         setSelectedChannel(updated);
       }
@@ -102,7 +103,6 @@ function AdminApp() {
   };
 
   const handleChannelUpdated = (updated: Channel) => {
-    setChannels((prev) => prev.map((c) => (c.chatId === updated.chatId ? updated : c)));
     setSelectedChannel(updated);
   };
 
@@ -114,7 +114,10 @@ function AdminApp() {
     <div className="min-h-screen flex flex-col">
       <Navbar
         channels={channels}
-        onLogout={() => setIsAuthenticated(false)}
+        onLogout={() => {
+          setIsAuthenticated(false);
+          qc.clear();
+        }}
         currentPage={currentPage}
         onNavigate={handleNavigatePage}
       />
@@ -137,7 +140,7 @@ function AdminApp() {
                 channel={selectedChannel}
                 onChannelUpdated={handleChannelUpdated}
               />
-            ) : routeChatId && !loading ? (
+            ) : routeChatId && !channelsQuery.isLoading ? (
               <div className="glass-panel h-[calc(100vh-120px)] flex flex-col items-center justify-center text-slate-400 gap-4 text-center p-8">
                 <AlertCircle size={48} className="text-amber-500 opacity-80" />
                 <h4 className="text-lg font-semibold text-slate-100">
@@ -147,12 +150,13 @@ function AdminApp() {
                   No channel matching ID <code className="font-mono text-indigo-400">{routeChatId}</code> was found.
                 </p>
                 {channels.length > 0 && (
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={() => handleSelectChannel(channels[0])}
-                    className="btn btn-secondary mt-2"
+                    className="mt-2"
                   >
                     Go to {channels[0].name}
-                  </button>
+                  </Button>
                 )}
               </div>
             ) : (
@@ -170,9 +174,11 @@ function AdminApp() {
 
 export function App() {
   return (
-    <Router base="/admin">
-      <AdminApp />
-    </Router>
+    <QueryClientProvider client={queryClient}>
+      <Router base="/admin">
+        <AdminApp />
+      </Router>
+    </QueryClientProvider>
   );
 }
 

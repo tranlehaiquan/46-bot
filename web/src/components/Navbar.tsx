@@ -1,6 +1,8 @@
 import React from "react";
 import { Bot, LogOut, Radio, Clock, CalendarDays, MessageSquare } from "lucide-react";
 import { api, type Channel } from "../api";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 
 export function Navbar({
   channels,
@@ -59,28 +61,29 @@ export function Navbar({
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           {pendingCount > 0 && (
-            <span className="badge badge-pending" title="Channels awaiting approval">
+            <Badge variant="pending" title="Channels awaiting approval">
               <Clock size={12} />
               <span>{pendingCount} Pending</span>
-            </span>
+            </Badge>
           )}
-          <span className="badge badge-active" title="Active channels">
+          <Badge variant="active" title="Active channels">
             <Radio size={12} />
             <span>{activeCount} Active</span>
-          </span>
+          </Badge>
         </div>
 
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => {
             api.logout();
             onLogout();
           }}
-          className="btn btn-secondary px-3.5 py-1.5 text-xs"
           title="Logout"
         >
           <LogOut size={14} />
           <span>Logout</span>
-        </button>
+        </Button>
       </div>
     </header>
   );

@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Users, User, Search, CheckCircle2, XCircle, Copy, Check } from "lucide-react";
 import type { Channel, ChannelStatus } from "../api";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 
 export function ChannelList({
   channels,
@@ -36,9 +38,10 @@ export function ChannelList({
     <div className="glass-panel flex flex-col h-[calc(100vh-120px)] overflow-hidden">
       {/* Header & Search */}
       <div className="p-5 pb-3">
-        <h3 className="text-base font-bold mb-3 text-white">
-          Channels ({channels.length})
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-bold text-white">Channels</h3>
+          <Badge variant="indigo">{channels.length}</Badge>
+        </div>
 
         <div className="relative mb-3">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -111,9 +114,7 @@ export function ChannelList({
                     <span className="font-semibold text-sm text-slate-100">{c.name}</span>
                   </div>
 
-                  <span className={`badge badge-${c.status}`}>
-                    {c.status}
-                  </span>
+                  <Badge variant={c.status}>{c.status}</Badge>
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
@@ -134,26 +135,30 @@ export function ChannelList({
                 {/* Quick actions for Pending channels */}
                 {c.status === "pending" && (
                   <div className="flex gap-1.5 mt-1 pt-2 border-t border-dashed border-white/[0.06]">
-                    <button
+                    <Button
+                      variant="success"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         onUpdateStatus(c.chatId, "active");
                       }}
-                      className="btn btn-success flex-1 py-1 px-2 text-xs gap-1"
+                      className="flex-1 py-1 text-xs"
                     >
                       <CheckCircle2 size={13} />
-                      <span>Approve (Active)</span>
-                    </button>
-                    <button
+                      <span>Approve</span>
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         onUpdateStatus(c.chatId, "disabled");
                       }}
-                      className="btn btn-danger py-1 px-2 text-xs gap-1"
+                      className="py-1 text-xs"
                     >
                       <XCircle size={13} />
                       <span>Block</span>
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
