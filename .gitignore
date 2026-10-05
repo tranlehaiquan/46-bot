@@ -1,5 +1,26 @@
+# Dependencies
 node_modules/
+**/node_modules/
+
+# Production build outputs
 dist/
-web/node_modules/
-web/dist/
+**/dist/
+
+# Environment files
 .env
+.env.*
+!.env.example
+
+# Local SQLite databases and data directories
+data/
+**/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# OS metadata
+.DS_Store
+Thumbs.db
