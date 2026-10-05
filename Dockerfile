@@ -19,7 +19,13 @@ RUN pnpm run build
 
 FROM node:22-slim AS runtime
 WORKDIR /app
-RUN npm install -g pnpm@12.9.1 \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fontconfig \
+    fonts-dejavu-core \
+    fonts-liberation \
+  && fc-cache -f \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm install -g pnpm@12.9.1 \
   && groupadd --gid 10001 bot \
   && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin bot
 

@@ -21,6 +21,8 @@ export type RenderCalendarImageOptions = {
   referenceDate?: Date;
 };
 
+const FONT_FAMILY = "'DejaVu Sans', 'Liberation Sans', Arial, sans-serif";
+
 const VIETNAMESE_DAYS = [
   "Chủ Nhật",
   "Thứ Hai",
@@ -35,14 +37,14 @@ const VIETNAMESE_DAYS_SHORT = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
 const KIND_METADATA: Record<
   string,
-  { label: string; icon: string; bg: string; text: string }
+  { label: string; dot: string; bg: string; text: string }
 > = {
-  birthday: { label: "Sinh nhật", icon: "🎂", bg: "#be123c", text: "#ffe4e6" },
-  gio: { label: "Giỗ", icon: "🕯️", bg: "#b45309", text: "#fef3c7" },
-  anniversary: { label: "Kỷ niệm", icon: "💍", bg: "#a21caf", text: "#fae8ff" },
-  appointment: { label: "Lịch hẹn", icon: "📌", bg: "#1d4ed8", text: "#dbeafe" },
-  reminder: { label: "Nhắc nhở", icon: "🔔", bg: "#047857", text: "#d1fae5" },
-  event: { label: "Sự kiện", icon: "🌟", bg: "#6d28d9", text: "#ede9fe" },
+  birthday: { label: "Sinh nhật", dot: "#f43f5e", bg: "#be123c", text: "#ffe4e6" },
+  gio: { label: "Giỗ", dot: "#f59e0b", bg: "#b45309", text: "#fef3c7" },
+  anniversary: { label: "Kỷ niệm", dot: "#ec4899", bg: "#a21caf", text: "#fae8ff" },
+  appointment: { label: "Lịch hẹn", dot: "#60a5fa", bg: "#1d4ed8", text: "#dbeafe" },
+  reminder: { label: "Nhắc nhở", dot: "#34d399", bg: "#047857", text: "#d1fae5" },
+  event: { label: "Sự kiện", dot: "#a78bfa", bg: "#6d28d9", text: "#ede9fe" },
 };
 
 function escapeXml(unsafe: string): string {
@@ -58,7 +60,7 @@ function getKindMeta(kind: string) {
   return (
     KIND_METADATA[kind] ?? {
       label: kind,
-      icon: "📌",
+      dot: "#94a3b8",
       bg: "#475569",
       text: "#f1f5f9",
     }
@@ -132,14 +134,14 @@ function renderWeekSvg(options: RenderCalendarImageOptions): string {
     contentSvg += `
       <g transform="translate(40, ${y})">
         <rect width="770" height="${cardHeight}" rx="10" fill="${bgFill}" stroke="${borderStroke}" stroke-width="${hasEvents ? "1.5" : "1"}" />
-        <text x="20" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700" fill="${dowColor}">${escapeXml(card.dowText)}</text>
-        <text x="120" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="600" fill="#f8fafc">${escapeXml(card.solarText)}</text>
-        ${card.lunarText ? `<text x="180" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="400" fill="#94a3b8">${escapeXml(card.lunarText)}</text>` : ""}
+        <text x="20" y="30" font-family="${FONT_FAMILY}" font-size="15" font-weight="700" fill="${dowColor}">${escapeXml(card.dowText)}</text>
+        <text x="120" y="30" font-family="${FONT_FAMILY}" font-size="15" font-weight="600" fill="#f8fafc">${escapeXml(card.solarText)}</text>
+        ${card.lunarText ? `<text x="180" y="30" font-family="${FONT_FAMILY}" font-size="13" font-weight="400" fill="#94a3b8">${escapeXml(card.lunarText)}</text>` : ""}
     `;
 
     if (!hasEvents) {
       contentSvg += `
-        <text x="320" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-style="italic" fill="#64748b">Không có sự kiện</text>
+        <text x="320" y="30" font-family="${FONT_FAMILY}" font-size="13" font-style="italic" fill="#64748b">Không có sự kiện</text>
       `;
     } else {
       let eventY = 54;
@@ -149,9 +151,10 @@ function renderWeekSvg(options: RenderCalendarImageOptions): string {
         const note = ev.event.notes ? ` - ${escapeXml(ev.event.notes)}` : "";
         contentSvg += `
           <g transform="translate(20, ${eventY - 18})">
-            <rect width="80" height="22" rx="4" fill="${meta.bg}" />
-            <text x="8" y="15" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" fill="${meta.text}">${meta.icon} ${escapeXml(meta.label)}</text>
-            <text x="95" y="16" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" fill="#f1f5f9">${title}<tspan fill="#94a3b8" font-size="12">${note}</tspan></text>
+            <rect width="84" height="22" rx="4" fill="${meta.bg}" />
+            <circle cx="10" cy="11" r="3.5" fill="${meta.dot}" />
+            <text x="18" y="15" font-family="${FONT_FAMILY}" font-size="11" font-weight="600" fill="${meta.text}">${escapeXml(meta.label)}</text>
+            <text x="96" y="16" font-family="${FONT_FAMILY}" font-size="14" font-weight="500" fill="#f1f5f9">${title}<tspan fill="#94a3b8" font-size="12">${note}</tspan></text>
           </g>
         `;
         eventY += 34;
@@ -180,9 +183,9 @@ function renderWeekSvg(options: RenderCalendarImageOptions): string {
       </defs>
       <rect width="${width}" height="${totalHeight}" fill="url(#bg)"/>
       <g transform="translate(40, 45)">
-        <text x="0" y="25" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="800" fill="#f8fafc" letter-spacing="0.5">${escapeXml(title)}</text>
-        <text x="0" y="52" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#38bdf8">${escapeXml(subtitle)}</text>
-        <text x="${width - 80}" y="35" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="#a855f7">Tổng cộng: ${options.events.length} sự kiện</text>
+        <text x="0" y="25" font-family="${FONT_FAMILY}" font-size="24" font-weight="800" fill="#f8fafc" letter-spacing="0.5">${escapeXml(title)}</text>
+        <text x="0" y="52" font-family="${FONT_FAMILY}" font-size="14" font-weight="400" fill="#38bdf8">${escapeXml(subtitle)}</text>
+        <text x="${width - 80}" y="35" text-anchor="end" font-family="${FONT_FAMILY}" font-size="13" font-weight="600" fill="#a855f7">Tổng cộng: ${options.events.length} sự kiện</text>
       </g>
       ${contentSvg}
     </svg>
@@ -209,8 +212,13 @@ function renderMonthSvg(options: RenderCalendarImageOptions): string {
     contentSvg = `
       <g transform="translate(40, ${y})">
         <rect width="770" height="${emptyHeight}" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1"/>
-        <text x="385" y="55" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="28">📅</text>
-        <text x="385" y="90" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="15" fill="#94a3b8">Không có sự kiện hoặc nhắc nhở nào trong tháng ${month}/${year}</text>
+        <g transform="translate(365, 25)">
+          <rect x="0" y="0" width="40" height="36" rx="6" fill="#334155" stroke="#38bdf8" stroke-width="2"/>
+          <rect x="0" y="0" width="40" height="10" rx="4" fill="#38bdf8"/>
+          <circle cx="10" cy="5" r="2" fill="#0f172a"/>
+          <circle cx="30" cy="5" r="2" fill="#0f172a"/>
+        </g>
+        <text x="385" y="90" text-anchor="middle" font-family="${FONT_FAMILY}" font-size="15" fill="#94a3b8">Không có sự kiện hoặc nhắc nhở nào trong tháng ${month}/${year}</text>
       </g>
     `;
     y += emptyHeight + 30;
@@ -236,8 +244,8 @@ function renderMonthSvg(options: RenderCalendarImageOptions): string {
           <rect width="770" height="${cardHeight}" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1"/>
           <!-- Day badge -->
           <rect x="15" y="12" width="60" height="${cardHeight - 24}" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/>
-          <text x="45" y="${Math.floor(cardHeight / 2) - 2}" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="800" fill="#f8fafc">${String(day).padStart(2, "0")}</text>
-          <text x="45" y="${Math.floor(cardHeight / 2) + 14}" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" fill="#38bdf8">${escapeXml(dowText)}</text>
+          <text x="45" y="${Math.floor(cardHeight / 2) - 2}" text-anchor="middle" font-family="${FONT_FAMILY}" font-size="18" font-weight="800" fill="#f8fafc">${String(day).padStart(2, "0")}</text>
+          <text x="45" y="${Math.floor(cardHeight / 2) + 14}" text-anchor="middle" font-family="${FONT_FAMILY}" font-size="11" font-weight="600" fill="#38bdf8">${escapeXml(dowText)}</text>
       `;
 
       let eventY = 28;
@@ -252,10 +260,11 @@ function renderMonthSvg(options: RenderCalendarImageOptions): string {
 
         contentSvg += `
           <g transform="translate(90, ${eventY - 14})">
-            <rect width="76" height="22" rx="4" fill="${meta.bg}" />
-            <text x="6" y="15" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" fill="${meta.text}">${meta.icon} ${escapeXml(meta.label)}</text>
-            <text x="88" y="16" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" fill="#f8fafc">${title}<tspan fill="#94a3b8" font-size="12">${note}</tspan></text>
-            ${calLabel ? `<text x="660" y="16" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="500" fill="#fbbf24">${escapeXml(calLabel)}</text>` : ""}
+            <rect width="80" height="22" rx="4" fill="${meta.bg}" />
+            <circle cx="10" cy="11" r="3.5" fill="${meta.dot}" />
+            <text x="18" y="15" font-family="${FONT_FAMILY}" font-size="11" font-weight="600" fill="${meta.text}">${escapeXml(meta.label)}</text>
+            <text x="92" y="16" font-family="${FONT_FAMILY}" font-size="14" font-weight="500" fill="#f8fafc">${title}<tspan fill="#94a3b8" font-size="12">${note}</tspan></text>
+            ${calLabel ? `<text x="660" y="16" text-anchor="end" font-family="${FONT_FAMILY}" font-size="12" font-weight="500" fill="#fbbf24">${escapeXml(calLabel)}</text>` : ""}
           </g>
         `;
         eventY += 34;
@@ -278,9 +287,9 @@ function renderMonthSvg(options: RenderCalendarImageOptions): string {
       </defs>
       <rect width="${width}" height="${totalHeight}" fill="url(#bg)"/>
       <g transform="translate(40, 45)">
-        <text x="0" y="25" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="800" fill="#f8fafc" letter-spacing="0.5">${escapeXml(title)}</text>
-        <text x="0" y="52" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#38bdf8">${escapeXml(subtitle)}</text>
-        <text x="${width - 80}" y="35" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="#a855f7">Tổng cộng: ${events.length} sự kiện</text>
+        <text x="0" y="25" font-family="${FONT_FAMILY}" font-size="24" font-weight="800" fill="#f8fafc" letter-spacing="0.5">${escapeXml(title)}</text>
+        <text x="0" y="52" font-family="${FONT_FAMILY}" font-size="14" font-weight="400" fill="#38bdf8">${escapeXml(subtitle)}</text>
+        <text x="${width - 80}" y="35" text-anchor="end" font-family="${FONT_FAMILY}" font-size="13" font-weight="600" fill="#a855f7">Tổng cộng: ${events.length} sự kiện</text>
       </g>
       ${contentSvg}
     </svg>
@@ -318,12 +327,12 @@ function renderYearSvg(options: RenderCalendarImageOptions): string {
     contentSvg += `
       <g transform="translate(40, ${y})">
         <rect width="820" height="${cardHeight}" rx="10" fill="${bgFill}" stroke="${strokeColor}" stroke-width="${hasEvents ? "1.5" : "1"}"/>
-        <text x="20" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700" fill="#38bdf8">THÁNG ${m}</text>
+        <text x="20" y="28" font-family="${FONT_FAMILY}" font-size="15" font-weight="700" fill="#38bdf8">THÁNG ${m}</text>
     `;
 
     if (!hasEvents) {
       contentSvg += `
-        <text x="140" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-style="italic" fill="#64748b">Không có sự kiện</text>
+        <text x="140" y="28" font-family="${FONT_FAMILY}" font-size="13" font-style="italic" fill="#64748b">Không có sự kiện</text>
       `;
     } else {
       let evY = 32;
@@ -338,10 +347,11 @@ function renderYearSvg(options: RenderCalendarImageOptions): string {
 
         contentSvg += `
           <g transform="translate(130, ${evY - 14})">
-            <text x="0" y="15" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="#f8fafc">${dateStr}</text>
-            <rect x="55" y="1" width="70" height="20" rx="4" fill="${meta.bg}"/>
-            <text x="60" y="15" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="600" fill="${meta.text}">${meta.icon} ${escapeXml(meta.label)}</text>
-            <text x="135" y="15" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" fill="#f1f5f9">${title}<tspan fill="#fbbf24" font-size="11">${escapeXml(calLabel)}</tspan></text>
+            <text x="0" y="15" font-family="${FONT_FAMILY}" font-size="13" font-weight="600" fill="#f8fafc">${dateStr}</text>
+            <rect x="55" y="1" width="76" height="20" rx="4" fill="${meta.bg}"/>
+            <circle cx="65" cy="11" r="3" fill="${meta.dot}" />
+            <text x="73" y="15" font-family="${FONT_FAMILY}" font-size="10" font-weight="600" fill="${meta.text}">${escapeXml(meta.label)}</text>
+            <text x="142" y="15" font-family="${FONT_FAMILY}" font-size="13" font-weight="500" fill="#f1f5f9">${title}<tspan fill="#fbbf24" font-size="11">${escapeXml(calLabel)}</tspan></text>
           </g>
         `;
         evY += 30;
@@ -364,9 +374,9 @@ function renderYearSvg(options: RenderCalendarImageOptions): string {
       </defs>
       <rect width="${width}" height="${totalHeight}" fill="url(#bg)"/>
       <g transform="translate(40, 45)">
-        <text x="0" y="25" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="800" fill="#f8fafc" letter-spacing="0.5">${escapeXml(title)}</text>
-        <text x="0" y="52" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#38bdf8">${escapeXml(subtitle)}</text>
-        <text x="${width - 80}" y="35" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="#a855f7">Tổng cộng: ${events.length} sự kiện</text>
+        <text x="0" y="25" font-family="${FONT_FAMILY}" font-size="24" font-weight="800" fill="#f8fafc" letter-spacing="0.5">${escapeXml(title)}</text>
+        <text x="0" y="52" font-family="${FONT_FAMILY}" font-size="14" font-weight="400" fill="#38bdf8">${escapeXml(subtitle)}</text>
+        <text x="${width - 80}" y="35" text-anchor="end" font-family="${FONT_FAMILY}" font-size="13" font-weight="600" fill="#a855f7">Tổng cộng: ${events.length} sự kiện</text>
       </g>
       ${contentSvg}
     </svg>
