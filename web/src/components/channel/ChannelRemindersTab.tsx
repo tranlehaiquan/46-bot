@@ -4,14 +4,12 @@ import {
   Trash2,
   Pencil,
   Calendar,
-  Sparkles,
   Cake,
   Heart,
   Flame,
   Clock,
   Sun,
   Moon,
-  FileText,
 } from "lucide-react";
 import { CalendarMonthGrid } from "../CalendarMonthGrid";
 import type { EventItem, HolidayOccurrence, CalendarEventOccurrence } from "../../api";
@@ -53,9 +51,9 @@ const EVENT_KINDS = [
 ] as const;
 
 const RECURRENCE_OPTIONS = [
-  { id: "yearly", label: "Hàng năm (Yearly)" },
-  { id: "monthly", label: "Hàng tháng (Monthly)" },
-  { id: "none", label: "Một lần (One-time)" },
+  { id: "yearly", label: "Hàng năm" },
+  { id: "monthly", label: "Hàng tháng" },
+  { id: "none", label: "Một lần" },
 ] as const;
 
 const ADVANCE_DAYS_OPTIONS = [
@@ -63,7 +61,7 @@ const ADVANCE_DAYS_OPTIONS = [
   { days: 1, label: "Trước 1 ngày" },
   { days: 3, label: "Trước 3 ngày" },
   { days: 7, label: "Trước 7 ngày" },
-];
+] as const;
 
 export function ChannelRemindersTab({
   chatId,
@@ -171,6 +169,20 @@ export function ChannelRemindersTab({
 
   const currentKindConfig = EVENT_KINDS.find((k) => k.id === eventForm.kind) || EVENT_KINDS[0];
   const KindIcon = currentKindConfig.icon;
+
+  // Context-aware year label & placeholder based on event kind
+  const yearMeta = (() => {
+    switch (eventForm.kind) {
+      case "gio":
+        return { label: "Năm mất (Tùy chọn)", placeholder: "VD: 2015" };
+      case "birthday":
+        return { label: "Năm sinh (Tùy chọn)", placeholder: "VD: 1990" };
+      case "anniversary":
+        return { label: "Năm bắt đầu (Tùy chọn)", placeholder: "VD: 2018" };
+      default:
+        return { label: "Năm (Tùy chọn)", placeholder: "VD: 2026" };
+    }
+  })();
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -286,7 +298,7 @@ export function ChannelRemindersTab({
 
       {/* Modern Redesigned Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg p-6 sm:p-7 gap-5 border border-white/10 shadow-2xl">
+        <DialogContent className="max-w-xl p-6 sm:p-7 gap-5 border border-white/10 shadow-2xl">
           <DialogHeader className="pb-3 border-b border-white/[0.08]">
             <div className="flex items-center gap-3">
               <div className={`p-2.5 rounded-xl border ${currentKindConfig.color}`}>
@@ -306,7 +318,7 @@ export function ChannelRemindersTab({
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {/* Event Title */}
             <div>
-              <Label htmlFor="event-title" required>Tên sự kiện / Event Title</Label>
+              <Label htmlFor="event-title" required>Tên sự kiện</Label>
               <Input
                 id="event-title"
                 required
@@ -320,7 +332,7 @@ export function ChannelRemindersTab({
 
             {/* Event Kind (Type) Chips */}
             <div>
-              <Label>Loại sự kiện / Category</Label>
+              <Label>Loại sự kiện</Label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {EVENT_KINDS.map((kind) => {
                   const Icon = kind.icon;
@@ -330,13 +342,13 @@ export function ChannelRemindersTab({
                       key={kind.id}
                       type="button"
                       onClick={() => setEventForm({ ...eventForm, kind: kind.id })}
-                      className={`flex items-center justify-center gap-2 p-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-2 p-2.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                         isSelected
                           ? `${kind.color} shadow-sm shadow-indigo-500/20 ring-1 ring-white/20`
                           : "bg-white/[0.02] border-white/10 text-slate-400 hover:bg-white/5 hover:text-slate-200"
                       }`}
                     >
-                      <Icon size={14} />
+                      <Icon size={15} />
                       <span>{kind.label}</span>
                     </button>
                   );
@@ -348,7 +360,7 @@ export function ChannelRemindersTab({
             <div className="p-4 rounded-xl bg-black/25 border border-white/[0.08] flex flex-col gap-3.5">
               {/* Solar vs Lunar Segmented Control */}
               <div>
-                <Label>Hệ lịch / Calendar</Label>
+                <Label>Hệ lịch</Label>
                 <div className="grid grid-cols-2 gap-2 bg-black/40 p-1 rounded-xl border border-white/[0.06]">
                   <button
                     type="button"
@@ -368,7 +380,7 @@ export function ChannelRemindersTab({
                     onClick={() => setEventForm({ ...eventForm, calendar: "lunar" })}
                     className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       eventForm.calendar === "lunar"
-                        ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
                         : "text-slate-400 hover:text-slate-200"
                     }`}
                   >
@@ -409,13 +421,13 @@ export function ChannelRemindersTab({
                 </div>
 
                 <div>
-                  <Label htmlFor="event-year">Năm sinh / Bắt đầu</Label>
+                  <Label htmlFor="event-year">{yearMeta.label}</Label>
                   <Input
                     id="event-year"
                     type="number"
                     min={1900}
                     max={2100}
-                    placeholder="VD: 1990"
+                    placeholder={yearMeta.placeholder}
                     value={eventForm.year}
                     onChange={(e) => setEventForm({ ...eventForm, year: e.target.value })}
                     className="text-center font-mono"
@@ -425,50 +437,66 @@ export function ChannelRemindersTab({
             </div>
 
             {/* Recurrence & Remind Advance */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Recurrence Segmented Control */}
               <div>
-                <Label htmlFor="event-recurrence">Chu kỳ lặp lại / Recurrence</Label>
-                <select
-                  id="event-recurrence"
-                  value={eventForm.recurrence}
-                  onChange={(e) => setEventForm({ ...eventForm, recurrence: e.target.value as EventItem["recurrence"] })}
-                  className="w-full rounded-lg border border-white/10 bg-[#0a0d14] px-3 py-2 text-sm text-slate-100 outline-none transition-all duration-150 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                >
-                  {RECURRENCE_OPTIONS.map((opt) => (
-                    <option key={opt.id} value={opt.id}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <Label htmlFor="event-remind">Nhắc trước (ngày)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="event-remind"
-                    type="number"
-                    min={0}
-                    max={30}
-                    value={eventForm.remindDaysBefore}
-                    onChange={(e) => setEventForm({ ...eventForm, remindDaysBefore: Number(e.target.value) })}
-                    className="font-mono text-center w-20 shrink-0"
-                  />
-                  <div className="flex-1 flex gap-1 items-center overflow-x-auto py-0.5">
-                    {ADVANCE_DAYS_OPTIONS.map((opt) => (
+                <Label>Chu kỳ lặp lại</Label>
+                <div className="grid grid-cols-3 gap-1 bg-black/30 p-1 rounded-xl border border-white/[0.08]">
+                  {RECURRENCE_OPTIONS.map((opt) => {
+                    const isSelected = eventForm.recurrence === opt.id;
+                    return (
                       <button
-                        key={opt.days}
+                        key={opt.id}
                         type="button"
-                        onClick={() => setEventForm({ ...eventForm, remindDaysBefore: opt.days })}
-                        className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition-all shrink-0 cursor-pointer ${
-                          eventForm.remindDaysBefore === opt.days
-                            ? "bg-indigo-600/30 text-indigo-300 border-indigo-500/50"
-                            : "bg-white/[0.02] border-white/10 text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                        onClick={() => setEventForm({ ...eventForm, recurrence: opt.id })}
+                        className={`py-2 px-1 text-xs font-semibold rounded-lg transition-all text-center cursor-pointer ${
+                          isSelected
+                            ? "bg-slate-700 text-white shadow-sm"
+                            : "text-slate-400 hover:text-slate-200"
                         }`}
                       >
                         {opt.label}
                       </button>
-                    ))}
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Remind in Advance with Wrapping Presets & Input */}
+              <div>
+                <Label htmlFor="event-remind">Nhắc trước</Label>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap gap-1.5 flex-1">
+                    {ADVANCE_DAYS_OPTIONS.map((opt) => {
+                      const isSelected = eventForm.remindDaysBefore === opt.days;
+                      return (
+                        <button
+                          key={opt.days}
+                          type="button"
+                          onClick={() => setEventForm({ ...eventForm, remindDaysBefore: opt.days })}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm"
+                              : "bg-white/[0.02] border-white/10 text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Input
+                      id="event-remind"
+                      type="number"
+                      min={0}
+                      max={30}
+                      value={eventForm.remindDaysBefore}
+                      onChange={(e) => setEventForm({ ...eventForm, remindDaysBefore: Number(e.target.value) })}
+                      className="font-mono text-center w-14 py-1 text-sm h-8"
+                    />
+                    <span className="text-xs text-slate-400">ngày</span>
                   </div>
                 </div>
               </div>
@@ -476,7 +504,7 @@ export function ChannelRemindersTab({
 
             {/* Notes */}
             <div>
-              <Label htmlFor="event-notes">Ghi chú (Tùy chọn) / Notes</Label>
+              <Label htmlFor="event-notes">Ghi chú (Tùy chọn)</Label>
               <Input
                 id="event-notes"
                 placeholder="Gợi ý quà tặng, địa điểm liên hoan hoặc lưu ý đặc biệt..."
@@ -491,7 +519,7 @@ export function ChannelRemindersTab({
                 variant="secondary"
                 onClick={() => setDialogOpen(false)}
               >
-                Hủy bỏ (Cancel)
+                Hủy
               </Button>
               <Button
                 type="submit"
