@@ -18,11 +18,19 @@ export function installShutdown(source: SignalSource, run: () => Promise<void>):
   }
 }
 
+export type Stoppable = {
+  stop(): void | Promise<void>;
+};
+
 export async function shutdown(
   close: () => Promise<void>,
   queue: WorkQueue,
   cleanup?: () => void | Promise<void>,
+  scheduler?: Stoppable,
 ): Promise<void> {
+  if (scheduler) {
+    await scheduler.stop();
+  }
   await close();
   await queue.drain();
   if (cleanup) {

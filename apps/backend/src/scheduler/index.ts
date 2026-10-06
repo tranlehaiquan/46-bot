@@ -1,337 +1,74 @@
-import type { AppConfig } from "../config.js";
-import type { ChannelRepository } from "../db/repositories/channels.js";
-import type { DueReminder, EventsRepository } from "../db/repositories/events.js";
-import { formatUtc7DateStr, getUtc7Parts } from "../db/repositories/events.js";
-import type { LookupRepository } from "../db/repositories/lookups.js";
-import { getUpcomingHolidays } from "../holidays/index.js";
-import type { LlmClient, ToolSet } from "../llm/client.js";
-import { detectPromptInjection } from "../llm/prompt-security.js";
-import type { Logger } from "../logger.js";
-import { createHolidayTools } from "../tools/holidays.js";
-import { createWeatherTool } from "../tools/weather.js";
-import { createWebSearchTool } from "../tools/web-search.js";
-import { splitText } from "../utils/split-text.js";
-import type { ZaloClient } from "../zalo-client.js";
+import type { Redis } from "ioredis";
+import { formatUtc7DateStr } from "../db/repositories/events.js";
+import { createInMemoryScheduler, startInMemoryScheduler } from "./in-memory.js";
+import { closeRedis, connectRedis } from "./redis.js";
 import {
-  formatEventReminder,
-  formatMorningBriefing,
-  formatWeeklyOutlook,
-} from "./formatters.js";
+  createSchedulerQueue,
+  registerRepeatableJobs,
+  type SchedulerQueue,
+} from "./queue.js";
+import {
+  createSchedulerWorker,
+  processEventReminders,
+  processMorningBriefing,
+  processSingleLookup,
+  processWeeklySummary,
+} from "./worker.js";
+import type { Worker } from "bullmq";
+import type {
+  Clock,
+  SchedulerDependencies,
+  SchedulerInstance,
+} from "./types.js";
 
-export const SCHEDULED_LOOKUP_SYSTEM_PROMPT = `Bạn là trợ lý báo tin định kỳ cho gia đình.
-- Nhiệm vụ: Thực hiện và trả lời chỉ dẫn tra cứu được yêu cầu một cách ngắn gọn, súc tích, chính xác.
-- Ngôn ngữ: Mặc định tiếng Việt.
-- Định dạng: Văn bản thuần (plain text), KHÔNG dùng Markdown (không dùng **, __, ##, *, _, ~~).
-- Không đặt câu hỏi ngược lại người dùng, không thêm phần chào hỏi thừa thãi hoặc hỏi tiếp.
-- Chỉ sử dụng các công cụ tra cứu được cung cấp.`;
+export {
+  SCHEDULED_LOOKUP_SYSTEM_PROMPT,
+  type Clock,
+  type SchedulerDependencies,
+  type SchedulerInstance,
+  type MorningBriefingJobData,
+  type WeeklySummaryJobData,
+  type EventReminderJobData,
+  type ScheduledLookupJobData,
+  type SchedulerJobType,
+} from "./types.js";
 
-export type Clock = {
-  now(): Date;
+export { createInMemoryScheduler, startInMemoryScheduler } from "./in-memory.js";
+export { connectRedis, createRedisClient, closeRedis } from "./redis.js";
+export { createSchedulerQueue, registerRepeatableJobs, enqueueLookupJob, enqueueEventReminderJob } from "./queue.js";
+export { createSchedulerWorker, processJob } from "./worker.js";
+
+export type DistributedSchedulerOptions = {
+  deps: SchedulerDependencies;
+  redisClient: Redis;
+  queue?: SchedulerQueue;
+  worker?: Worker;
 };
 
-export type SchedulerDependencies = {
-  config: AppConfig;
-  eventsRepo: EventsRepository;
-  zalo: ZaloClient;
-  log?: Logger;
-  clock?: Clock;
-  lookupsRepo?: LookupRepository;
-  channelsRepo?: ChannelRepository;
-  llm?: LlmClient;
-};
+export function createDistributedScheduler(options: DistributedSchedulerOptions): SchedulerInstance {
+  const { deps, redisClient } = options;
+  const queue = options.queue ?? createSchedulerQueue(redisClient);
+  const worker = options.worker ?? createSchedulerWorker(redisClient, deps);
 
-export type SchedulerInstance = {
-  stop(): void;
-  tick(): Promise<void>;
-  runCatchUp(): Promise<void>;
-  runMorningBriefing(date?: Date): Promise<void>;
-  runWeeklySummary(date?: Date): Promise<void>;
-  runEventReminders(date?: Date): Promise<void>;
-  runDueLookups(date?: Date): Promise<void>;
-};
-
-export function createScheduler(deps: SchedulerDependencies): SchedulerInstance {
-  const { config, eventsRepo, zalo, log, clock = { now: () => new Date() }, lookupsRepo, channelsRepo, llm } = deps;
-
-  let timer: NodeJS.Timeout | null = null;
-  const sentMorningBriefings = new Set<string>(); // key: `${chatId}:${dateStr}`
-  const sentWeeklySummaries = new Set<string>(); // key: `${chatId}:${dateStr}`
-
-  function getLocalTimeInfo(date: Date) {
-    const parts = getUtc7Parts(date);
-    const dateStr = formatUtc7DateStr(date);
-    const vnMs = date.getTime() + 7 * 60 * 60 * 1000;
-    const vnDate = new Date(vnMs);
-    const hour = vnDate.getUTCHours();
-    const minute = vnDate.getUTCMinutes();
-    const dayOfWeek = vnDate.getUTCDay(); // 0 = Sunday
-
-    return { parts, dateStr, hour, minute, dayOfWeek };
-  }
-
-  async function runMorningBriefing(referenceDate = clock.now()): Promise<void> {
-    const { dateStr } = getLocalTimeInfo(referenceDate);
-    const channels = config.familyChatIds;
-
-    if (channels.length === 0) {
-      log?.info({ event: "scheduler_morning_briefing_skipped", reason: "no_family_chat_ids" });
-      return;
-    }
-
-    const todayHolidays = getUpcomingHolidays({ windowDays: 0, referenceDate });
-
-    for (const chatId of channels) {
-      const dedupeKey = `${chatId}:${dateStr}`;
-      if (sentMorningBriefings.has(dedupeKey)) {
-        continue;
-      }
-
-      const allUpcoming = eventsRepo.listUpcomingEvents(chatId, 7, referenceDate);
-      const todayEvents = allUpcoming.filter((e) => e.daysRemaining === 0);
-      const upcomingMilestones = allUpcoming.filter(
-        (e) =>
-          e.daysRemaining > 0 &&
-          (e.event.kind === "birthday" || e.event.kind === "anniversary" || e.event.kind === "gio"),
-      );
-
-      const messageText = formatMorningBriefing({
-        todayEvents,
-        todayHolidays,
-        upcomingMilestones,
-        referenceDate,
-      });
-
-      if (messageText) {
-        try {
-          await zalo.sendMessage(chatId, messageText);
-          sentMorningBriefings.add(dedupeKey);
-          log?.info({ event: "scheduler_morning_briefing_sent", chatId, date: dateStr });
-        } catch (error) {
-          const err = error instanceof Error ? error.message : String(error);
-          log?.error({ event: "scheduler_morning_briefing_error", chatId, error: err });
-        }
-      } else {
-        sentMorningBriefings.add(dedupeKey);
-      }
-    }
-  }
-
-  async function runWeeklySummary(referenceDate = clock.now()): Promise<void> {
-    const { dateStr } = getLocalTimeInfo(referenceDate);
-    const channels = config.familyChatIds;
-
-    if (channels.length === 0) {
-      log?.info({ event: "scheduler_weekly_summary_skipped", reason: "no_family_chat_ids" });
-      return;
-    }
-
-    const weekHolidays = getUpcomingHolidays({ windowDays: 7, referenceDate }).filter(
-      (h) => h.daysRemaining > 0,
-    );
-
-    for (const chatId of channels) {
-      const dedupeKey = `${chatId}:${dateStr}`;
-      if (sentWeeklySummaries.has(dedupeKey)) {
-        continue;
-      }
-
-      const weekEvents = eventsRepo
-        .listUpcomingEvents(chatId, 7, referenceDate)
-        .filter((e) => e.daysRemaining > 0);
-
-      const messageText = formatWeeklyOutlook({
-        weekEvents,
-        weekHolidays,
-        referenceDate,
-      });
-
-      if (messageText) {
-        try {
-          await zalo.sendMessage(chatId, messageText);
-          sentWeeklySummaries.add(dedupeKey);
-          log?.info({ event: "scheduler_weekly_summary_sent", chatId, date: dateStr });
-        } catch (error) {
-          const err = error instanceof Error ? error.message : String(error);
-          log?.error({ event: "scheduler_weekly_summary_error", chatId, error: err });
-        }
-      } else {
-        sentWeeklySummaries.add(dedupeKey);
-      }
-    }
-  }
-
-  async function runEventReminders(referenceDate = clock.now()): Promise<void> {
-    const dueReminders: DueReminder[] = eventsRepo.findEventsDueForReminder(referenceDate);
-
-    for (const due of dueReminders) {
-      const { event, occurrenceDateStr } = due;
-
-      if (eventsRepo.isReminderSent(event.id, occurrenceDateStr)) {
-        continue;
-      }
-
-      const messageText = formatEventReminder(due);
-      try {
-        await zalo.sendMessage(event.chatId, messageText);
-        eventsRepo.recordReminderSent(event.id, occurrenceDateStr, clock.now().getTime());
-        log?.info({
-          event: "scheduler_reminder_sent",
-          eventId: event.id,
-          chatId: event.chatId,
-          occurrenceDate: occurrenceDateStr,
-        });
-      } catch (error) {
-        const err = error instanceof Error ? error.message : String(error);
-        log?.error({
-          event: "scheduler_reminder_error",
-          eventId: event.id,
-          chatId: event.chatId,
-          error: err,
-        });
-      }
-    }
-  }
-
-  async function runDueLookups(referenceDate = clock.now()): Promise<void> {
-    if (!lookupsRepo || !llm) {
-      return;
-    }
-
-    const { dateStr } = getLocalTimeInfo(referenceDate);
-    const dueLookups = lookupsRepo.findDueLookups(referenceDate);
-
-    for (const lookup of dueLookups) {
-      if (channelsRepo) {
-        const channel = channelsRepo.getChannel(lookup.chatId);
-        if (channel && channel.status !== "active") {
-          log?.info({
-            event: "scheduler_lookup_skipped_channel",
-            chatId: lookup.chatId,
-            status: channel.status,
-          });
-          continue;
-        }
-      }
-
-      const injectionCheck = detectPromptInjection(lookup.instruction);
-      if (injectionCheck.isInjection) {
-        const claim = lookupsRepo.claimRun(lookup.id, dateStr, referenceDate.getTime());
-        if (claim.claimed) {
-          lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
-          // Mark directly as failed since injection shouldn't be retried
-          lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
-          lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
-        }
-        continue;
-      }
-
-      const claim = lookupsRepo.claimRun(lookup.id, dateStr, referenceDate.getTime());
-      if (!claim.claimed) {
-        continue;
-      }
-
-      const run = claim.run;
-
-      const weatherTool = createWeatherTool();
-      const holidayTools = createHolidayTools();
-      const tools: ToolSet = {
-        weather_check: weatherTool.weather_check,
-        holiday_list_upcoming: holidayTools.holiday_list_upcoming,
-      };
-
-      if (config.tavilyApiKey) {
-        const webSearchTool = createWebSearchTool(config.tavilyApiKey);
-        tools.web_search = webSearchTool.web_search;
-      }
-
-      try {
-        const reply = await llm.generateReply({
-          systemPrompt: SCHEDULED_LOOKUP_SYSTEM_PROMPT,
-          history: [],
-          incomingMessage: {
-            senderId: lookup.createdBy,
-            senderName: "Family Member",
-            content: lookup.instruction,
-          },
-          tools,
-        });
-
-        if (!reply || reply.trim().length === 0) {
-          throw new Error("Empty reply from LLM for scheduled lookup");
-        }
-
-        const chunks = splitText(reply, 2000);
-        for (const chunk of chunks) {
-          await zalo.sendMessage(lookup.chatId, chunk);
-        }
-
-        lookupsRepo.recordRunSuccess(run.id, clock.now().getTime());
-        log?.info({
-          event: "scheduler_lookup_sent",
-          lookupId: lookup.id,
-          chatId: lookup.chatId,
-          fireDate: dateStr,
-        });
-      } catch (error) {
-        const err = error instanceof Error ? error.message : String(error);
-        lookupsRepo.recordRunFailure(run.id, err);
-        log?.error({
-          event: "scheduler_lookup_error",
-          lookupId: lookup.id,
-          chatId: lookup.chatId,
-          fireDate: dateStr,
-          attemptCount: run.attemptCount,
-          error: err,
-        });
-      }
-    }
+  async function stop(): Promise<void> {
+    await worker.close();
+    await queue.close();
+    await closeRedis(redisClient);
   }
 
   async function runCatchUp(): Promise<void> {
-    const now = clock.now();
-    const { hour } = getLocalTimeInfo(now);
-
-    // Due lookups catch-up
-    await runDueLookups(now);
-
-    // Morning briefing window catch-up: between 07:00 and 09:00 (within 2 hours of 07:00)
-    if (hour >= 7 && hour < 9) {
-      await runMorningBriefing(now);
-    }
-
-    // Event reminders window catch-up: between 08:00 and 10:00 (within 2 hours of 08:00)
-    if (hour >= 8 && hour < 10) {
-      await runEventReminders(now);
-    }
+    const now = deps.clock?.now() ?? new Date();
+    await processMorningBriefing(deps, now);
+    await processEventReminders(deps, now);
   }
 
   async function tick(): Promise<void> {
-    const now = clock.now();
-    const { hour, minute, dayOfWeek } = getLocalTimeInfo(now);
-
-    // Always check for due lookups on every tick
-    await runDueLookups(now);
-
-    // 07:00 daily morning briefing
-    if (hour === 7 && minute === 0) {
-      await runMorningBriefing(now);
-    }
-
-    // 08:00 daily event reminders
-    if (hour === 8 && minute === 0) {
-      await runEventReminders(now);
-    }
-
-    // 20:00 Sunday weekly summary
-    if (dayOfWeek === 0 && hour === 20 && minute === 0) {
-      await runWeeklySummary(now);
-    }
-  }
-
-  function stop(): void {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
+    const now = deps.clock?.now() ?? new Date();
+    if (!deps.lookupsRepo) return;
+    const dateStr = formatUtc7DateStr(now);
+    const dueLookups = deps.lookupsRepo.findDueLookups(now);
+    for (const lookup of dueLookups) {
+      await processSingleLookup(deps, { lookupId: lookup.id, dateStr }, now).catch(() => {});
     }
   }
 
@@ -339,40 +76,101 @@ export function createScheduler(deps: SchedulerDependencies): SchedulerInstance 
     stop,
     tick,
     runCatchUp,
-    runMorningBriefing,
-    runWeeklySummary,
-    runEventReminders,
-    runDueLookups,
+    runMorningBriefing: (date) => processMorningBriefing(deps, date ?? deps.clock?.now() ?? new Date()),
+    runWeeklySummary: (date) => processWeeklySummary(deps, date ?? deps.clock?.now() ?? new Date()),
+    runEventReminders: (date) => processEventReminders(deps, date ?? deps.clock?.now() ?? new Date()),
+    runDueLookups: async (date) => {
+      const now = date ?? deps.clock?.now() ?? new Date();
+      if (!deps.lookupsRepo) return;
+      const dateStr = formatUtc7DateStr(now);
+      const dueLookups = deps.lookupsRepo.findDueLookups(now);
+      for (const lookup of dueLookups) {
+        await processSingleLookup(deps, { lookupId: lookup.id, dateStr }, now).catch(() => {});
+      }
+    },
   };
+}
+
+export function createScheduler(deps: SchedulerDependencies): SchedulerInstance {
+  return createInMemoryScheduler(deps);
 }
 
 export function startScheduler(
   deps: SchedulerDependencies,
   intervalMs = 60_000,
 ): SchedulerInstance {
-  const scheduler = createScheduler(deps);
-
-  // Run startup catch-up asynchronously
-  scheduler.runCatchUp().catch((err) => {
-    deps.log?.error({ event: "scheduler_catchup_error", error: String(err) });
-  });
-
-  const timer = setInterval(() => {
-    scheduler.tick().catch((err) => {
-      deps.log?.error({ event: "scheduler_tick_error", error: String(err) });
-    });
-  }, intervalMs);
-
-  // Unref timer so it does not block Node process exit in tests
-  if (typeof timer.unref === "function") {
-    timer.unref();
+  if (!deps.config.redisUrl || deps.config.redisUrl.trim() === "") {
+    return startInMemoryScheduler(deps, intervalMs);
   }
 
-  const originalStop = scheduler.stop;
-  scheduler.stop = () => {
-    clearInterval(timer);
-    originalStop();
+  let activeInstance: SchedulerInstance = startInMemoryScheduler(deps, intervalMs);
+
+  const instanceProxy: SchedulerInstance = {
+    stop: async () => {
+      await activeInstance.stop();
+    },
+    tick: async () => {
+      await activeInstance.tick();
+    },
+    runCatchUp: async () => {
+      await activeInstance.runCatchUp();
+    },
+    runMorningBriefing: async (date) => {
+      await activeInstance.runMorningBriefing(date);
+    },
+    runWeeklySummary: async (date) => {
+      await activeInstance.runWeeklySummary(date);
+    },
+    runEventReminders: async (date) => {
+      await activeInstance.runEventReminders(date);
+    },
+    runDueLookups: async (date) => {
+      await activeInstance.runDueLookups(date);
+    },
   };
 
-  return scheduler;
+  connectRedis(deps.config.redisUrl, deps.log)
+    .then(async (redisClient) => {
+      if (!redisClient) {
+        return;
+      }
+
+      try {
+        const queue = createSchedulerQueue(redisClient);
+        await registerRepeatableJobs(queue, deps.log);
+        const worker = createSchedulerWorker(redisClient, deps);
+
+        // Stop in-memory timer
+        activeInstance.stop();
+
+        const distributed = createDistributedScheduler({
+          deps,
+          redisClient,
+          queue,
+          worker,
+        });
+
+        activeInstance = distributed;
+        deps.log?.info({ event: "scheduler_distributed_active" });
+
+        await distributed.runCatchUp().catch((err) => {
+          deps.log?.error({ event: "scheduler_distributed_catchup_error", error: String(err) });
+        });
+      } catch (err) {
+        deps.log?.warn({
+          event: "scheduler_distributed_init_failed",
+          error: String(err),
+          message: "Continuing with in-memory scheduler",
+        });
+      }
+    })
+    .catch((err) => {
+      deps.log?.warn({
+        event: "scheduler_redis_connect_error",
+        error: String(err),
+        message: "Continuing with in-memory scheduler",
+      });
+    });
+
+  return instanceProxy;
 }

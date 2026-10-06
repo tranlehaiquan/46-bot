@@ -175,4 +175,20 @@ describe("loadConfig", () => {
       },
     );
   });
+
+  it("loads optional REDIS_URL and defaults SCHEDULER_CONCURRENCY to 5", () => {
+    const config = loadConfig(validEnv());
+    assert.equal(config.redisUrl, undefined);
+    assert.equal(config.schedulerConcurrency, 5);
+
+    const customConfig = loadConfig(
+      validEnv({
+        REDIS_URL: "redis://127.0.0.1:6379",
+        SCHEDULER_CONCURRENCY: "10",
+      }),
+    );
+    assert.equal(customConfig.redisUrl, "redis://127.0.0.1:6379");
+    assert.equal(customConfig.schedulerConcurrency, 10);
+  });
 });
+

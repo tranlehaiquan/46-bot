@@ -8,7 +8,7 @@ import { createEventsRepository, createUtc7Date, type EventsRepository } from ".
 import { createLookupRepository, type LookupRepository } from "../db/repositories/lookups.js";
 import type { LlmClient } from "../llm/client.js";
 import type { ZaloClient } from "../zalo-client.js";
-import { createScheduler, type Clock } from "./index.js";
+import { createScheduler, startScheduler, type Clock } from "./index.js";
 
 function fakeZalo() {
   const sends: Array<{ chatId: string; text: string }> = [];
@@ -664,4 +664,62 @@ describe("Background Scheduler Engine", () => {
     run = lookupsRepo.getLatestRun(lookup.id);
     assert.equal(run?.status, "failed");
   });
+
+  it("startScheduler starts in-memory scheduler when redisUrl is unset", async () => {
+    const zalo = fakeZalo();
+    const clock = makeClock(new Date("2026-10-06T07:00:00+07:00"));
+    const config = loadConfig({
+      ZALO_BOT_TOKEN: "token",
+      FAMILY_CHAT_IDS: "chat1",
+      WEBHOOK_URL: "https://example.com/webhook",
+      WEBHOOK_SECRET: "secret123",
+      MODE: "webhook",
+      PORT: "3000",
+      GEMINI_API_KEY: "key",
+    });
+
+    const instance = startScheduler({
+      config,
+      eventsRepo: repo,
+      zalo,
+      clock,
+    });
+
+    assert.ok(instance);
+    await instance.stop();
+  });
+
+  it("startScheduler gracefully falls back to in-memory when redis connection fails", async () => {
+    const zalo = fakeZalo();
+    const clock = makeClock(new Date("2026-10-06T07:00:00+07:00"));
+    const config = loadConfig({
+      ZALO_BOT_TOKEN: "token",
+      FAMILY_CHAT_IDS: "chat1",
+      WEBHOOK_URL: "https://example.com/webhook",
+      WEBHOOK_SECRET: "secret123",
+      MODE: "webhook",
+      PORT: "3000",
+      GEMINI_API_KEY: "key",
+      REDIS_URL: "redis://127.0.0.1:54321", // unreachable
+    });
+
+    const logs: unknown[] = [];
+    const mockLog = {
+      info: (obj: unknown) => logs.push(obj),
+      warn: (obj: unknown) => logs.push(obj),
+      error: (obj: unknown) => logs.push(obj),
+    };
+
+    const instance = startScheduler({
+      config,
+      eventsRepo: repo,
+      zalo,
+      log: mockLog as any,
+      clock,
+    });
+
+    assert.ok(instance);
+    await instance.stop();
+  });
 });
+

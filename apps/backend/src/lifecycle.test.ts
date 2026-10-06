@@ -75,4 +75,22 @@ describe("lifecycle", () => {
     );
     assert.equal(cleanedUp, true);
   });
+
+  it("stops scheduler when provided to shutdown", async () => {
+    const queue = new WorkQueue();
+    let stopped = false;
+    const scheduler = {
+      stop: async () => {
+        stopped = true;
+      },
+    };
+    await shutdown(
+      async () => {},
+      queue,
+      undefined,
+      scheduler,
+    );
+    assert.equal(stopped, true);
+  });
 });
+

@@ -136,15 +136,13 @@ async function main(): Promise<void> {
 
   installShutdown(process, async () => {
     await shutdown(
-      () => {
-        scheduler.stop();
-        return app.close();
-      },
+      () => app.close(),
       queue,
       () => {
         closeDatabase(db);
         log.info({ event: "db_closed" });
       },
+      scheduler,
     );
     process.exit(0);
   });
