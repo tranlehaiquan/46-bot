@@ -80,7 +80,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
   if (channelRepo) {
     const initialStatus = config.familyChatIds.includes(message.chatId) ? "active" : "pending";
     const chatType = message.chatType === "PRIVATE" ? "PRIVATE" : "GROUP";
-    channelRepo.upsertDiscovery({
+    await channelRepo.upsertDiscovery({
       chatId: message.chatId,
       name: message.senderName || message.chatId,
       chatType,
@@ -129,10 +129,10 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
 
   // Deduplication
   if (seenRepo) {
-    if (seenRepo.hasSeen(message.messageId)) {
+    if (await seenRepo.hasSeen(message.messageId)) {
       return;
     }
-    seenRepo.markSeen(message.messageId);
+    await seenRepo.markSeen(message.messageId);
   } else if (seen) {
     if (seen.has(message.messageId)) {
       return;
@@ -142,7 +142,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
 
   // Channel status gating
   if (channelRepo) {
-    const channel = channelRepo.getChannel(message.chatId);
+    const channel = await channelRepo.getChannel(message.chatId);
     const status = channel?.status ?? (config.familyChatIds.includes(message.chatId) ? "active" : "pending");
     if (status === "disabled") {
       return;
@@ -170,10 +170,10 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       }
     }
 
-    const history = messageRepo ? messageRepo.getRecent(message.chatId, 20) : [];
+    const history = messageRepo ? await messageRepo.getRecent(message.chatId, 20) : [];
 
     if (messageRepo) {
-      messageRepo.insert({
+      await messageRepo.insert({
         chatId: message.chatId,
         senderId: message.senderId,
         senderName: message.senderName,
@@ -236,7 +236,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
         ? { ...listTools, ...eventTools, ...holidayTools, ...searchTools, ...memoryTools, ...weatherTools, ...lookupTools }
         : undefined;
 
-    const memories = memoryRepo ? memoryRepo.listMemories(message.chatId) : undefined;
+    const memories = memoryRepo ? await memoryRepo.listMemories(message.chatId) : undefined;
 
     let replyText: string;
     const injectionCheck = detectPromptInjection(message.text);
@@ -273,7 +273,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     }
 
     if (messageRepo) {
-      messageRepo.insert({
+      await messageRepo.insert({
         chatId: message.chatId,
         senderId: "bot",
         senderName: "Family Bot",

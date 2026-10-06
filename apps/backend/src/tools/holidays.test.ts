@@ -31,7 +31,7 @@ describe("Holiday tools", () => {
   it("imports public holidays idempotently into events repository", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createEventsRepository(db);
       const tools = createHolidayTools(repo, { chatId: "chat-holiday", senderName: "Admin" });
 
@@ -45,7 +45,7 @@ describe("Holiday tools", () => {
       assert.equal(importRes.success, true);
       assert.equal(importRes.addedCount, 7);
 
-      const events = repo.getEventsByChat("chat-holiday");
+      const events = await repo.getEventsByChat("chat-holiday");
       assert.equal(events.length, 7);
 
       // Verify specific holidays are present
@@ -64,7 +64,7 @@ describe("Holiday tools", () => {
         {} as any,
       )) as any;
       assert.equal(secondImportRes.addedCount, 0);
-      assert.equal(repo.getEventsByChat("chat-holiday").length, 7);
+      assert.equal((await repo.getEventsByChat("chat-holiday")).length, 7);
 
       // Third import with includeTraditional = true: should add the cultural festivals and family days
       const thirdImportRes = (await tools.holiday_import.execute?.(
@@ -73,7 +73,7 @@ describe("Holiday tools", () => {
       )) as any;
       assert.ok(thirdImportRes.addedCount > 0);
       assert.equal(thirdImportRes.addedCount, 11); // 11 non-public celebrations
-      assert.equal(repo.getEventsByChat("chat-holiday").length, 18);
+      assert.equal((await repo.getEventsByChat("chat-holiday")).length, 18);
     } finally {
       closeDatabase(db);
     }

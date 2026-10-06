@@ -66,7 +66,7 @@ export function createDistributedScheduler(options: DistributedSchedulerOptions)
     const now = deps.clock?.now() ?? new Date();
     if (!deps.lookupsRepo) return;
     const dateStr = formatUtc7DateStr(now);
-    const dueLookups = deps.lookupsRepo.findDueLookups(now);
+    const dueLookups = await deps.lookupsRepo.findDueLookups(now);
     for (const lookup of dueLookups) {
       await processSingleLookup(deps, { lookupId: lookup.id, dateStr }, now).catch(() => {});
     }
@@ -83,7 +83,7 @@ export function createDistributedScheduler(options: DistributedSchedulerOptions)
       const now = date ?? deps.clock?.now() ?? new Date();
       if (!deps.lookupsRepo) return;
       const dateStr = formatUtc7DateStr(now);
-      const dueLookups = deps.lookupsRepo.findDueLookups(now);
+      const dueLookups = await deps.lookupsRepo.findDueLookups(now);
       for (const lookup of dueLookups) {
         await processSingleLookup(deps, { lookupId: lookup.id, dateStr }, now).catch(() => {});
       }

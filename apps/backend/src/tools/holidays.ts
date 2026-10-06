@@ -70,7 +70,7 @@ export function createHolidayTools(
       }
 
       const { chatId, senderName } = context;
-      const existingEvents = eventsRepo.getEventsByChat(chatId);
+      const existingEvents = await eventsRepo.getEventsByChat(chatId);
       const existingTitles = new Set(existingEvents.map((e) => e.title.toLowerCase().trim()));
 
       const targetHolidays = VIETNAMESE_HOLIDAYS.filter(
@@ -81,7 +81,7 @@ export function createHolidayTools(
       for (const h of targetHolidays) {
         const normName = h.name.toLowerCase().trim();
         if (!existingTitles.has(normName)) {
-          eventsRepo.createEvent({
+          await eventsRepo.createEvent({
             chatId,
             title: h.name,
             kind: "event",

@@ -1,7 +1,7 @@
 import type { SqliteDatabase } from "./connection.js";
 
-export function migrate(db: SqliteDatabase): void {
-  db.exec(`
+export async function migrate(db: SqliteDatabase): Promise<void> {
+  await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS seen_messages (
       message_id TEXT PRIMARY KEY,
       ts INTEGER NOT NULL

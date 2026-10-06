@@ -73,7 +73,7 @@ async function main(): Promise<void> {
   });
 
   const db = openDatabase(config.dbPath);
-  migrate(db);
+  await migrate(db);
   const seenRepo = createSeenRepository(db);
   const messageRepo = createMessageRepository(db);
   const listRepo = createListRepository(db);
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
   const channelRepo = createChannelRepository(db);
   const lookupsRepo = createLookupRepository(db);
   if (config.familyChatIds.length > 0) {
-    channelRepo.seedChannels(config.familyChatIds);
+    await channelRepo.seedChannels(config.familyChatIds);
   }
 
   const llmClient = createLlmClient({

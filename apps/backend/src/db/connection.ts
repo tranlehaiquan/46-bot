@@ -1,39 +1,65 @@
-import Database from "better-sqlite3";
+import { createClient, type Client } from "@libsql/client";
 import { dirname, basename, resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 
-export type SqliteDatabase = Database.Database;
+export type SqliteDatabase = Client;
 
-export function openDatabase(dbPath: string): SqliteDatabase {
-  let resolvedPath = dbPath;
+export function openDatabase(dbPathOrUrl: string, authToken?: string): SqliteDatabase {
+  const url = dbPathOrUrl;
 
-  if (dbPath !== ":memory:") {
-    const dir = dirname(resolvedPath);
-    try {
-      mkdirSync(dir, { recursive: true });
-    } catch (err) {
-      // If dbPath is absolute (e.g. /data/family.db configured for Docker)
-      // and cannot be written locally (e.g. on macOS without root permissions),
-      // fallback to local ./data relative to current working directory.
-      const fallbackPath = resolve(process.cwd(), "./data", basename(dbPath));
-      const fallbackDir = dirname(fallbackPath);
+  // Remote Turso or libSQL endpoints (libsql://, https://, http://, wss://, ws://)
+  if (
+    url.startsWith("libsql://") ||
+    url.startsWith("https://") ||
+    url.startsWith("http://") ||
+    url.startsWith("wss://") ||
+    url.startsWith("ws://")
+  ) {
+    return createClient({ url, authToken });
+  }
+
+  // In-memory sqlite
+  if (url === ":memory:" || url === "file::memory:") {
+    return createClient({ url: ":memory:" });
+  }
+
+  // If already a file: URL
+  if (url.startsWith("file:")) {
+    const rawPath = url.slice(5);
+    const dir = dirname(rawPath);
+    if (dir && dir !== "." && dir !== "/") {
       try {
-        mkdirSync(fallbackDir, { recursive: true });
-        resolvedPath = fallbackPath;
+        mkdirSync(dir, { recursive: true });
       } catch {
-        throw err;
+        // Ignore
       }
+    }
+    return createClient({ url });
+  }
+
+  // Local filesystem path (e.g. /data/family.db or ./data/family.db)
+  let resolvedPath = url;
+  const dir = dirname(resolvedPath);
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    const fallbackPath = resolve(process.cwd(), "./data", basename(url));
+    const fallbackDir = dirname(fallbackPath);
+    try {
+      mkdirSync(fallbackDir, { recursive: true });
+      resolvedPath = fallbackPath;
+    } catch {
+      throw err;
     }
   }
 
-  const db = new Database(resolvedPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("busy_timeout = 5000");
-  return db;
+  return createClient({ url: `file:${resolvedPath}` });
 }
 
 export function closeDatabase(db: SqliteDatabase): void {
-  if (db.open) {
+  try {
     db.close();
+  } catch {
+    // Ignore close errors
   }
 }

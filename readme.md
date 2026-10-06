@@ -78,8 +78,7 @@ Dưới đây là bảng tổng hợp chi tiết các công cụ (tools) đượ
 
 - **Ngôn ngữ & Runtime:** Node.js 22 (LTS), TypeScript (Strict Mode), ESM module.
 - **Giao thức Zalo:** Webhook API chính thức của Zalo (`zalo-bot-js` & Fastify Webhook Handler).
-- **Trí tuệ nhân tạo (LLM):** Vercel AI SDK (`ai`), hỗ trợ linh hoạt cả **Google Gemini** (`@ai-sdk/google`) và **DeepSeek** (`@ai-sdk/deepseek`). Tự động xử lý multi-step tool calls (giới hạn tối đa 4 bước xử lý liên hoàn).
-- **Cơ sở dữ liệu:** SQLite thông qua thư viện siêu tốc `better-sqlite3`, chạy ở chế độ WAL (`Write-Ahead Logging`), xử lý timeout đa luồng (`busyTimeout: 5000ms`), lưu trữ file tại `/data/family.db`.
+- **Cơ sở dữ liệu:** libSQL / Turso client (`@libsql/client`), hỗ trợ cả database SQLite cục bộ (`file:...`) và cloud distributed Turso database (`libsql://...` hoặc `https://...`).
 - **Âm lịch Việt Nam:** Thư viện tính toán thiên văn dựa trên thuật toán Hồ Ngọc Đức, múi giờ GMT+7, hỗ trợ đầy đủ các chu kỳ tháng nhuận và năm nhuận.
 - **Tìm kiếm thời gian thực:** `@tavily/core` API client.
 - **Lập lịch (Scheduling):** In-process scheduler chạy nền theo múi giờ `Asia/Ho_Chi_Minh`.

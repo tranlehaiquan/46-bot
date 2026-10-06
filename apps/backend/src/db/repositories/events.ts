@@ -80,20 +80,20 @@ export type EventOccurrence = {
 };
 
 export interface EventsRepository {
-  createEvent(input: CreateEventInput): EventRow;
-  getEventById(id: number): EventRow | undefined;
-  getEventsByChat(chatId: string): EventRow[];
-  getAllEvents(): EventRow[];
-  updateEvent(id: number, updates: UpdateEventInput): EventRow | undefined;
-  deleteEvent(id: number): boolean;
-  listUpcomingEvents(chatId: string, windowDays?: number, referenceDate?: Date): UpcomingEvent[];
-  getEventsForRange(chatId: string, startDate: Date, endDate: Date): EventOccurrence[];
-  getEventsForWeek(chatId: string, referenceDate?: Date): EventOccurrence[];
-  getEventsForMonth(chatId: string, year: number, month: number): EventOccurrence[];
-  getEventsForYear(chatId: string, year: number): EventOccurrence[];
-  isReminderSent(eventId: number, occurrenceDate: string): boolean;
-  recordReminderSent(eventId: number, occurrenceDate: string, sentAt?: number): void;
-  findEventsDueForReminder(referenceDate?: Date, chatId?: string): DueReminder[];
+  createEvent(input: CreateEventInput): Promise<EventRow>;
+  getEventById(id: number): Promise<EventRow | undefined>;
+  getEventsByChat(chatId: string): Promise<EventRow[]>;
+  getAllEvents(): Promise<EventRow[]>;
+  updateEvent(id: number, updates: UpdateEventInput): Promise<EventRow | undefined>;
+  deleteEvent(id: number): Promise<boolean>;
+  listUpcomingEvents(chatId: string, windowDays?: number, referenceDate?: Date): Promise<UpcomingEvent[]>;
+  getEventsForRange(chatId: string, startDate: Date, endDate: Date): Promise<EventOccurrence[]>;
+  getEventsForWeek(chatId: string, referenceDate?: Date): Promise<EventOccurrence[]>;
+  getEventsForMonth(chatId: string, year: number, month: number): Promise<EventOccurrence[]>;
+  getEventsForYear(chatId: string, year: number): Promise<EventOccurrence[]>;
+  isReminderSent(eventId: number, occurrenceDate: string): Promise<boolean>;
+  recordReminderSent(eventId: number, occurrenceDate: string, sentAt?: number): Promise<void>;
+  findEventsDueForReminder(referenceDate?: Date, chatId?: string): Promise<DueReminder[]>;
 }
 
 export function getUtc7Parts(date: Date): { year: number; month: number; day: number } {
@@ -285,54 +285,26 @@ export function getNextOccurrence(
 
 function mapEventRow(row: any): EventRow {
   return {
-    id: row.id,
-    chatId: row.chat_id,
-    title: row.title,
+    id: Number(row.id),
+    chatId: String(row.chat_id ?? row.chatId),
+    title: String(row.title),
     kind: row.kind as EventKind,
     calendar: row.calendar as EventCalendar,
-    day: row.day,
-    month: row.month,
-    year: row.year ?? null,
-    isLeapMonth: row.is_leap_month === 1,
+    day: Number(row.day),
+    month: Number(row.month),
+    year: row.year !== null && row.year !== undefined ? Number(row.year) : null,
+    isLeapMonth: Number(row.is_leap_month ?? row.isLeapMonth) === 1,
     recurrence: row.recurrence as EventRecurrence,
-    remindDaysBefore: row.remind_days_before,
-    notes: row.notes ?? null,
-    createdBy: row.created_by,
-    ts: row.ts,
+    remindDaysBefore: Number(row.remind_days_before ?? row.remindDaysBefore),
+    notes: row.notes !== null && row.notes !== undefined ? String(row.notes) : null,
+    createdBy: String(row.created_by ?? row.createdBy),
+    ts: Number(row.ts),
   };
 }
 
 export function createEventsRepository(db: SqliteDatabase): EventsRepository {
-  const insertStmt = db.prepare(`
-    INSERT INTO events (
-      chat_id, title, kind, calendar, day, month, year,
-      is_leap_month, recurrence, remind_days_before, notes, created_by, ts
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const getByIdStmt = db.prepare(`
-    SELECT id, chat_id, title, kind, calendar, day, month, year,
-           is_leap_month, recurrence, remind_days_before, notes, created_by, ts
-    FROM events
-    WHERE id = ?
-  `);
-
-  const getByChatStmt = db.prepare(`
-    SELECT id, chat_id, title, kind, calendar, day, month, year,
-           is_leap_month, recurrence, remind_days_before, notes, created_by, ts
-    FROM events
-    WHERE chat_id = ?
-    ORDER BY id ASC
-  `);
-
-  const deleteByIdStmt = db.prepare(`
-    DELETE FROM events
-    WHERE id = ?
-  `);
-
   const repo: EventsRepository = {
-    createEvent(input: CreateEventInput): EventRow {
+    async createEvent(input: CreateEventInput): Promise<EventRow> {
       const now = Date.now();
       const kind = input.kind ?? "event";
       const calendar = input.calendar ?? "solar";
@@ -342,21 +314,27 @@ export function createEventsRepository(db: SqliteDatabase): EventsRepository {
       const year = input.year ?? null;
       const notes = input.notes ?? null;
 
-      const result = insertStmt.run(
-        input.chatId,
-        input.title.trim(),
-        kind,
-        calendar,
-        input.day,
-        input.month,
-        year,
-        isLeap,
-        recurrence,
-        remindDaysBefore,
-        notes,
-        input.createdBy,
-        now,
-      );
+      const result = await db.execute({
+        sql: `INSERT INTO events (
+          chat_id, title, kind, calendar, day, month, year,
+          is_leap_month, recurrence, remind_days_before, notes, created_by, ts
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          input.chatId,
+          input.title.trim(),
+          kind,
+          calendar,
+          input.day,
+          input.month,
+          year,
+          isLeap,
+          recurrence,
+          remindDaysBefore,
+          notes,
+          input.createdBy,
+          now,
+        ],
+      });
 
       return {
         id: Number(result.lastInsertRowid),
@@ -376,18 +354,33 @@ export function createEventsRepository(db: SqliteDatabase): EventsRepository {
       };
     },
 
-    getEventById(id: number): EventRow | undefined {
-      const row = getByIdStmt.get(id);
-      return row ? mapEventRow(row) : undefined;
+    async getEventById(id: number): Promise<EventRow | undefined> {
+      const res = await db.execute({
+        sql: `SELECT id, chat_id as chatId, title, kind, calendar, day, month, year,
+                     is_leap_month as isLeapMonth, recurrence, remind_days_before as remindDaysBefore,
+                     notes, created_by as createdBy, ts
+              FROM events
+              WHERE id = ?`,
+        args: [id],
+      });
+      return res.rows[0] ? mapEventRow(res.rows[0]) : undefined;
     },
 
-    getEventsByChat(chatId: string): EventRow[] {
-      const rows = getByChatStmt.all(chatId);
-      return rows.map(mapEventRow);
+    async getEventsByChat(chatId: string): Promise<EventRow[]> {
+      const res = await db.execute({
+        sql: `SELECT id, chat_id as chatId, title, kind, calendar, day, month, year,
+                     is_leap_month as isLeapMonth, recurrence, remind_days_before as remindDaysBefore,
+                     notes, created_by as createdBy, ts
+              FROM events
+              WHERE chat_id = ?
+              ORDER BY id ASC`,
+        args: [chatId],
+      });
+      return res.rows.map(mapEventRow);
     },
 
-    updateEvent(id: number, updates: UpdateEventInput): EventRow | undefined {
-      const existing = repo.getEventById(id);
+    async updateEvent(id: number, updates: UpdateEventInput): Promise<EventRow | undefined> {
+      const existing = await repo.getEventById(id);
       if (!existing) {
         return undefined;
       }
@@ -398,40 +391,33 @@ export function createEventsRepository(db: SqliteDatabase): EventsRepository {
       const day = updates.day !== undefined ? updates.day : existing.day;
       const month = updates.month !== undefined ? updates.month : existing.month;
       const year = updates.year !== undefined ? updates.year : existing.year;
-      const isLeap = updates.isLeapMonth !== undefined ? (updates.isLeapMonth ? 1 : 0) : (existing.isLeapMonth ? 1 : 0);
+      const isLeap = updates.isLeapMonth !== undefined ? (updates.isLeapMonth ? 1 : 0) : existing.isLeapMonth ? 1 : 0;
       const recurrence = updates.recurrence !== undefined ? updates.recurrence : existing.recurrence;
-      const remindDaysBefore = updates.remindDaysBefore !== undefined ? updates.remindDaysBefore : existing.remindDaysBefore;
+      const remindDaysBefore =
+        updates.remindDaysBefore !== undefined ? updates.remindDaysBefore : existing.remindDaysBefore;
       const notes = updates.notes !== undefined ? updates.notes : existing.notes;
 
-      db.prepare(`
-        UPDATE events
-        SET title = ?, kind = ?, calendar = ?, day = ?, month = ?, year = ?,
-            is_leap_month = ?, recurrence = ?, remind_days_before = ?, notes = ?
-        WHERE id = ?
-      `).run(
-        title,
-        kind,
-        calendar,
-        day,
-        month,
-        year,
-        isLeap,
-        recurrence,
-        remindDaysBefore,
-        notes,
-        id,
-      );
+      await db.execute({
+        sql: `UPDATE events
+              SET title = ?, kind = ?, calendar = ?, day = ?, month = ?, year = ?,
+                  is_leap_month = ?, recurrence = ?, remind_days_before = ?, notes = ?
+              WHERE id = ?`,
+        args: [title, kind, calendar, day, month, year, isLeap, recurrence, remindDaysBefore, notes, id],
+      });
 
       return repo.getEventById(id);
     },
 
-    deleteEvent(id: number): boolean {
-      const result = deleteByIdStmt.run(id);
-      return result.changes > 0;
+    async deleteEvent(id: number): Promise<boolean> {
+      const res = await db.execute({
+        sql: `DELETE FROM events WHERE id = ?`,
+        args: [id],
+      });
+      return res.rowsAffected > 0;
     },
 
-    listUpcomingEvents(chatId: string, windowDays = 30, referenceDate = new Date()): UpcomingEvent[] {
-      const events = repo.getEventsByChat(chatId);
+    async listUpcomingEvents(chatId: string, windowDays = 30, referenceDate = new Date()): Promise<UpcomingEvent[]> {
+      const events = await repo.getEventsByChat(chatId);
       const upcoming: UpcomingEvent[] = [];
 
       for (const event of events) {
@@ -457,7 +443,7 @@ export function createEventsRepository(db: SqliteDatabase): EventsRepository {
       return upcoming;
     },
 
-    getEventsForRange(chatId: string, startDate: Date, endDate: Date): EventOccurrence[] {
+    async getEventsForRange(chatId: string, startDate: Date, endDate: Date): Promise<EventOccurrence[]> {
       const startParts = getUtc7Parts(startDate);
       const endParts = getUtc7Parts(endDate);
       const startMid = Date.UTC(startParts.year, startParts.month - 1, startParts.day);
@@ -467,7 +453,7 @@ export function createEventsRepository(db: SqliteDatabase): EventsRepository {
         return [];
       }
 
-      const events = repo.getEventsByChat(chatId);
+      const events = await repo.getEventsByChat(chatId);
       const occurrences: EventOccurrence[] = [];
       const seenKey = new Set<string>();
 
@@ -578,45 +564,53 @@ export function createEventsRepository(db: SqliteDatabase): EventsRepository {
       return occurrences;
     },
 
-    getEventsForWeek(chatId: string, referenceDate: Date = new Date()): EventOccurrence[] {
+    async getEventsForWeek(chatId: string, referenceDate: Date = new Date()): Promise<EventOccurrence[]> {
       const start = getStartOfWeekUtc7(referenceDate);
       const end = getEndOfWeekUtc7(referenceDate);
       return repo.getEventsForRange(chatId, start, end);
     },
 
-    getEventsForMonth(chatId: string, year: number, month: number): EventOccurrence[] {
+    async getEventsForMonth(chatId: string, year: number, month: number): Promise<EventOccurrence[]> {
       const start = createUtc7Date(year, month, 1);
       const end = createUtc7Date(year, month, getDaysInSolarMonth(year, month));
       return repo.getEventsForRange(chatId, start, end);
     },
 
-    getEventsForYear(chatId: string, year: number): EventOccurrence[] {
+    async getEventsForYear(chatId: string, year: number): Promise<EventOccurrence[]> {
       const start = createUtc7Date(year, 1, 1);
       const end = createUtc7Date(year, 12, 31);
       return repo.getEventsForRange(chatId, start, end);
     },
-    getAllEvents(): EventRow[] {
-      const rows = db.prepare("SELECT * FROM events ORDER BY id ASC").all();
-      return rows.map(mapEventRow);
+
+    async getAllEvents(): Promise<EventRow[]> {
+      const res = await db.execute({
+        sql: `SELECT id, chat_id as chatId, title, kind, calendar, day, month, year,
+                     is_leap_month as isLeapMonth, recurrence, remind_days_before as remindDaysBefore,
+                     notes, created_by as createdBy, ts
+              FROM events
+              ORDER BY id ASC`,
+        args: [],
+      });
+      return res.rows.map(mapEventRow);
     },
 
-    isReminderSent(eventId: number, occurrenceDate: string): boolean {
-      const row = db
-        .prepare("SELECT 1 FROM reminders_sent WHERE event_id = ? AND occurrence_date = ? LIMIT 1")
-        .get(eventId, occurrenceDate);
-      return Boolean(row);
+    async isReminderSent(eventId: number, occurrenceDate: string): Promise<boolean> {
+      const res = await db.execute({
+        sql: "SELECT 1 FROM reminders_sent WHERE event_id = ? AND occurrence_date = ? LIMIT 1",
+        args: [eventId, occurrenceDate],
+      });
+      return res.rows.length > 0;
     },
 
-    recordReminderSent(eventId: number, occurrenceDate: string, sentAt = Date.now()): void {
-      db.prepare("INSERT OR IGNORE INTO reminders_sent (event_id, occurrence_date, sent_at) VALUES (?, ?, ?)").run(
-        eventId,
-        occurrenceDate,
-        sentAt,
-      );
+    async recordReminderSent(eventId: number, occurrenceDate: string, sentAt = Date.now()): Promise<void> {
+      await db.execute({
+        sql: "INSERT OR IGNORE INTO reminders_sent (event_id, occurrence_date, sent_at) VALUES (?, ?, ?)",
+        args: [eventId, occurrenceDate, sentAt],
+      });
     },
 
-    findEventsDueForReminder(referenceDate = new Date(), chatId?: string): DueReminder[] {
-      const events = chatId ? repo.getEventsByChat(chatId) : repo.getAllEvents();
+    async findEventsDueForReminder(referenceDate = new Date(), chatId?: string): Promise<DueReminder[]> {
+      const events = chatId ? await repo.getEventsByChat(chatId) : await repo.getAllEvents();
       const due: DueReminder[] = [];
 
       for (const event of events) {

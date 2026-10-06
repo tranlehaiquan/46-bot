@@ -190,5 +190,20 @@ describe("loadConfig", () => {
     assert.equal(customConfig.redisUrl, "redis://127.0.0.1:6379");
     assert.equal(customConfig.schedulerConcurrency, 10);
   });
+
+  it("loads optional TURSO_DATABASE_URL and TURSO_AUTH_TOKEN", () => {
+    const config = loadConfig(validEnv());
+    assert.equal(config.tursoDatabaseUrl, undefined);
+    assert.equal(config.tursoAuthToken, undefined);
+
+    const tursoConfig = loadConfig(
+      validEnv({
+        TURSO_DATABASE_URL: "libsql://family-bot.turso.io",
+        TURSO_AUTH_TOKEN: "jwt-token-xyz",
+      }),
+    );
+    assert.equal(tursoConfig.tursoDatabaseUrl, "libsql://family-bot.turso.io");
+    assert.equal(tursoConfig.tursoAuthToken, "jwt-token-xyz");
+  });
 });
 

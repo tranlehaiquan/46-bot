@@ -9,7 +9,7 @@ describe("Shared list tools", () => {
   it("executes list_create, list_add_item, list_check_item, list_remove_item, and list_show", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createListRepository(db);
       const tools = createListTools(repo, { chatId: "chat-100", senderName: "Bố" });
 
@@ -65,7 +65,7 @@ describe("Shared list tools", () => {
   it("handles non-existent list errors gracefully", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createListRepository(db);
       const tools = createListTools(repo, { chatId: "chat-100", senderName: "Mẹ" });
 

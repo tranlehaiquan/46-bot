@@ -61,72 +61,52 @@ export type ClaimRunResult =
   | { claimed: false; run?: ScheduledLookupRunRow; reason: string };
 
 export interface LookupRepository {
-  createLookup(input: CreateLookupInput): ScheduledLookupRow;
-  getLookupById(id: number): ScheduledLookupRow | undefined;
-  listLookups(chatId?: string): ScheduledLookupWithLastRun[];
-  updateLookup(id: number, updates: UpdateLookupInput): ScheduledLookupRow | undefined;
-  cancelLookup(id: number): boolean;
-  findDueLookups(referenceDate?: Date): ScheduledLookupRow[];
-  claimRun(lookupId: number, fireDate: string, nowMs?: number): ClaimRunResult;
-  recordRunSuccess(runId: number, sentAt?: number): void;
-  recordRunFailure(runId: number, error: string): void;
-  getLatestRun(lookupId: number): ScheduledLookupRunRow | undefined;
-  getRunsForLookup(lookupId: number): ScheduledLookupRunRow[];
+  createLookup(input: CreateLookupInput): Promise<ScheduledLookupRow>;
+  getLookupById(id: number): Promise<ScheduledLookupRow | undefined>;
+  listLookups(chatId?: string): Promise<ScheduledLookupWithLastRun[]>;
+  updateLookup(id: number, updates: UpdateLookupInput): Promise<ScheduledLookupRow | undefined>;
+  cancelLookup(id: number): Promise<boolean>;
+  findDueLookups(referenceDate?: Date): Promise<ScheduledLookupRow[]>;
+  claimRun(lookupId: number, fireDate: string, nowMs?: number): Promise<ClaimRunResult>;
+  recordRunSuccess(runId: number, sentAt?: number): Promise<void>;
+  recordRunFailure(runId: number, error: string): Promise<void>;
+  getLatestRun(lookupId: number): Promise<ScheduledLookupRunRow | undefined>;
+  getRunsForLookup(lookupId: number): Promise<ScheduledLookupRunRow[]>;
 }
 
-type RawLookupRow = {
-  id: number;
-  chat_id: string;
-  instruction: string;
-  recurrence: string;
-  hour: number;
-  minute: number;
-  weekday: number | null;
-  day_of_month: number | null;
-  active: number;
-  created_by: string;
-  created_at: number;
-  updated_at: number;
-};
-
-type RawRunRow = {
-  id: number;
-  lookup_id: number;
-  fire_date: string;
-  status: string;
-  attempt_count: number;
-  last_error: string | null;
-  sent_at: number | null;
-  started_at: number;
-};
-
-function mapLookupRow(raw: RawLookupRow): ScheduledLookupRow {
+function mapLookupRow(raw: any): ScheduledLookupRow {
   return {
-    id: raw.id,
-    chatId: raw.chat_id,
-    instruction: raw.instruction,
+    id: Number(raw.id),
+    chatId: String(raw.chat_id ?? raw.chatId),
+    instruction: String(raw.instruction),
     recurrence: raw.recurrence as LookupRecurrence,
-    hour: raw.hour,
-    minute: raw.minute,
-    weekday: raw.weekday,
-    dayOfMonth: raw.day_of_month,
+    hour: Number(raw.hour),
+    minute: Number(raw.minute),
+    weekday: raw.weekday !== null && raw.weekday !== undefined ? Number(raw.weekday) : null,
+    dayOfMonth:
+      (raw.day_of_month ?? raw.dayOfMonth) !== null && (raw.day_of_month ?? raw.dayOfMonth) !== undefined
+        ? Number(raw.day_of_month ?? raw.dayOfMonth)
+        : null,
     active: Boolean(raw.active),
-    createdBy: raw.created_by,
-    createdAt: raw.created_at,
-    updatedAt: raw.updated_at,
+    createdBy: String(raw.created_by ?? raw.createdBy),
+    createdAt: Number(raw.created_at ?? raw.createdAt),
+    updatedAt: Number(raw.updated_at ?? raw.updatedAt),
   };
 }
 
-function mapRunRow(raw: RawRunRow): ScheduledLookupRunRow {
+function mapRunRow(raw: any): ScheduledLookupRunRow {
   return {
-    id: raw.id,
-    lookupId: raw.lookup_id,
-    fireDate: raw.fire_date,
+    id: Number(raw.id),
+    lookupId: Number(raw.lookup_id ?? raw.lookupId),
+    fireDate: String(raw.fire_date ?? raw.fireDate),
     status: raw.status as RunStatus,
-    attemptCount: raw.attempt_count,
-    lastError: raw.last_error,
-    sentAt: raw.sent_at,
-    startedAt: raw.started_at,
+    attemptCount: Number(raw.attempt_count ?? raw.attemptCount),
+    lastError: (raw.last_error ?? raw.lastError) ? String(raw.last_error ?? raw.lastError) : null,
+    sentAt:
+      (raw.sent_at ?? raw.sentAt) !== null && (raw.sent_at ?? raw.sentAt) !== undefined
+        ? Number(raw.sent_at ?? raw.sentAt)
+        : null,
+    startedAt: Number(raw.started_at ?? raw.startedAt),
   };
 }
 
@@ -176,63 +156,70 @@ export function isTimeDue(
 }
 
 export function createLookupRepository(db: SqliteDatabase): LookupRepository {
-  const insertLookupStmt = db.prepare(`
-    INSERT INTO scheduled_lookups (
-      chat_id, instruction, recurrence, hour, minute, weekday, day_of_month, active, created_by, created_at, updated_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const getByIdStmt = db.prepare("SELECT * FROM scheduled_lookups WHERE id = ?");
-  const deleteByIdStmt = db.prepare("DELETE FROM scheduled_lookups WHERE id = ?");
-
   const repo: LookupRepository = {
-    createLookup(input: CreateLookupInput): ScheduledLookupRow {
+    async createLookup(input: CreateLookupInput): Promise<ScheduledLookupRow> {
       const now = Date.now();
       const active = input.active !== undefined ? (input.active ? 1 : 0) : 1;
       const weekday = input.weekday !== undefined ? input.weekday : null;
       const dayOfMonth = input.dayOfMonth !== undefined ? input.dayOfMonth : null;
 
-      const info = insertLookupStmt.run(
-        input.chatId,
-        input.instruction.trim(),
-        input.recurrence,
-        input.hour,
-        input.minute,
-        weekday,
-        dayOfMonth,
-        active,
-        input.createdBy,
-        now,
-        now,
-      );
+      const info = await db.execute({
+        sql: `INSERT INTO scheduled_lookups (
+          chat_id, instruction, recurrence, hour, minute, weekday, day_of_month, active, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          input.chatId,
+          input.instruction.trim(),
+          input.recurrence,
+          input.hour,
+          input.minute,
+          weekday,
+          dayOfMonth,
+          active,
+          input.createdBy,
+          now,
+          now,
+        ],
+      });
 
       const id = Number(info.lastInsertRowid);
-      return repo.getLookupById(id)!;
+      const created = await repo.getLookupById(id);
+      return created!;
     },
 
-    getLookupById(id: number): ScheduledLookupRow | undefined {
-      const row = getByIdStmt.get(id) as RawLookupRow | undefined;
-      return row ? mapLookupRow(row) : undefined;
-    },
-
-    listLookups(chatId?: string): ScheduledLookupWithLastRun[] {
-      const lookups = chatId
-        ? (db.prepare("SELECT * FROM scheduled_lookups WHERE chat_id = ? ORDER BY id ASC").all(chatId) as RawLookupRow[])
-        : (db.prepare("SELECT * FROM scheduled_lookups ORDER BY id ASC").all() as RawLookupRow[]);
-
-      return lookups.map((raw) => {
-        const lookup = mapLookupRow(raw);
-        const lastRun = repo.getLatestRun(lookup.id);
-        return {
-          ...lookup,
-          lastRun,
-        };
+    async getLookupById(id: number): Promise<ScheduledLookupRow | undefined> {
+      const res = await db.execute({
+        sql: "SELECT * FROM scheduled_lookups WHERE id = ?",
+        args: [id],
       });
+      return res.rows[0] ? mapLookupRow(res.rows[0]) : undefined;
     },
 
-    updateLookup(id: number, updates: UpdateLookupInput): ScheduledLookupRow | undefined {
-      const existing = repo.getLookupById(id);
+    async listLookups(chatId?: string): Promise<ScheduledLookupWithLastRun[]> {
+      const res = chatId
+        ? await db.execute({
+            sql: "SELECT * FROM scheduled_lookups WHERE chat_id = ? ORDER BY id ASC",
+            args: [chatId],
+          })
+        : await db.execute({
+            sql: "SELECT * FROM scheduled_lookups ORDER BY id ASC",
+            args: [],
+          });
+
+      const lookups = res.rows.map(mapLookupRow);
+      return Promise.all(
+        lookups.map(async (lookup) => {
+          const lastRun = await repo.getLatestRun(lookup.id);
+          return {
+            ...lookup,
+            lastRun,
+          };
+        }),
+      );
+    },
+
+    async updateLookup(id: number, updates: UpdateLookupInput): Promise<ScheduledLookupRow | undefined> {
+      const existing = await repo.getLookupById(id);
       if (!existing) return undefined;
 
       const instruction = updates.instruction !== undefined ? updates.instruction.trim() : existing.instruction;
@@ -241,39 +228,45 @@ export function createLookupRepository(db: SqliteDatabase): LookupRepository {
       const minute = updates.minute !== undefined ? updates.minute : existing.minute;
       const weekday = updates.weekday !== undefined ? updates.weekday : existing.weekday;
       const dayOfMonth = updates.dayOfMonth !== undefined ? updates.dayOfMonth : existing.dayOfMonth;
-      const active = updates.active !== undefined ? (updates.active ? 1 : 0) : (existing.active ? 1 : 0);
+      const active = updates.active !== undefined ? (updates.active ? 1 : 0) : existing.active ? 1 : 0;
       const updatedAt = Date.now();
 
-      db.prepare(`
-        UPDATE scheduled_lookups
-        SET instruction = ?, recurrence = ?, hour = ?, minute = ?, weekday = ?, day_of_month = ?, active = ?, updated_at = ?
-        WHERE id = ?
-      `).run(instruction, recurrence, hour, minute, weekday, dayOfMonth, active, updatedAt, id);
+      await db.execute({
+        sql: `UPDATE scheduled_lookups
+              SET instruction = ?, recurrence = ?, hour = ?, minute = ?, weekday = ?, day_of_month = ?, active = ?, updated_at = ?
+              WHERE id = ?`,
+        args: [instruction, recurrence, hour, minute, weekday, dayOfMonth, active, updatedAt, id],
+      });
 
       return repo.getLookupById(id);
     },
 
-    cancelLookup(id: number): boolean {
-      const result = deleteByIdStmt.run(id);
-      return result.changes > 0;
+    async cancelLookup(id: number): Promise<boolean> {
+      const res = await db.execute({
+        sql: "DELETE FROM scheduled_lookups WHERE id = ?",
+        args: [id],
+      });
+      return res.rowsAffected > 0;
     },
 
-    findDueLookups(referenceDate = new Date()): ScheduledLookupRow[] {
+    async findDueLookups(referenceDate = new Date()): Promise<ScheduledLookupRow[]> {
       const { dateStr } = getVnTime(referenceDate);
-      const activeLookups = db
-        .prepare("SELECT * FROM scheduled_lookups WHERE active = 1")
-        .all() as RawLookupRow[];
-
+      const res = await db.execute({
+        sql: "SELECT * FROM scheduled_lookups WHERE active = 1",
+        args: [],
+      });
+      const activeLookups = res.rows.map(mapLookupRow);
       const due: ScheduledLookupRow[] = [];
 
-      for (const raw of activeLookups) {
-        const lookup = mapLookupRow(raw);
+      for (const lookup of activeLookups) {
         if (!isScheduleMatch(lookup, referenceDate)) continue;
         if (!isTimeDue(lookup, referenceDate)) continue;
 
-        const run = db
-          .prepare("SELECT * FROM scheduled_lookup_runs WHERE lookup_id = ? AND fire_date = ?")
-          .get(lookup.id, dateStr) as RawRunRow | undefined;
+        const runRes = await db.execute({
+          sql: "SELECT * FROM scheduled_lookup_runs WHERE lookup_id = ? AND fire_date = ?",
+          args: [lookup.id, dateStr],
+        });
+        const run = runRes.rows[0] ? mapRunRow(runRes.rows[0]) : undefined;
 
         if (!run) {
           due.push(lookup);
@@ -285,12 +278,12 @@ export function createLookupRepository(db: SqliteDatabase): LookupRepository {
         }
 
         if (run.status === "running") {
-          if (run.attempt_count >= 3) {
+          if (run.attemptCount >= 3) {
             continue;
           }
           const nowMs = referenceDate.getTime();
           const tenMinutesMs = 10 * 60 * 1000;
-          if (nowMs - run.started_at >= tenMinutesMs || run.started_at === 0) {
+          if (nowMs - run.startedAt >= tenMinutesMs || run.startedAt === 0) {
             due.push(lookup);
           }
         }
@@ -299,33 +292,43 @@ export function createLookupRepository(db: SqliteDatabase): LookupRepository {
       return due;
     },
 
-    claimRun(lookupId: number, fireDate: string, nowMs = Date.now()): ClaimRunResult {
-      return db.transaction((): ClaimRunResult => {
-        const existing = db
-          .prepare("SELECT * FROM scheduled_lookup_runs WHERE lookup_id = ? AND fire_date = ?")
-          .get(lookupId, fireDate) as RawRunRow | undefined;
+    async claimRun(lookupId: number, fireDate: string, nowMs = Date.now()): Promise<ClaimRunResult> {
+      const tx = await db.transaction("write");
+      try {
+        const existingRes = await tx.execute({
+          sql: "SELECT * FROM scheduled_lookup_runs WHERE lookup_id = ? AND fire_date = ?",
+          args: [lookupId, fireDate],
+        });
 
-        if (!existing) {
-          const insertStmt = db.prepare(`
-            INSERT INTO scheduled_lookup_runs (lookup_id, fire_date, status, attempt_count, last_error, sent_at, started_at)
-            VALUES (?, ?, 'running', 1, NULL, NULL, ?)
-          `);
-          const info = insertStmt.run(lookupId, fireDate, nowMs);
-          const newRunId = Number(info.lastInsertRowid);
-          const run = mapRunRow(
-            db.prepare("SELECT * FROM scheduled_lookup_runs WHERE id = ?").get(newRunId) as RawRunRow,
-          );
+        if (!existingRes.rows[0]) {
+          const insertRes = await tx.execute({
+            sql: `INSERT INTO scheduled_lookup_runs (lookup_id, fire_date, status, attempt_count, last_error, sent_at, started_at)
+                  VALUES (?, ?, 'running', 1, NULL, NULL, ?)`,
+            args: [lookupId, fireDate, nowMs],
+          });
+          const newRunId = Number(insertRes.lastInsertRowid);
+          const runRes = await tx.execute({
+            sql: "SELECT * FROM scheduled_lookup_runs WHERE id = ?",
+            args: [newRunId],
+          });
+          await tx.commit();
+          const run = mapRunRow(runRes.rows[0]);
           return { claimed: true, run };
         }
 
-        const run = mapRunRow(existing);
+        const run = mapRunRow(existingRes.rows[0]);
         if (run.status === "sent" || run.status === "failed") {
+          await tx.commit();
           return { claimed: false, run, reason: "already_completed" };
         }
 
         if (run.status === "running") {
           if (run.attemptCount >= 3) {
-            db.prepare("UPDATE scheduled_lookup_runs SET status = 'failed' WHERE id = ?").run(run.id);
+            await tx.execute({
+              sql: "UPDATE scheduled_lookup_runs SET status = 'failed' WHERE id = ?",
+              args: [run.id],
+            });
+            await tx.commit();
             return { claimed: false, run: { ...run, status: "failed" }, reason: "max_attempts" };
           }
 
@@ -333,64 +336,83 @@ export function createLookupRepository(db: SqliteDatabase): LookupRepository {
           if (nowMs - run.startedAt >= tenMinutesMs || run.startedAt === 0) {
             // Reclaim crashed attempt
             const newCount = run.attemptCount + 1;
-            db.prepare(`
-              UPDATE scheduled_lookup_runs
-              SET status = 'running', attempt_count = ?, started_at = ?
-              WHERE id = ?
-            `).run(newCount, nowMs, run.id);
+            await tx.execute({
+              sql: `UPDATE scheduled_lookup_runs
+                    SET status = 'running', attempt_count = ?, started_at = ?
+                    WHERE id = ?`,
+              args: [newCount, nowMs, run.id],
+            });
 
-            const updated = mapRunRow(
-              db.prepare("SELECT * FROM scheduled_lookup_runs WHERE id = ?").get(run.id) as RawRunRow,
-            );
+            const updatedRes = await tx.execute({
+              sql: "SELECT * FROM scheduled_lookup_runs WHERE id = ?",
+              args: [run.id],
+            });
+            await tx.commit();
+            const updated = mapRunRow(updatedRes.rows[0]);
             return { claimed: true, run: updated };
           }
 
+          await tx.commit();
           return { claimed: false, run, reason: "in_progress" };
         }
 
+        await tx.commit();
         return { claimed: false, run, reason: "unknown" };
-      })();
-    },
-
-    recordRunSuccess(runId: number, sentAt = Date.now()): void {
-      db.prepare(`
-        UPDATE scheduled_lookup_runs
-        SET status = 'sent', sent_at = ?
-        WHERE id = ?
-      `).run(sentAt, runId);
-    },
-
-    recordRunFailure(runId: number, error: string): void {
-      const row = db.prepare("SELECT * FROM scheduled_lookup_runs WHERE id = ?").get(runId) as RawRunRow | undefined;
-      if (!row) return;
-
-      if (row.attempt_count >= 3) {
-        db.prepare(`
-          UPDATE scheduled_lookup_runs
-          SET status = 'failed', last_error = ?
-          WHERE id = ?
-        `).run(error, runId);
-      } else {
-        db.prepare(`
-          UPDATE scheduled_lookup_runs
-          SET last_error = ?, started_at = 0
-          WHERE id = ?
-        `).run(error, runId);
+      } catch (err) {
+        await tx.rollback();
+        throw err;
       }
     },
 
-    getLatestRun(lookupId: number): ScheduledLookupRunRow | undefined {
-      const row = db
-        .prepare("SELECT * FROM scheduled_lookup_runs WHERE lookup_id = ? ORDER BY id DESC LIMIT 1")
-        .get(lookupId) as RawRunRow | undefined;
-      return row ? mapRunRow(row) : undefined;
+    async recordRunSuccess(runId: number, sentAt = Date.now()): Promise<void> {
+      await db.execute({
+        sql: `UPDATE scheduled_lookup_runs
+              SET status = 'sent', sent_at = ?
+              WHERE id = ?`,
+        args: [sentAt, runId],
+      });
     },
 
-    getRunsForLookup(lookupId: number): ScheduledLookupRunRow[] {
-      const rows = db
-        .prepare("SELECT * FROM scheduled_lookup_runs WHERE lookup_id = ? ORDER BY id ASC")
-        .all(lookupId) as RawRunRow[];
-      return rows.map(mapRunRow);
+    async recordRunFailure(runId: number, error: string): Promise<void> {
+      const res = await db.execute({
+        sql: "SELECT * FROM scheduled_lookup_runs WHERE id = ?",
+        args: [runId],
+      });
+      const row = res.rows[0];
+      if (!row) return;
+
+      const attemptCount = Number(row.attempt_count ?? row.attemptCount);
+      if (attemptCount >= 3) {
+        await db.execute({
+          sql: `UPDATE scheduled_lookup_runs
+                SET status = 'failed', last_error = ?
+                WHERE id = ?`,
+          args: [error, runId],
+        });
+      } else {
+        await db.execute({
+          sql: `UPDATE scheduled_lookup_runs
+                SET last_error = ?, started_at = 0
+                WHERE id = ?`,
+          args: [error, runId],
+        });
+      }
+    },
+
+    async getLatestRun(lookupId: number): Promise<ScheduledLookupRunRow | undefined> {
+      const res = await db.execute({
+        sql: "SELECT * FROM scheduled_lookup_runs WHERE lookup_id = ? ORDER BY id DESC LIMIT 1",
+        args: [lookupId],
+      });
+      return res.rows[0] ? mapRunRow(res.rows[0]) : undefined;
+    },
+
+    async getRunsForLookup(lookupId: number): Promise<ScheduledLookupRunRow[]> {
+      const res = await db.execute({
+        sql: "SELECT * FROM scheduled_lookup_runs WHERE lookup_id = ? ORDER BY id ASC",
+        args: [lookupId],
+      });
+      return res.rows.map(mapRunRow);
     },
   };
 

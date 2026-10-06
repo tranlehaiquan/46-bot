@@ -14,7 +14,7 @@ export function createListTools(
       name: z.string().describe("Tên danh sách cần tạo"),
     }),
     execute: async ({ name }) => {
-      const list = repo.getOrCreateList(chatId, name);
+      const list = await repo.getOrCreateList(chatId, name);
       return {
         success: true,
         listId: list.id,
@@ -31,8 +31,8 @@ export function createListTools(
       items: z.array(z.string()).min(1).describe("Mảng các món cần thêm (ví dụ: ['trứng', 'sữa'])"),
     }),
     execute: async ({ listName, items }) => {
-      const list = repo.getOrCreateList(chatId, listName);
-      const added = repo.addItems(list.id, items, senderName);
+      const list = await repo.getOrCreateList(chatId, listName);
+      const added = await repo.addItems(list.id, items, senderName);
       return {
         success: true,
         listName: list.name,
@@ -52,14 +52,14 @@ export function createListTools(
     }),
     execute: async ({ listName, itemText, done }) => {
       const isDone = done ?? true;
-      const list = repo.getListByName(chatId, listName);
+      const list = await repo.getListByName(chatId, listName);
       if (!list) {
         return {
           success: false,
           message: `Không tìm thấy danh sách "${listName}".`,
         };
       }
-      const updated = repo.checkItem(list.id, itemText, isDone);
+      const updated = await repo.checkItem(list.id, itemText, isDone);
       if (!updated) {
         return {
           success: false,
@@ -83,14 +83,14 @@ export function createListTools(
       itemText: z.string().describe("Tên hoặc từ khóa của món cần xóa"),
     }),
     execute: async ({ listName, itemText }) => {
-      const list = repo.getListByName(chatId, listName);
+      const list = await repo.getListByName(chatId, listName);
       if (!list) {
         return {
           success: false,
           message: `Không tìm thấy danh sách "${listName}".`,
         };
       }
-      const removed = repo.removeItem(list.id, itemText);
+      const removed = await repo.removeItem(list.id, itemText);
       if (!removed) {
         return {
           success: false,
@@ -113,7 +113,7 @@ export function createListTools(
     }),
     execute: async ({ listName }) => {
       if (listName && listName.trim().length > 0) {
-        const listWithItems = repo.getListWithItems(chatId, listName);
+        const listWithItems = await repo.getListWithItems(chatId, listName);
         if (!listWithItems) {
           return {
             success: false,
@@ -133,7 +133,7 @@ export function createListTools(
         };
       }
 
-      const allLists = repo.getListsByChat(chatId);
+      const allLists = await repo.getListsByChat(chatId);
       return {
         success: true,
         lists: allLists.map((l) => ({ id: l.id, name: l.name })),

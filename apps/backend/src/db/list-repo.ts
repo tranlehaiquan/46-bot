@@ -21,104 +21,57 @@ export type ListWithItems = ListRow & {
 };
 
 export interface ListRepository {
-  getOrCreateList(chatId: string, name: string): ListRow;
-  getListByName(chatId: string, name: string): ListRow | undefined;
-  getListsByChat(chatId: string): ListRow[];
-  addItem(listId: number, text: string, addedBy: string): ListItemRow;
-  addItems(listId: number, texts: string[], addedBy: string): ListItemRow[];
-  getItems(listId: number): ListItemRow[];
-  getListWithItems(chatId: string, name: string): ListWithItems | undefined;
-  checkItem(listId: number, itemIdOrText: number | string, done: boolean): ListItemRow | undefined;
-  removeItem(listId: number, itemIdOrText: number | string): boolean;
-  deleteList(chatId: string, name: string): boolean;
+  getOrCreateList(chatId: string, name: string): Promise<ListRow>;
+  getListByName(chatId: string, name: string): Promise<ListRow | undefined>;
+  getListsByChat(chatId: string): Promise<ListRow[]>;
+  addItem(listId: number, text: string, addedBy: string): Promise<ListItemRow>;
+  addItems(listId: number, texts: string[], addedBy: string): Promise<ListItemRow[]>;
+  getItems(listId: number): Promise<ListItemRow[]>;
+  getListWithItems(chatId: string, name: string): Promise<ListWithItems | undefined>;
+  checkItem(listId: number, itemIdOrText: number | string, done: boolean): Promise<ListItemRow | undefined>;
+  removeItem(listId: number, itemIdOrText: number | string): Promise<boolean>;
+  deleteList(chatId: string, name: string): Promise<boolean>;
+}
+
+function normalize(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function mapListRow(row: any): ListRow {
+  return {
+    id: Number(row.id),
+    chatId: String(row.chatId),
+    name: String(row.name),
+    createdAt: Number(row.createdAt),
+  };
+}
+
+function mapItemRow(row: any): ListItemRow {
+  return {
+    id: Number(row.id),
+    listId: Number(row.listId),
+    text: String(row.text),
+    done: Number(row.done) === 1,
+    addedBy: String(row.addedBy),
+    ts: Number(row.ts),
+  };
 }
 
 export function createListRepository(db: SqliteDatabase): ListRepository {
-  const getListStmt = db.prepare(`
-    SELECT id, chat_id as chatId, name, created_at as createdAt
-    FROM lists
-    WHERE chat_id = ? AND normalized_name = ?
-  `);
-
-  const insertListStmt = db.prepare(`
-    INSERT INTO lists (chat_id, name, normalized_name, created_at)
-    VALUES (?, TRIM(?), ?, ?)
-  `);
-
-  const getListsByChatStmt = db.prepare(`
-    SELECT id, chat_id as chatId, name, created_at as createdAt
-    FROM lists
-    WHERE chat_id = ?
-    ORDER BY name ASC
-  `);
-
-  const insertItemStmt = db.prepare(`
-    INSERT INTO list_items (list_id, text, done, added_by, ts)
-    VALUES (?, TRIM(?), 0, ?, ?)
-  `);
-
-  const getItemsStmt = db.prepare(`
-    SELECT id, list_id as listId, text, done, added_by as addedBy, ts
-    FROM list_items
-    WHERE list_id = ?
-    ORDER BY done ASC, ts ASC, id ASC
-  `);
-
-  const findItemByIdStmt = db.prepare(`
-    SELECT id, list_id as listId, text, done, added_by as addedBy, ts
-    FROM list_items
-    WHERE list_id = ? AND id = ?
-  `);
-
-  const findItemByTextStmt = db.prepare(`
-    SELECT id, list_id as listId, text, done, added_by as addedBy, ts
-    FROM list_items
-    WHERE list_id = ? AND LOWER(text) LIKE ?
-    ORDER BY id ASC
-    LIMIT 1
-  `);
-
-  const updateItemDoneStmt = db.prepare(`
-    UPDATE list_items
-    SET done = ?
-    WHERE id = ?
-  `);
-
-  const deleteItemByIdStmt = db.prepare(`
-    DELETE FROM list_items
-    WHERE list_id = ? AND id = ?
-  `);
-
-  const deleteListStmt = db.prepare(`
-    DELETE FROM lists
-    WHERE chat_id = ? AND normalized_name = ?
-  `);
-
-  function normalize(name: string): string {
-    return name.trim().toLowerCase();
-  }
-
-  function mapItemRow(row: { id: number; listId: number; text: string; done: number; addedBy: string; ts: number }): ListItemRow {
-    return {
-      id: row.id,
-      listId: row.listId,
-      text: row.text,
-      done: row.done === 1,
-      addedBy: row.addedBy,
-      ts: row.ts,
-    };
-  }
-
   const repo: ListRepository = {
-    getOrCreateList(chatId: string, name: string): ListRow {
+    async getOrCreateList(chatId: string, name: string): Promise<ListRow> {
       const trimmed = name.trim();
       const norm = normalize(trimmed);
-      const existing = getListStmt.get(chatId, norm) as ListRow | undefined;
+      const existing = await this.getListByName(chatId, norm);
       if (existing) {
         return existing;
       }
       const now = Date.now();
-      const result = insertListStmt.run(chatId, trimmed, norm, now);
+      const result = await db.execute({
+        sql: `INSERT INTO lists (chat_id, name, normalized_name, created_at)
+              VALUES (?, TRIM(?), ?, ?)`,
+        args: [chatId, trimmed, norm, now],
+      });
       return {
         id: Number(result.lastInsertRowid),
         chatId,
@@ -127,98 +80,144 @@ export function createListRepository(db: SqliteDatabase): ListRepository {
       };
     },
 
-    getListByName(chatId: string, name: string): ListRow | undefined {
-      return getListStmt.get(chatId, normalize(name)) as ListRow | undefined;
+    async getListByName(chatId: string, name: string): Promise<ListRow | undefined> {
+      const res = await db.execute({
+        sql: `SELECT id, chat_id as chatId, name, created_at as createdAt
+              FROM lists
+              WHERE chat_id = ? AND normalized_name = ?`,
+        args: [chatId, normalize(name)],
+      });
+      return res.rows[0] ? mapListRow(res.rows[0]) : undefined;
     },
 
-    getListsByChat(chatId: string): ListRow[] {
-      return getListsByChatStmt.all(chatId) as ListRow[];
+    async getListsByChat(chatId: string): Promise<ListRow[]> {
+      const res = await db.execute({
+        sql: `SELECT id, chat_id as chatId, name, created_at as createdAt
+              FROM lists
+              WHERE chat_id = ?
+              ORDER BY name ASC`,
+        args: [chatId],
+      });
+      return res.rows.map(mapListRow);
     },
 
-    addItem(listId: number, text: string, addedBy: string): ListItemRow {
+    async addItem(listId: number, text: string, addedBy: string): Promise<ListItemRow> {
       const now = Date.now();
-      const result = insertItemStmt.run(listId, text.trim(), addedBy, now);
+      const trimmed = text.trim();
+      const result = await db.execute({
+        sql: `INSERT INTO list_items (list_id, text, done, added_by, ts)
+              VALUES (?, ?, 0, ?, ?)`,
+        args: [listId, trimmed, addedBy, now],
+      });
       return {
         id: Number(result.lastInsertRowid),
         listId,
-        text: text.trim(),
+        text: trimmed,
         done: false,
         addedBy,
         ts: now,
       };
     },
 
-    addItems(listId: number, texts: string[], addedBy: string): ListItemRow[] {
+    async addItems(listId: number, texts: string[], addedBy: string): Promise<ListItemRow[]> {
       const items: ListItemRow[] = [];
-      const tx = db.transaction(() => {
-        for (const t of texts) {
-          const trimmed = t.trim();
-          if (trimmed.length > 0) {
-            items.push(repo.addItem(listId, trimmed, addedBy));
-          }
+      for (const t of texts) {
+        const trimmed = t.trim();
+        if (trimmed.length > 0) {
+          items.push(await this.addItem(listId, trimmed, addedBy));
         }
-      });
-      tx();
+      }
       return items;
     },
 
-    getItems(listId: number): ListItemRow[] {
-      const rows = getItemsStmt.all(listId) as Array<{
-        id: number;
-        listId: number;
-        text: string;
-        done: number;
-        addedBy: string;
-        ts: number;
-      }>;
-      return rows.map(mapItemRow);
+    async getItems(listId: number): Promise<ListItemRow[]> {
+      const res = await db.execute({
+        sql: `SELECT id, list_id as listId, text, done, added_by as addedBy, ts
+              FROM list_items
+              WHERE list_id = ?
+              ORDER BY done ASC, ts ASC, id ASC`,
+        args: [listId],
+      });
+      return res.rows.map(mapItemRow);
     },
 
-    getListWithItems(chatId: string, name: string): ListWithItems | undefined {
-      const list = repo.getListByName(chatId, name);
+    async getListWithItems(chatId: string, name: string): Promise<ListWithItems | undefined> {
+      const list = await this.getListByName(chatId, name);
       if (!list) {
         return undefined;
       }
-      const items = repo.getItems(list.id);
+      const items = await this.getItems(list.id);
       return { ...list, items };
     },
 
-    checkItem(listId: number, itemIdOrText: number | string, done: boolean): ListItemRow | undefined {
+    async checkItem(listId: number, itemIdOrText: number | string, done: boolean): Promise<ListItemRow | undefined> {
       let item: ListItemRow | undefined;
       if (typeof itemIdOrText === "number") {
-        const row = findItemByIdStmt.get(listId, itemIdOrText) as any;
-        if (row) item = mapItemRow(row);
+        const res = await db.execute({
+          sql: `SELECT id, list_id as listId, text, done, added_by as addedBy, ts
+                FROM list_items
+                WHERE list_id = ? AND id = ?`,
+          args: [listId, itemIdOrText],
+        });
+        if (res.rows[0]) item = mapItemRow(res.rows[0]);
       } else {
         const query = `%${normalize(itemIdOrText)}%`;
-        const row = findItemByTextStmt.get(listId, query) as any;
-        if (row) item = mapItemRow(row);
+        const res = await db.execute({
+          sql: `SELECT id, list_id as listId, text, done, added_by as addedBy, ts
+                FROM list_items
+                WHERE list_id = ? AND LOWER(text) LIKE ?
+                ORDER BY id ASC
+                LIMIT 1`,
+          args: [listId, query],
+        });
+        if (res.rows[0]) item = mapItemRow(res.rows[0]);
       }
 
       if (!item) {
         return undefined;
       }
 
-      updateItemDoneStmt.run(done ? 1 : 0, item.id);
+      await db.execute({
+        sql: `UPDATE list_items SET done = ? WHERE id = ?`,
+        args: [done ? 1 : 0, item.id],
+      });
       return { ...item, done };
     },
 
-    removeItem(listId: number, itemIdOrText: number | string): boolean {
+    async removeItem(listId: number, itemIdOrText: number | string): Promise<boolean> {
       if (typeof itemIdOrText === "number") {
-        const result = deleteItemByIdStmt.run(listId, itemIdOrText);
-        return result.changes > 0;
+        const res = await db.execute({
+          sql: `DELETE FROM list_items WHERE list_id = ? AND id = ?`,
+          args: [listId, itemIdOrText],
+        });
+        return res.rowsAffected > 0;
       }
       const query = `%${normalize(itemIdOrText)}%`;
-      const row = findItemByTextStmt.get(listId, query) as any;
-      if (!row) {
+      const searchRes = await db.execute({
+        sql: `SELECT id, list_id as listId, text, done, added_by as addedBy, ts
+              FROM list_items
+              WHERE list_id = ? AND LOWER(text) LIKE ?
+              ORDER BY id ASC
+              LIMIT 1`,
+        args: [listId, query],
+      });
+      if (!searchRes.rows[0]) {
         return false;
       }
-      const result = deleteItemByIdStmt.run(listId, row.id);
-      return result.changes > 0;
+      const item = mapItemRow(searchRes.rows[0]);
+      const res = await db.execute({
+        sql: `DELETE FROM list_items WHERE list_id = ? AND id = ?`,
+        args: [listId, item.id],
+      });
+      return res.rowsAffected > 0;
     },
 
-    deleteList(chatId: string, name: string): boolean {
-      const result = deleteListStmt.run(chatId, normalize(name));
-      return result.changes > 0;
+    async deleteList(chatId: string, name: string): Promise<boolean> {
+      const res = await db.execute({
+        sql: `DELETE FROM lists WHERE chat_id = ? AND normalized_name = ?`,
+        args: [chatId, normalize(name)],
+      });
+      return res.rowsAffected > 0;
     },
   };
 

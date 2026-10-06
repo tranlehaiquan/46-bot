@@ -9,7 +9,7 @@ describe("Event tools", () => {
   it("executes event_add, event_list_upcoming, event_update, and event_delete", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createEventsRepository(db);
       const tools = createEventTools(repo, { chatId: "chat-events", senderName: "Bố" });
 
@@ -98,7 +98,7 @@ describe("Event tools", () => {
   it("handles non-existent event updates and deletes gracefully", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createEventsRepository(db);
       const tools = createEventTools(repo, { chatId: "chat-events", senderName: "Mẹ" });
 
@@ -123,11 +123,11 @@ describe("Event tools", () => {
   it("executes event_send_image for weekly, monthly, and yearly scopes and dispatches photo", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createEventsRepository(db);
 
       // Add a couple of events
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-events",
         title: "Sinh nhật Bé",
         kind: "birthday",
@@ -137,7 +137,7 @@ describe("Event tools", () => {
         year: 2026,
         createdBy: "Ba",
       });
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-events",
         title: "Giỗ Bà Cố",
         kind: "gio",

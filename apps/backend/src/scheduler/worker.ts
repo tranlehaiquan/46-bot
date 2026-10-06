@@ -36,7 +36,7 @@ export async function processMorningBriefing(
   const dateStr = formatUtc7DateStr(referenceDate);
 
   for (const chatId of channels) {
-    const allUpcoming = eventsRepo.listUpcomingEvents(chatId, 7, referenceDate);
+    const allUpcoming = await eventsRepo.listUpcomingEvents(chatId, 7, referenceDate);
     const todayEvents = allUpcoming.filter((e) => e.daysRemaining === 0);
     const upcomingMilestones = allUpcoming.filter(
       (e) =>
@@ -80,8 +80,8 @@ export async function processWeeklySummary(
   const dateStr = formatUtc7DateStr(referenceDate);
 
   for (const chatId of channels) {
-    const weekEvents = eventsRepo
-      .listUpcomingEvents(chatId, 7, referenceDate)
+    const weekEvents = (await eventsRepo
+      .listUpcomingEvents(chatId, 7, referenceDate))
       .filter((e) => e.daysRemaining > 0);
 
     const messageText = formatWeeklyOutlook({
@@ -107,19 +107,19 @@ export async function processEventReminders(
   referenceDate = deps.clock?.now() ?? new Date(),
 ): Promise<void> {
   const { eventsRepo, zalo, log, clock = { now: () => new Date() } } = deps;
-  const dueReminders: DueReminder[] = eventsRepo.findEventsDueForReminder(referenceDate);
+  const dueReminders: DueReminder[] = await eventsRepo.findEventsDueForReminder(referenceDate);
 
   for (const due of dueReminders) {
     const { event, occurrenceDateStr } = due;
 
-    if (eventsRepo.isReminderSent(event.id, occurrenceDateStr)) {
+    if (await eventsRepo.isReminderSent(event.id, occurrenceDateStr)) {
       continue;
     }
 
     const messageText = formatEventReminder(due);
     try {
       await zalo.sendMessage(event.chatId, messageText);
-      eventsRepo.recordReminderSent(event.id, occurrenceDateStr, clock.now().getTime());
+      await eventsRepo.recordReminderSent(event.id, occurrenceDateStr, clock.now().getTime());
       log?.info({
         event: "scheduler_reminder_sent",
         eventId: event.id,
@@ -148,13 +148,13 @@ export async function processSingleLookup(
     return;
   }
 
-  const lookup = lookupsRepo.getLookupById(data.lookupId);
+  const lookup = await lookupsRepo.getLookupById(data.lookupId);
   if (!lookup || !lookup.active) {
     return;
   }
 
   if (channelsRepo) {
-    const channel = channelsRepo.getChannel(lookup.chatId);
+    const channel = await channelsRepo.getChannel(lookup.chatId);
     if (channel && channel.status !== "active") {
       log?.info({
         event: "scheduler_lookup_skipped_channel",
@@ -167,16 +167,16 @@ export async function processSingleLookup(
 
   const injectionCheck = detectPromptInjection(lookup.instruction);
   if (injectionCheck.isInjection) {
-    const claim = lookupsRepo.claimRun(lookup.id, data.dateStr, referenceDate.getTime());
+    const claim = await lookupsRepo.claimRun(lookup.id, data.dateStr, referenceDate.getTime());
     if (claim.claimed) {
-      lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
-      lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
-      lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
+      await lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
+      await lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
+      await lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
     }
     return;
   }
 
-  const claim = lookupsRepo.claimRun(lookup.id, data.dateStr, referenceDate.getTime());
+  const claim = await lookupsRepo.claimRun(lookup.id, data.dateStr, referenceDate.getTime());
   if (!claim.claimed) {
     return;
   }
@@ -216,7 +216,7 @@ export async function processSingleLookup(
       await zalo.sendMessage(lookup.chatId, chunk);
     }
 
-    lookupsRepo.recordRunSuccess(run.id, clock.now().getTime());
+    await lookupsRepo.recordRunSuccess(run.id, clock.now().getTime());
     log?.info({
       event: "scheduler_lookup_sent",
       lookupId: lookup.id,
@@ -225,7 +225,7 @@ export async function processSingleLookup(
     });
   } catch (error) {
     const err = error instanceof Error ? error.message : String(error);
-    lookupsRepo.recordRunFailure(run.id, err);
+    await lookupsRepo.recordRunFailure(run.id, err);
     log?.error({
       event: "scheduler_lookup_error",
       lookupId: lookup.id,
@@ -260,7 +260,7 @@ export async function processJob(
     case "due-lookups-tick": {
       if (!deps.lookupsRepo) break;
       const dateStr = formatUtc7DateStr(now);
-      const dueLookups = deps.lookupsRepo.findDueLookups(now);
+      const dueLookups = await deps.lookupsRepo.findDueLookups(now);
       for (const lookup of dueLookups) {
         await processSingleLookup(deps, { lookupId: lookup.id, dateStr }, now).catch(() => {});
       }
@@ -275,11 +275,11 @@ export async function processJob(
 
     case "event-reminder": {
       const data = job.data as EventReminderJobData;
-      const event = deps.eventsRepo.getEventById(data.eventId);
-      if (event && !deps.eventsRepo.isReminderSent(event.id, data.occurrenceDateStr)) {
+      const event = await deps.eventsRepo.getEventById(data.eventId);
+      if (event && !(await deps.eventsRepo.isReminderSent(event.id, data.occurrenceDateStr))) {
         const messageText = `🔔 Nhắc nhở: "${event.title}"!`;
         await deps.zalo.sendMessage(event.chatId, messageText);
-        deps.eventsRepo.recordReminderSent(event.id, data.occurrenceDateStr, now.getTime());
+        await deps.eventsRepo.recordReminderSent(event.id, data.occurrenceDateStr, now.getTime());
       }
       break;
     }

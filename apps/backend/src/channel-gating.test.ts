@@ -89,7 +89,7 @@ describe("Channel Delivery & Runtime Gating", () => {
   it("auto-discovers new channels into pending and replies with pending notice when addressed", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const channelRepo = createChannelRepository(db);
       const zalo = fakeZalo();
       const queue = new WorkQueue();
@@ -124,7 +124,7 @@ describe("Channel Delivery & Runtime Gating", () => {
       await queue.drain();
 
       // Verify channel was created with pending status
-      const ch1 = channelRepo.getChannel("group-auto-1");
+      const ch1 = await channelRepo.getChannel("group-auto-1");
       assert.ok(ch1);
       assert.equal(ch1.status, "pending");
       assert.equal(zalo.sends.length, 0);
@@ -163,7 +163,7 @@ describe("Channel Delivery & Runtime Gating", () => {
   it("handles transition from pending to active and allows conversations", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const channelRepo = createChannelRepository(db);
       const zalo = fakeZalo();
       const queue = new WorkQueue();
@@ -178,7 +178,7 @@ describe("Channel Delivery & Runtime Gating", () => {
       });
 
       // Initially channel is created as active by admin
-      channelRepo.upsertDiscovery({
+      await channelRepo.upsertDiscovery({
         chatId: "group-active-1",
         name: "Gia Đình 46",
         chatType: "GROUP",
@@ -219,7 +219,7 @@ describe("Channel Delivery & Runtime Gating", () => {
   it("completely silences disabled channels", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const channelRepo = createChannelRepository(db);
       const zalo = fakeZalo();
       const queue = new WorkQueue();
@@ -234,7 +234,7 @@ describe("Channel Delivery & Runtime Gating", () => {
       });
 
       // Channel is disabled
-      channelRepo.upsertDiscovery({
+      await channelRepo.upsertDiscovery({
         chatId: "group-disabled-1",
         name: "Disabled Group",
         chatType: "GROUP",
@@ -272,7 +272,7 @@ describe("Channel Delivery & Runtime Gating", () => {
   it("completes full end-to-end lifecycle: discovery -> pending notice -> admin approval -> active conversation", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const channelRepo = createChannelRepository(db);
       const zalo = fakeZalo();
       const queue = new WorkQueue();
@@ -309,7 +309,7 @@ describe("Channel Delivery & Runtime Gating", () => {
       await queue.drain();
 
       // Step 2: Channel is recorded as pending, and bot replied with pending notice
-      const channelBefore = channelRepo.getChannel("group-e2e-99");
+      const channelBefore = await channelRepo.getChannel("group-e2e-99");
       assert.ok(channelBefore);
       assert.equal(channelBefore.status, "pending");
       assert.equal(zalo.sends.length, 1);
@@ -332,7 +332,7 @@ describe("Channel Delivery & Runtime Gating", () => {
         payload: JSON.stringify({ status: "active", name: "Gia Đình Hạnh Phúc" }),
       });
       assert.equal(approveRes.statusCode, 200);
-      assert.equal(channelRepo.getChannel("group-e2e-99")?.status, "active");
+      assert.equal((await channelRepo.getChannel("group-e2e-99"))?.status, "active");
 
       // Step 5: User sends a new message to the bot
       const convoDelivery = deliveryPayload({
