@@ -56,7 +56,7 @@ describe("Admin REST API", () => {
   it("authenticates admin and rejects unauthorized access", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const app = buildServer({
         config: mockConfig(),
         log: createLogger(),
@@ -108,11 +108,11 @@ describe("Admin REST API", () => {
   it("manages channels lifecycle via API", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const channelRepo = createChannelRepository(db);
       const messageRepo = createMessageRepository(db);
       const zalo = fakeZalo();
-      channelRepo.upsertDiscovery({
+      await channelRepo.upsertDiscovery({
         chatId: "group-100",
         name: "Discovery Group",
         chatType: "GROUP",
@@ -152,7 +152,7 @@ describe("Admin REST API", () => {
       assert.equal(patchBody.channel.status, "active");
       assert.equal(patchBody.channel.name, "Official Group");
       assert.deepEqual(zalo.sends, [{ chatId: "group-100", text: getChannelActivatedMessage() }]);
-      assert.equal(messageRepo.getRecent("group-100")[0].content, getChannelActivatedMessage());
+      assert.equal((await messageRepo.getRecent("group-100"))[0].content, getChannelActivatedMessage());
 
       // Other transitions, including an unchanged active status, do not repeat the message.
       const repeatPatchRes = await app.inject({
@@ -173,11 +173,11 @@ describe("Admin REST API", () => {
   it("manages messages, sending direct messages, and viewing history", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const messageRepo = createMessageRepository(db);
       const zalo = fakeZalo();
 
-      messageRepo.insert({
+      await messageRepo.insert({
         chatId: "group-200",
         senderId: "u-1",
         senderName: "User 1",
@@ -215,7 +215,7 @@ describe("Admin REST API", () => {
       assert.equal(zalo.sends[0].text, "Direct reply from admin");
 
       // Verify message is saved to repo
-      const recent = messageRepo.getRecent("group-200");
+      const recent = await messageRepo.getRecent("group-200");
       assert.equal(recent.length, 2);
       assert.equal(recent[1].content, "Direct reply from admin");
       assert.equal(recent[1].role, "assistant");
@@ -229,7 +229,7 @@ describe("Admin REST API", () => {
   it("manages channel events and reminders", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const eventsRepo = createEventsRepository(db);
       const app = buildServer({
         config: mockConfig(),
@@ -292,7 +292,7 @@ describe("Admin REST API", () => {
       assert.equal(JSON.parse(deleteRes.body).ok, true);
 
       // Verify empty list
-      assert.equal(eventsRepo.getEventsByChat("group-300").length, 0);
+      assert.equal((await eventsRepo.getEventsByChat("group-300")).length, 0);
 
       await app.close();
     } finally {
@@ -303,7 +303,7 @@ describe("Admin REST API", () => {
   it("manages channel memories and stories", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const memoryRepo = createMemoryRepository(db);
       const app = buildServer({
         config: mockConfig(),
@@ -367,7 +367,7 @@ describe("Admin REST API", () => {
       });
       assert.equal(delStoryRes.statusCode, 200);
 
-      const remaining = memoryRepo.listMemories("group-400");
+      const remaining = await memoryRepo.listMemories("group-400");
       assert.equal(remaining.length, 0);
 
       await app.close();
@@ -421,11 +421,11 @@ describe("Admin REST API", () => {
   it("covers channel lookups API: list with failed last run, pause, resume, delete, and HTTP 401 without session", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const channelRepo = createChannelRepository(db);
       const lookupsRepo = createLookupRepository(db);
 
-      channelRepo.upsertDiscovery({
+      await channelRepo.upsertDiscovery({
         chatId: "group-1",
         name: "Gia đình",
         chatType: "GROUP",
@@ -457,7 +457,7 @@ describe("Admin REST API", () => {
       const authHeaders = { authorization: `Bearer ${authToken}` };
 
       // 2. Create a lookup and record a failed run
-      const lookup = lookupsRepo.createLookup({
+      const lookup = await lookupsRepo.createLookup({
         chatId: "group-1",
         instruction: "Giá vàng SJC",
         recurrence: "daily",
@@ -468,9 +468,9 @@ describe("Admin REST API", () => {
 
       // Claim and fail 3 attempts to produce a 'failed' last run
       for (let i = 0; i < 3; i++) {
-        const claim = lookupsRepo.claimRun(lookup.id, "2026-10-05");
+        const claim = await lookupsRepo.claimRun(lookup.id, "2026-10-05");
         if (claim.claimed) {
-          lookupsRepo.recordRunFailure(claim.run.id, "Connection failed");
+          await lookupsRepo.recordRunFailure(claim.run.id, "Connection failed");
         }
       }
 
@@ -498,7 +498,7 @@ describe("Admin REST API", () => {
       const pauseBody = JSON.parse(pauseRes.body) as { ok: boolean; lookup: any };
       assert.equal(pauseBody.ok, true);
       assert.equal(pauseBody.lookup.active, false);
-      assert.equal(lookupsRepo.getLookupById(lookup.id)?.active, false);
+      assert.equal((await lookupsRepo.getLookupById(lookup.id))?.active, false);
 
       // 5. Resume lookup (PATCH active: true)
       const resumeRes = await app.inject({
@@ -511,7 +511,7 @@ describe("Admin REST API", () => {
       const resumeBody = JSON.parse(resumeRes.body) as { ok: boolean; lookup: any };
       assert.equal(resumeBody.ok, true);
       assert.equal(resumeBody.lookup.active, true);
-      assert.equal(lookupsRepo.getLookupById(lookup.id)?.active, true);
+      assert.equal((await lookupsRepo.getLookupById(lookup.id))?.active, true);
 
       // 6. Delete lookup
       const deleteRes = await app.inject({
@@ -522,7 +522,7 @@ describe("Admin REST API", () => {
       assert.equal(deleteRes.statusCode, 200);
       const deleteBody = JSON.parse(deleteRes.body) as { ok: boolean };
       assert.equal(deleteBody.ok, true);
-      assert.equal(lookupsRepo.getLookupById(lookup.id), undefined);
+      assert.equal(await lookupsRepo.getLookupById(lookup.id), undefined);
 
       // Verify list is now empty
       const afterDeleteRes = await app.inject({
@@ -542,20 +542,20 @@ describe("Admin REST API", () => {
   it("exports database snapshot and structured JSON", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const channelRepo = createChannelRepository(db);
       const messageRepo = createMessageRepository(db);
       const eventsRepo = createEventsRepository(db);
       const memoryRepo = createMemoryRepository(db);
       const lookupsRepo = createLookupRepository(db);
 
-      channelRepo.upsertDiscovery({
+      await channelRepo.upsertDiscovery({
         chatId: "group-1",
         name: "Gia đình",
         chatType: "GROUP",
         status: "active",
       });
-      eventsRepo.createEvent({
+      await eventsRepo.createEvent({
         chatId: "group-1",
         title: "Sinh nhật",
         kind: "birthday",
@@ -565,7 +565,7 @@ describe("Admin REST API", () => {
         year: 1990,
         createdBy: "user-1",
       });
-      memoryRepo.upsertMemory("group-1", "Ba", "thích uống trà xanh", "user-1");
+      await memoryRepo.upsertMemory("group-1", "Ba", "thích uống trà xanh", "user-1");
 
       const app = buildServer({
         config: mockConfig(),

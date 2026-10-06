@@ -145,7 +145,7 @@ export function createLookupTools(
         };
       }
 
-      const created = repo.createLookup({
+      const created = await repo.createLookup({
         chatId,
         instruction: instruction.trim(),
         recurrence,
@@ -185,7 +185,7 @@ export function createLookupTools(
     description: "Xem danh sách các lịch tra cứu định kỳ hiện có của nhóm chat này.",
     inputSchema: z.object({}),
     execute: async () => {
-      const lookups = repo.listLookups(chatId);
+      const lookups = await repo.listLookups(chatId);
       if (lookups.length === 0) {
         return {
           success: true,
@@ -237,7 +237,7 @@ export function createLookupTools(
       dayOfMonth,
       active,
     }) => {
-      const existing = repo.getLookupById(id);
+      const existing = await repo.getLookupById(id);
       if (!existing || existing.chatId !== chatId) {
         return {
           success: false,
@@ -283,7 +283,7 @@ export function createLookupTools(
         };
       }
 
-      const updated = repo.updateLookup(id, {
+      const updated = await repo.updateLookup(id, {
         instruction,
         recurrence,
         hour: parsedHour,
@@ -332,7 +332,7 @@ export function createLookupTools(
       id: z.number().int().describe("ID của lịch tra cứu cần hủy"),
     }),
     execute: async ({ id }) => {
-      const existing = repo.getLookupById(id);
+      const existing = await repo.getLookupById(id);
       if (!existing || existing.chatId !== chatId) {
         return {
           success: false,
@@ -340,7 +340,7 @@ export function createLookupTools(
         };
       }
 
-      const cancelled = repo.cancelLookup(id);
+      const cancelled = await repo.cancelLookup(id);
       if (!cancelled) {
         return {
           success: false,

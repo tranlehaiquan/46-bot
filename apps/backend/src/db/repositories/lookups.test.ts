@@ -5,17 +5,17 @@ import { migrate } from "../migrations.js";
 import { createLookupRepository, isScheduleMatch } from "./lookups.js";
 
 describe("LookupRepository", () => {
-  function setup() {
+  async function setup() {
     const db = openDatabase(":memory:");
-    migrate(db);
+    await migrate(db);
     const repo = createLookupRepository(db);
     return { db, repo };
   }
 
-  it("creates, retrieves, updates, cancels, and lists lookups", () => {
-    const { db, repo } = setup();
+  it("creates, retrieves, updates, cancels, and lists lookups", async () => {
+    const { db, repo } = await setup();
     try {
-      const created = repo.createLookup({
+      const created = await repo.createLookup({
         chatId: "chat-1",
         instruction: "Báo giá vàng SJC",
         recurrence: "daily",
@@ -33,11 +33,11 @@ describe("LookupRepository", () => {
       assert.equal(created.weekday, null);
       assert.equal(created.dayOfMonth, null);
 
-      const fetched = repo.getLookupById(created.id);
+      const fetched = await repo.getLookupById(created.id);
       assert.deepEqual(fetched, created);
 
       // Update lookup
-      const updated = repo.updateLookup(created.id, {
+      const updated = await repo.updateLookup(created.id, {
         active: false,
         hour: 9,
         minute: 0,
@@ -47,15 +47,15 @@ describe("LookupRepository", () => {
       assert.equal(updated?.minute, 0);
 
       // List lookups
-      const list = repo.listLookups("chat-1");
+      const list = await repo.listLookups("chat-1");
       assert.equal(list.length, 1);
       assert.equal(list[0].id, created.id);
 
       // Cancel lookup
-      const cancelled = repo.cancelLookup(created.id);
+      const cancelled = await repo.cancelLookup(created.id);
       assert.equal(cancelled, true);
-      assert.equal(repo.getLookupById(created.id), undefined);
-      assert.equal(repo.listLookups("chat-1").length, 0);
+      assert.equal(await repo.getLookupById(created.id), undefined);
+      assert.equal((await repo.listLookups("chat-1")).length, 0);
     } finally {
       closeDatabase(db);
     }
@@ -121,10 +121,10 @@ describe("LookupRepository", () => {
   });
 
   describe("Due query and run claims", () => {
-    it("returns due lookups according to time and date", () => {
-      const { db, repo } = setup();
+    it("returns due lookups according to time and date", async () => {
+      const { db, repo } = await setup();
       try {
-        const lookup = repo.createLookup({
+        const lookup = await repo.createLookup({
           chatId: "chat-1",
           instruction: "Thời tiết sáng",
           recurrence: "daily",
@@ -135,26 +135,26 @@ describe("LookupRepository", () => {
 
         // 06:59 -> not due yet
         const beforeTime = new Date("2026-10-05T06:59:00+07:00");
-        assert.equal(repo.findDueLookups(beforeTime).length, 0);
+        assert.equal((await repo.findDueLookups(beforeTime)).length, 0);
 
         // 07:00 -> due!
         const exactTime = new Date("2026-10-05T07:00:00+07:00");
-        const dueList = repo.findDueLookups(exactTime);
+        const dueList = await repo.findDueLookups(exactTime);
         assert.equal(dueList.length, 1);
         assert.equal(dueList[0].id, lookup.id);
 
         // 10:30 on same day -> still due because not yet sent or running
         const laterTime = new Date("2026-10-05T10:30:00+07:00");
-        assert.equal(repo.findDueLookups(laterTime).length, 1);
+        assert.equal((await repo.findDueLookups(laterTime)).length, 1);
       } finally {
         closeDatabase(db);
       }
     });
 
-    it("handles unique claim, attempt counting, and reclaiming running rows older than 10 minutes", () => {
-      const { db, repo } = setup();
+    it("handles unique claim, attempt counting, and reclaiming running rows older than 10 minutes", async () => {
+      const { db, repo } = await setup();
       try {
-        const lookup = repo.createLookup({
+        const lookup = await repo.createLookup({
           chatId: "chat-1",
           instruction: "Tin tức buổi sáng",
           recurrence: "daily",
@@ -167,7 +167,7 @@ describe("LookupRepository", () => {
         const t0 = 1000000;
 
         // 1. Initial claim succeeds
-        const claim1 = repo.claimRun(lookup.id, fireDate, t0);
+        const claim1 = await repo.claimRun(lookup.id, fireDate, t0);
         assert.equal(claim1.claimed, true);
         if (!claim1.claimed) throw new Error("Expected claim to succeed");
         assert.equal(claim1.run.status, "running");
@@ -175,19 +175,19 @@ describe("LookupRepository", () => {
         assert.equal(claim1.run.startedAt, t0);
 
         // 2. Immediate second claim fails (in progress)
-        const claim2 = repo.claimRun(lookup.id, fireDate, t0 + 1000);
+        const claim2 = await repo.claimRun(lookup.id, fireDate, t0 + 1000);
         assert.equal(claim2.claimed, false);
         assert.equal(claim2.reason, "in_progress");
 
         // 3. 5 minutes later, still in progress (< 10 minutes)
         const t5m = t0 + 5 * 60 * 1000;
-        const claim3 = repo.claimRun(lookup.id, fireDate, t5m);
+        const claim3 = await repo.claimRun(lookup.id, fireDate, t5m);
         assert.equal(claim3.claimed, false);
         assert.equal(claim3.reason, "in_progress");
 
         // 4. 11 minutes later (crashed attempt), reclaim succeeds with attemptCount = 2
         const t11m = t0 + 11 * 60 * 1000;
-        const claim4 = repo.claimRun(lookup.id, fireDate, t11m);
+        const claim4 = await repo.claimRun(lookup.id, fireDate, t11m);
         assert.equal(claim4.claimed, true);
         if (!claim4.claimed) throw new Error("Expected reclaim to succeed");
         assert.equal(claim4.run.attemptCount, 2);
@@ -196,28 +196,28 @@ describe("LookupRepository", () => {
 
         // 5. Another 11 minutes later, attemptCount = 3
         const t22m = t11m + 11 * 60 * 1000;
-        const claim5 = repo.claimRun(lookup.id, fireDate, t22m);
+        const claim5 = await repo.claimRun(lookup.id, fireDate, t22m);
         assert.equal(claim5.claimed, true);
         if (!claim5.claimed) throw new Error("Expected reclaim to succeed");
         assert.equal(claim5.run.attemptCount, 3);
 
         // 6. Another 11 minutes later, attemptCount reaches limit (3) -> marked failed
         const t33m = t22m + 11 * 60 * 1000;
-        const claim6 = repo.claimRun(lookup.id, fireDate, t33m);
+        const claim6 = await repo.claimRun(lookup.id, fireDate, t33m);
         assert.equal(claim6.claimed, false);
         assert.equal(claim6.reason, "max_attempts");
 
-        const latest = repo.getLatestRun(lookup.id);
+        const latest = await repo.getLatestRun(lookup.id);
         assert.equal(latest?.status, "failed");
       } finally {
         closeDatabase(db);
       }
     });
 
-    it("records success and failure correctly", () => {
-      const { db, repo } = setup();
+    it("records success and failure correctly", async () => {
+      const { db, repo } = await setup();
       try {
-        const lookup = repo.createLookup({
+        const lookup = await repo.createLookup({
           chatId: "chat-1",
           instruction: "Giá vàng",
           recurrence: "daily",
@@ -227,17 +227,17 @@ describe("LookupRepository", () => {
         });
 
         const fireDate = "2026-10-05";
-        const claim = repo.claimRun(lookup.id, fireDate);
+        const claim = await repo.claimRun(lookup.id, fireDate);
         assert.equal(claim.claimed, true);
         if (!claim.claimed) throw new Error("Expected claim to succeed");
 
-        repo.recordRunSuccess(claim.run.id, 123456789);
-        const afterSuccess = repo.getLatestRun(lookup.id);
+        await repo.recordRunSuccess(claim.run.id, 123456789);
+        const afterSuccess = await repo.getLatestRun(lookup.id);
         assert.equal(afterSuccess?.status, "sent");
         assert.equal(afterSuccess?.sentAt, 123456789);
 
         // Once sent, cannot be claimed again
-        const retry = repo.claimRun(lookup.id, fireDate);
+        const retry = await repo.claimRun(lookup.id, fireDate);
         assert.equal(retry.claimed, false);
         assert.equal(retry.reason, "already_completed");
       } finally {
@@ -245,10 +245,10 @@ describe("LookupRepository", () => {
       }
     });
 
-    it("resets started_at on non-final failure allowing immediate retry on next tick", () => {
-      const { db, repo } = setup();
+    it("resets started_at on non-final failure allowing immediate retry on next tick", async () => {
+      const { db, repo } = await setup();
       try {
-        const lookup = repo.createLookup({
+        const lookup = await repo.createLookup({
           chatId: "chat-1",
           instruction: "Giá vàng",
           recurrence: "daily",
@@ -259,18 +259,18 @@ describe("LookupRepository", () => {
 
         const fireDate = "2026-10-05";
         const t0 = 1000000;
-        const claim = repo.claimRun(lookup.id, fireDate, t0);
+        const claim = await repo.claimRun(lookup.id, fireDate, t0);
         assert.equal(claim.claimed, true);
         if (!claim.claimed) throw new Error("Claim failed");
 
         // Record non-final failure (attempt 1)
-        repo.recordRunFailure(claim.run.id, "Network timeout");
-        const runAfterFail = repo.getLatestRun(lookup.id);
+        await repo.recordRunFailure(claim.run.id, "Network timeout");
+        const runAfterFail = await repo.getLatestRun(lookup.id);
         assert.equal(runAfterFail?.lastError, "Network timeout");
         assert.equal(runAfterFail?.startedAt, 0);
 
         // Next tick (e.g. 1 minute later) can immediately reclaim for attempt 2!
-        const nextTick = repo.claimRun(lookup.id, fireDate, t0 + 60 * 1000);
+        const nextTick = await repo.claimRun(lookup.id, fireDate, t0 + 60 * 1000);
         assert.equal(nextTick.claimed, true);
         if (!nextTick.claimed) throw new Error("Next tick claim failed");
         assert.equal(nextTick.run.attemptCount, 2);

@@ -395,7 +395,7 @@ describe("LLM conversation and database integration", () => {
 
   it("triggers typing indicator, queries LLM, splits response, and records history", async () => {
     const db = openDatabase(":memory:");
-    migrate(db);
+    await migrate(db);
     const seenRepo = createSeenRepository(db);
     const messageRepo = createMessageRepository(db);
 
@@ -433,7 +433,7 @@ describe("LLM conversation and database integration", () => {
     ]);
 
     // Verify messages table has user turn and assistant turn
-    const history = messageRepo.getRecent("group-1");
+    const history = await messageRepo.getRecent("group-1");
     assert.equal(history.length, 2);
     assert.equal(history[0].role, "user");
     assert.equal(history[0].content, "@bot Chao buoi sang");
@@ -529,7 +529,7 @@ describe("LLM conversation and database integration", () => {
 
   it("supports shared lists tools execution through conversational flow", async () => {
     const db = openDatabase(":memory:");
-    migrate(db);
+    await migrate(db);
     const seenRepo = createSeenRepository(db);
     const messageRepo = createMessageRepository(db);
     const listRepo = createListRepository(db);
@@ -578,10 +578,10 @@ describe("LLM conversation and database integration", () => {
     ]);
 
     // Verify list and items in database
-    const list = listRepo.getListByName("group-1", "Đi chợ");
+    const list = await listRepo.getListByName("group-1", "Đi chợ");
     assert.ok(list);
     assert.equal(list.name, "Đi chợ");
-    const items = listRepo.getItems(list.id);
+    const items = await listRepo.getItems(list.id);
     assert.equal(items.length, 2);
     // Uncompleted items come first (done = 0 / false)
     assert.equal(items[0].text, "Sữa tươi");
@@ -598,7 +598,7 @@ describe("LLM conversation and database integration", () => {
 
   it("supports event and reminder tools execution through conversational flow", async () => {
     const db = openDatabase(":memory:");
-    migrate(db);
+    await migrate(db);
     const seenRepo = createSeenRepository(db);
     const messageRepo = createMessageRepository(db);
     const eventsRepo = createEventsRepository(db);
@@ -653,7 +653,7 @@ describe("LLM conversation and database integration", () => {
       { chatId: "group-1", text: "Đã lưu ngày giỗ Ông Nội (10/3 âm lịch). Tìm thấy 1 sự kiện sắp tới." },
     ]);
 
-    const events = eventsRepo.getEventsByChat("group-1");
+    const events = await eventsRepo.getEventsByChat("group-1");
     assert.equal(events.length, 1);
     assert.equal(events[0].title, "Giỗ Ông Nội");
     assert.equal(events[0].calendar, "lunar");
@@ -668,7 +668,7 @@ describe("LLM conversation and database integration", () => {
 
   it("supports holiday tools execution through conversational flow", async () => {
     const db = openDatabase(":memory:");
-    migrate(db);
+    await migrate(db);
     const seenRepo = createSeenRepository(db);
     const messageRepo = createMessageRepository(db);
     const eventsRepo = createEventsRepository(db);
@@ -712,7 +712,7 @@ describe("LLM conversation and database integration", () => {
       { chatId: "group-1", text: "Có 7 ngày nghỉ lễ chính thức. Đã thêm 7 ngày lễ vào lịch nhóm." },
     ]);
 
-    const events = eventsRepo.getEventsByChat("group-1");
+    const events = await eventsRepo.getEventsByChat("group-1");
     assert.equal(events.length, 7);
 
     await app.close();
@@ -721,13 +721,13 @@ describe("LLM conversation and database integration", () => {
 
   it("supports long-term memory and memory book tools execution and prompt injection through conversational flow", async () => {
     const db = openDatabase(":memory:");
-    migrate(db);
+    await migrate(db);
     const seenRepo = createSeenRepository(db);
     const messageRepo = createMessageRepository(db);
     const memoryRepo = createMemoryRepository(db);
 
     // Seed existing memory to verify prompt injection
-    memoryRepo.upsertMemory("group-1", "Bố", "Thích uống cà phê đen không đường", "user-1");
+    await memoryRepo.upsertMemory("group-1", "Bố", "Thích uống cà phê đen không đường", "user-1");
 
     let receivedMemories: Array<{ subject: string; fact: string }> | undefined;
 
@@ -790,9 +790,9 @@ describe("LLM conversation and database integration", () => {
     ]);
 
     // Verify persistence in SQLite
-    const memories = memoryRepo.listMemories("group-1");
+    const memories = await memoryRepo.listMemories("group-1");
     assert.equal(memories.length, 2);
-    const stories = memoryRepo.searchStories("group-1", "Đà Lạt");
+    const stories = await memoryRepo.searchStories("group-1", "Đà Lạt");
     assert.equal(stories.length, 1);
     assert.equal(stories[0].title, "Chuyến đi Đà Lạt đầu tiên");
 

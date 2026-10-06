@@ -92,6 +92,14 @@ const envSchema = z.object({
     (value) => (value === undefined || value === "" ? 5 : value),
     z.coerce.number().int().positive().optional(),
   ),
+  TURSO_DATABASE_URL: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
+  TURSO_AUTH_TOKEN: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
 }).superRefine((data, ctx) => {
   const chosenProvider = data.LLM_PROVIDER ?? (data.GEMINI_API_KEY ? "gemini" : data.DEEPSEEK_API_KEY ? "deepseek" : undefined);
   if (!chosenProvider) {
@@ -149,6 +157,8 @@ export type AppConfig = {
   tavilyApiKey?: string;
   redisUrl?: string;
   schedulerConcurrency?: number;
+  tursoDatabaseUrl?: string;
+  tursoAuthToken?: string;
 };
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
@@ -200,5 +210,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     tavilyApiKey: parsed.data.TAVILY_API_KEY,
     redisUrl: parsed.data.REDIS_URL,
     schedulerConcurrency: parsed.data.SCHEDULER_CONCURRENCY ?? 5,
+    tursoDatabaseUrl: parsed.data.TURSO_DATABASE_URL,
+    tursoAuthToken: parsed.data.TURSO_AUTH_TOKEN,
   };
 }

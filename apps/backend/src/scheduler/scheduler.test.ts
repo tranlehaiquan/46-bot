@@ -75,9 +75,9 @@ describe("Background Scheduler Engine", () => {
   let lookupsRepo: LookupRepository;
   let zalo: ReturnType<typeof fakeZalo>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     db = openDatabase(":memory:");
-    migrate(db);
+    await migrate(db);
     repo = createEventsRepository(db);
     channelRepo = createChannelRepository(db);
     lookupsRepo = createLookupRepository(db);
@@ -90,7 +90,7 @@ describe("Background Scheduler Engine", () => {
     const clock = makeClock(morningTime);
 
     // Chat A has an event today
-    repo.createEvent({
+    await repo.createEvent({
       chatId: "chat-A",
       title: "Sinh nhật Mẹ",
       day: 5,
@@ -102,7 +102,7 @@ describe("Background Scheduler Engine", () => {
     });
 
     // Chat B has an event in 3 days
-    repo.createEvent({
+    await repo.createEvent({
       chatId: "chat-B",
       title: "Kỷ niệm ngày cưới",
       day: 8,
@@ -152,7 +152,7 @@ describe("Background Scheduler Engine", () => {
     const clock = makeClock(reminderTime);
 
     // Event in chat-A happening today
-    const ev1 = repo.createEvent({
+    const ev1 = await repo.createEvent({
       chatId: "chat-A",
       title: "Họp phụ huynh",
       day: 5,
@@ -163,7 +163,7 @@ describe("Background Scheduler Engine", () => {
     });
 
     // Advance reminder in chat-B happening in 3 days (remindDaysBefore = 3)
-    const ev2 = repo.createEvent({
+    const ev2 = await repo.createEvent({
       chatId: "chat-B",
       title: "Giỗ Ông Cụ",
       calendar: "solar",
@@ -206,15 +206,15 @@ describe("Background Scheduler Engine", () => {
     assert.match(sendB.text, /Giỗ Ông Cụ/);
 
     // Verify recorded in SQLite reminders_sent
-    assert.equal(repo.isReminderSent(ev1.id, "2026-10-05"), true);
-    assert.equal(repo.isReminderSent(ev2.id, "2026-10-08"), true);
+    assert.equal(await repo.isReminderSent(ev1.id, "2026-10-05"), true);
+    assert.equal(await repo.isReminderSent(ev2.id, "2026-10-08"), true);
   });
 
   it("does not duplicate reminder sends across multiple ticks or scheduler restarts (idempotency)", async () => {
     const reminderTime = new Date(Date.UTC(2026, 9, 5, 1, 0, 0));
     const clock = makeClock(reminderTime);
 
-    repo.createEvent({
+    await repo.createEvent({
       chatId: "chat-A",
       title: "Khám định kỳ",
       day: 5,
@@ -268,7 +268,7 @@ describe("Background Scheduler Engine", () => {
     const reminderTime = new Date(Date.UTC(2026, 9, 5, 1, 0, 0));
     const clock = makeClock(reminderTime);
 
-    repo.createEvent({
+    await repo.createEvent({
       chatId: "group-discovered-xyz",
       title: "Lễ hội làng",
       day: 5,
@@ -308,7 +308,7 @@ describe("Background Scheduler Engine", () => {
     const sundayEvening = new Date(Date.UTC(2026, 9, 4, 13, 0, 0));
     const clock = makeClock(sundayEvening);
 
-    repo.createEvent({
+    await repo.createEvent({
       chatId: "chat-family",
       title: "Sinh nhật bé Na",
       day: 8,
@@ -347,7 +347,7 @@ describe("Background Scheduler Engine", () => {
     const catchUpTime = new Date(Date.UTC(2026, 9, 5, 1, 30, 0));
     const clock = makeClock(catchUpTime);
 
-    repo.createEvent({
+    await repo.createEvent({
       chatId: "chat-A",
       title: "Đi họp",
       day: 5,
@@ -387,9 +387,9 @@ describe("Background Scheduler Engine", () => {
     const fireTime = new Date(Date.UTC(2026, 9, 5, 0, 0, 0));
     const clock = makeClock(fireTime);
 
-    channelRepo.upsertDiscovery({ chatId: "chat-lookup", name: "Family", chatType: "GROUP", status: "active" });
+    await channelRepo.upsertDiscovery({ chatId: "chat-lookup", name: "Family", chatType: "GROUP", status: "active" });
 
-    const lookup = lookupsRepo.createLookup({
+    const lookup = await lookupsRepo.createLookup({
       chatId: "chat-lookup",
       instruction: "Thời tiết TP.HCM",
       recurrence: "daily",
@@ -426,7 +426,7 @@ describe("Background Scheduler Engine", () => {
     assert.equal(zalo.sends[0]?.chatId, "chat-lookup");
     assert.equal(zalo.sends[0]?.text, "Trời nắng ráo 30 độ.");
 
-    const latestRun = lookupsRepo.getLatestRun(lookup.id);
+    const latestRun = await lookupsRepo.getLatestRun(lookup.id);
     assert.equal(latestRun?.status, "sent");
 
     // 2. Later same-day tick at 07:05 -> does NOT send a second message after sent
@@ -436,7 +436,7 @@ describe("Background Scheduler Engine", () => {
 
     // 3. Restart later same-day when lookup was NOT yet sent:
     // Create another lookup for chat-2 that was scheduled at 07:00
-    const lookup2 = lookupsRepo.createLookup({
+    const lookup2 = await lookupsRepo.createLookup({
       chatId: "chat-lookup-2",
       instruction: "Báo giá vàng",
       recurrence: "daily",
@@ -444,7 +444,7 @@ describe("Background Scheduler Engine", () => {
       minute: 0,
       createdBy: "user-1",
     });
-    channelRepo.upsertDiscovery({ chatId: "chat-lookup-2", name: "Family 2", chatType: "GROUP", status: "active" });
+    await channelRepo.upsertDiscovery({ chatId: "chat-lookup-2", name: "Family 2", chatType: "GROUP", status: "active" });
 
     // New scheduler instance simulates a restart at 10:30 later that same day
     const restartTime = new Date(Date.UTC(2026, 9, 5, 3, 30, 0)); // 10:30 UTC+7
@@ -472,9 +472,9 @@ describe("Background Scheduler Engine", () => {
     const fireTime = new Date(Date.UTC(2026, 9, 5, 0, 0, 0));
     const clock = makeClock(fireTime);
 
-    channelRepo.upsertDiscovery({ chatId: "chat-tools", name: "Family", chatType: "GROUP", status: "active" });
+    await channelRepo.upsertDiscovery({ chatId: "chat-tools", name: "Family", chatType: "GROUP", status: "active" });
 
-    lookupsRepo.createLookup({
+    await lookupsRepo.createLookup({
       chatId: "chat-tools",
       instruction: "Thời tiết TP.HCM và tin tức mới nhất",
       recurrence: "daily",
@@ -534,8 +534,8 @@ describe("Background Scheduler Engine", () => {
     const clock = makeClock(morningTime);
 
     // Pending channel
-    channelRepo.upsertDiscovery({ chatId: "chat-pending", name: "Pending Group", chatType: "GROUP", status: "pending" });
-    const pendingLookup = lookupsRepo.createLookup({
+    await channelRepo.upsertDiscovery({ chatId: "chat-pending", name: "Pending Group", chatType: "GROUP", status: "pending" });
+    const pendingLookup = await lookupsRepo.createLookup({
       chatId: "chat-pending",
       instruction: "Thời tiết",
       recurrence: "daily",
@@ -545,8 +545,8 @@ describe("Background Scheduler Engine", () => {
     });
 
     // Disabled channel
-    channelRepo.upsertDiscovery({ chatId: "chat-disabled", name: "Disabled Group", chatType: "GROUP", status: "disabled" });
-    const disabledLookup = lookupsRepo.createLookup({
+    await channelRepo.upsertDiscovery({ chatId: "chat-disabled", name: "Disabled Group", chatType: "GROUP", status: "disabled" });
+    const disabledLookup = await lookupsRepo.createLookup({
       chatId: "chat-disabled",
       instruction: "Giá vàng",
       recurrence: "daily",
@@ -580,29 +580,29 @@ describe("Background Scheduler Engine", () => {
     // Tick at 07:00 -> both skipped without inserting a run
     await scheduler.tick();
     assert.equal(zalo.sends.length, 0);
-    assert.equal(lookupsRepo.getLatestRun(pendingLookup.id), undefined);
-    assert.equal(lookupsRepo.getLatestRun(disabledLookup.id), undefined);
+    assert.equal(await lookupsRepo.getLatestRun(pendingLookup.id), undefined);
+    assert.equal(await lookupsRepo.getLatestRun(disabledLookup.id), undefined);
 
     // Later that local day (11:00 UTC+7), channel-pending becomes active
     clock.advanceMs(4 * 60 * 60 * 1000);
-    channelRepo.updateStatus("chat-pending", "active");
+    await channelRepo.updateStatus("chat-pending", "active");
 
     await scheduler.tick();
 
     // Now delivered to chat-pending!
     assert.equal(zalo.sends.length, 1);
     assert.equal(zalo.sends[0]?.chatId, "chat-pending");
-    assert.equal(lookupsRepo.getLatestRun(pendingLookup.id)?.status, "sent");
+    assert.equal((await lookupsRepo.getLatestRun(pendingLookup.id))?.status, "sent");
     // chat-disabled still received nothing
-    assert.equal(lookupsRepo.getLatestRun(disabledLookup.id), undefined);
+    assert.equal(await lookupsRepo.getLatestRun(disabledLookup.id), undefined);
   });
 
   it("2.4 retries a failed run up to 3 times on the same local day, then stores failed and the error without calling sendMessage", async () => {
     const fireTime = new Date(Date.UTC(2026, 9, 5, 0, 0, 0)); // 07:00 UTC+7
     const clock = makeClock(fireTime);
 
-    channelRepo.upsertDiscovery({ chatId: "chat-retry", name: "Family", chatType: "GROUP", status: "active" });
-    const lookup = lookupsRepo.createLookup({
+    await channelRepo.upsertDiscovery({ chatId: "chat-retry", name: "Family", chatType: "GROUP", status: "active" });
+    const lookup = await lookupsRepo.createLookup({
       chatId: "chat-retry",
       instruction: "Giá USD hôm nay",
       recurrence: "daily",
@@ -637,7 +637,7 @@ describe("Background Scheduler Engine", () => {
     // Attempt 1 at 07:00
     await scheduler.tick();
     assert.equal(zalo.sends.length, 0); // silent in chat!
-    let run = lookupsRepo.getLatestRun(lookup.id);
+    let run = await lookupsRepo.getLatestRun(lookup.id);
     assert.equal(run?.attemptCount, 1);
     assert.equal(run?.lastError, "LLM failure");
 
@@ -645,14 +645,14 @@ describe("Background Scheduler Engine", () => {
     clock.advanceMs(60 * 1000);
     await scheduler.tick();
     assert.equal(zalo.sends.length, 0); // still silent
-    run = lookupsRepo.getLatestRun(lookup.id);
+    run = await lookupsRepo.getLatestRun(lookup.id);
     assert.equal(run?.attemptCount, 2);
 
     // Attempt 3 at 07:02
     clock.advanceMs(60 * 1000);
     await scheduler.tick();
     assert.equal(zalo.sends.length, 0); // still silent
-    run = lookupsRepo.getLatestRun(lookup.id);
+    run = await lookupsRepo.getLatestRun(lookup.id);
     assert.equal(run?.attemptCount, 3);
     assert.equal(run?.status, "failed");
     assert.equal(run?.lastError, "LLM failure");
@@ -661,7 +661,7 @@ describe("Background Scheduler Engine", () => {
     clock.advanceMs(60 * 1000);
     await scheduler.tick();
     assert.equal(zalo.sends.length, 0);
-    run = lookupsRepo.getLatestRun(lookup.id);
+    run = await lookupsRepo.getLatestRun(lookup.id);
     assert.equal(run?.status, "failed");
   });
 

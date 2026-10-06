@@ -1,10 +1,13 @@
-import type { FastifyInstance, FastifyPluginAsync } from "fastify";
+import type { FastifyInstance } from "fastify";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { ServerDeps } from "../server.js";
 import { createAuthHook, createToken } from "./auth.js";
 import type { ChannelStatus } from "../db/repositories/channels.js";
 import { getChannelActivatedMessage } from "../delivery.js";
 import { getUpcomingHolidays } from "../holidays/index.js";
-import { getNextOccurrence, formatUtc7DateStr, createUtc7Date, getUtc7Parts } from "../db/repositories/events.js";
+import { getNextOccurrence, createUtc7Date, getUtc7Parts } from "../db/repositories/events.js";
 
 function parseJsonBody(body: unknown): Record<string, unknown> {
   if (Buffer.isBuffer(body)) {
@@ -45,7 +48,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         ? (query.status as ChannelStatus)
         : undefined;
 
-      const channels = deps.channelRepo ? deps.channelRepo.listChannels(statusFilter) : [];
+      const channels = deps.channelRepo ? await deps.channelRepo.listChannels(statusFilter) : [];
       return reply.send({ channels });
     });
 
@@ -57,7 +60,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         return reply.code(503).send({ error: "Channel repository unavailable" });
       }
 
-      const existing = deps.channelRepo.getChannel(chatId);
+      const existing = await deps.channelRepo.getChannel(chatId);
       if (!existing) {
         return reply.code(404).send({ error: "Channel not found" });
       }
@@ -66,26 +69,28 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       if (typeof body.status === "string") {
         const status = body.status as ChannelStatus;
         if (["pending", "active", "disabled"].includes(status)) {
-          deps.channelRepo.updateStatus(chatId, status);
+          await deps.channelRepo.updateStatus(chatId, status);
         }
       }
 
       if (typeof body.name === "string" && body.name.trim()) {
-        deps.channelRepo.updateName(chatId, body.name.trim());
+        await deps.channelRepo.updateName(chatId, body.name.trim());
       }
 
-      const updated = deps.channelRepo.getChannel(chatId);
+      const updated = await deps.channelRepo.getChannel(chatId);
       if (activatesPendingChannel) {
         try {
           const content = getChannelActivatedMessage();
           await deps.zalo.sendMessage(chatId, content);
-          deps.messageRepo?.insert({
-            chatId,
-            senderId: "bot",
-            senderName: "Admin",
-            role: "assistant",
-            content,
-          });
+          if (deps.messageRepo) {
+            await deps.messageRepo.insert({
+              chatId,
+              senderId: "bot",
+              senderName: "Admin",
+              role: "assistant",
+              content,
+            });
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           deps.log.error({ event: "admin_channel_activation_message_failed", chat_id: chatId, message });
@@ -100,7 +105,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       const query = (request.query || {}) as { limit?: string };
       const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200);
 
-      const messages = deps.messageRepo ? deps.messageRepo.getRecent(chatId, limit) : [];
+      const messages = deps.messageRepo ? await deps.messageRepo.getRecent(chatId, limit) : [];
       return reply.send({ messages });
     });
 
@@ -116,7 +121,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       try {
         await deps.zalo.sendMessage(chatId, content);
         if (deps.messageRepo) {
-          deps.messageRepo.insert({
+          await deps.messageRepo.insert({
             chatId,
             senderId: "bot",
             senderName: "Admin",
@@ -135,7 +140,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
     // 4. Reminders & Events
     adminScope.get("/api/admin/channels/:chatId/events", async (request, reply) => {
       const { chatId } = request.params as { chatId: string };
-      const events = deps.eventsRepo ? deps.eventsRepo.getEventsByChat(chatId) : [];
+      const events = deps.eventsRepo ? await deps.eventsRepo.getEventsByChat(chatId) : [];
       return reply.send({ events });
     });
 
@@ -152,7 +157,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         return reply.code(400).send({ error: "Title is required" });
       }
 
-      const event = deps.eventsRepo.createEvent({
+      const event = await deps.eventsRepo.createEvent({
         chatId,
         title,
         kind: (body.kind as any) ?? "event",
@@ -178,12 +183,12 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       }
 
       const eventId = Number(id);
-      const existing = deps.eventsRepo.getEventById(eventId);
+      const existing = await deps.eventsRepo.getEventById(eventId);
       if (!existing) {
         return reply.code(404).send({ error: "Event not found" });
       }
 
-      const updated = deps.eventsRepo.updateEvent(eventId, {
+      const updated = await deps.eventsRepo.updateEvent(eventId, {
         title: typeof body.title === "string" ? body.title : undefined,
         kind: body.kind as any,
         calendar: body.calendar as any,
@@ -204,15 +209,15 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       if (!deps.eventsRepo) {
         return reply.code(503).send({ error: "Events repository unavailable" });
       }
-      const success = deps.eventsRepo.deleteEvent(Number(id));
+      const success = await deps.eventsRepo.deleteEvent(Number(id));
       return reply.send({ ok: success });
     });
 
     // 5. Memory & Stories
     adminScope.get("/api/admin/channels/:chatId/memories", async (request, reply) => {
       const { chatId } = request.params as { chatId: string };
-      const facts = deps.memoryRepo ? deps.memoryRepo.listMemories(chatId) : [];
-      const stories = deps.memoryRepo ? deps.memoryRepo.listStories(chatId) : [];
+      const facts = deps.memoryRepo ? await deps.memoryRepo.listMemories(chatId) : [];
+      const stories = deps.memoryRepo ? await deps.memoryRepo.listStories(chatId) : [];
       return reply.send({ facts, stories });
     });
 
@@ -231,7 +236,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         return reply.code(400).send({ error: "Subject and fact are required" });
       }
 
-      const memory = deps.memoryRepo.upsertMemory(chatId, subject, fact, "admin");
+      const memory = await deps.memoryRepo.upsertMemory(chatId, subject, fact, "admin");
       return reply.code(201).send({ ok: true, memory });
     });
 
@@ -244,10 +249,10 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       const numericId = Number(idOrSubject);
       let success = false;
       if (!Number.isNaN(numericId)) {
-        success = deps.memoryRepo.deleteMemoryById(chatId, numericId);
+        success = await deps.memoryRepo.deleteMemoryById(chatId, numericId);
       }
       if (!success) {
-        success = deps.memoryRepo.deleteMemory(chatId, idOrSubject);
+        success = await deps.memoryRepo.deleteMemory(chatId, idOrSubject);
       }
       return reply.send({ ok: success });
     });
@@ -267,7 +272,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         return reply.code(400).send({ error: "Title and story are required" });
       }
 
-      const created = deps.memoryRepo.addStory({
+      const created = await deps.memoryRepo.addStory({
         chatId,
         title,
         story,
@@ -284,7 +289,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       if (!deps.memoryRepo) {
         return reply.code(503).send({ error: "Memory repository unavailable" });
       }
-      const success = deps.memoryRepo.deleteStory(chatId, Number(id));
+      const success = await deps.memoryRepo.deleteStory(chatId, Number(id));
       return reply.send({ ok: success });
     });
 
@@ -310,8 +315,8 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       }
 
       const allEvents = chatIdFilter
-        ? deps.eventsRepo.getEventsByChat(chatIdFilter)
-        : deps.eventsRepo.getAllEvents();
+        ? await deps.eventsRepo.getEventsByChat(chatIdFilter)
+        : await deps.eventsRepo.getAllEvents();
 
       // Reference is the first day of the requested month
       const refDate = createUtc7Date(year, month, 1);
@@ -333,7 +338,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         const occParts = getUtc7Parts(occ.date);
         if (occParts.year !== year || occParts.month !== month) continue;
 
-        const channel = deps.channelRepo ? deps.channelRepo.getChannel(event.chatId) : undefined;
+        const channel = deps.channelRepo ? await deps.channelRepo.getChannel(event.chatId) : undefined;
         events.push({
           eventId: event.id,
           chatId: event.chatId,
@@ -354,7 +359,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       if (!deps.lookupsRepo) {
         return reply.send({ lookups: [] });
       }
-      const lookups = deps.lookupsRepo.listLookups(chatId);
+      const lookups = await deps.lookupsRepo.listLookups(chatId);
       return reply.send({ lookups });
     });
 
@@ -367,7 +372,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       }
 
       const lookupId = Number(id);
-      const existing = deps.lookupsRepo.getLookupById(lookupId);
+      const existing = await deps.lookupsRepo.getLookupById(lookupId);
       if (!existing || existing.chatId !== chatId) {
         return reply.code(404).send({ error: "Lookup not found" });
       }
@@ -375,7 +380,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       const active = typeof body.active === "boolean" ? body.active : undefined;
       const instruction = typeof body.instruction === "string" ? body.instruction : undefined;
 
-      const updated = deps.lookupsRepo.updateLookup(lookupId, {
+      const updated = await deps.lookupsRepo.updateLookup(lookupId, {
         active,
         instruction,
       });
@@ -391,12 +396,12 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       }
 
       const lookupId = Number(id);
-      const existing = deps.lookupsRepo.getLookupById(lookupId);
+      const existing = await deps.lookupsRepo.getLookupById(lookupId);
       if (!existing || existing.chatId !== chatId) {
         return reply.code(404).send({ error: "Lookup not found" });
       }
 
-      const success = deps.lookupsRepo.cancelLookup(lookupId);
+      const success = await deps.lookupsRepo.cancelLookup(lookupId);
       return reply.send({ ok: success });
     });
 
@@ -406,15 +411,15 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         return reply.code(503).send({ error: "Database unavailable for export" });
       }
 
-      const channels = deps.db.prepare("SELECT * FROM channels ORDER BY created_at ASC").all();
-      const events = deps.db.prepare("SELECT * FROM events ORDER BY month ASC, day ASC").all();
-      const facts = deps.db.prepare("SELECT * FROM memories ORDER BY ts ASC").all();
-      const stories = deps.db.prepare("SELECT * FROM memory_book ORDER BY ts ASC").all();
-      const lists = deps.db.prepare("SELECT * FROM lists ORDER BY created_at ASC").all();
-      const listItems = deps.db.prepare("SELECT * FROM list_items ORDER BY ts ASC").all();
-      const lookups = deps.db.prepare("SELECT * FROM scheduled_lookups ORDER BY created_at ASC").all();
-      const lookupRuns = deps.db.prepare("SELECT * FROM scheduled_lookup_runs ORDER BY id DESC LIMIT 500").all();
-      const messages = deps.db.prepare("SELECT * FROM messages ORDER BY ts DESC LIMIT 1000").all();
+      const channels = (await deps.db.execute("SELECT * FROM channels ORDER BY created_at ASC")).rows;
+      const events = (await deps.db.execute("SELECT * FROM events ORDER BY month ASC, day ASC")).rows;
+      const facts = (await deps.db.execute("SELECT * FROM memories ORDER BY ts ASC")).rows;
+      const stories = (await deps.db.execute("SELECT * FROM memory_book ORDER BY ts ASC")).rows;
+      const lists = (await deps.db.execute("SELECT * FROM lists ORDER BY created_at ASC")).rows;
+      const listItems = (await deps.db.execute("SELECT * FROM list_items ORDER BY ts ASC")).rows;
+      const lookups = (await deps.db.execute("SELECT * FROM scheduled_lookups ORDER BY created_at ASC")).rows;
+      const lookupRuns = (await deps.db.execute("SELECT * FROM scheduled_lookup_runs ORDER BY id DESC LIMIT 500")).rows;
+      const messages = (await deps.db.execute("SELECT * FROM messages ORDER BY ts DESC LIMIT 1000")).rows;
 
       const dateStr = new Date().toISOString().slice(0, 10);
       const payload = {
@@ -456,17 +461,21 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       }
 
       try {
-        deps.db.pragma("wal_checkpoint(PASSIVE)");
-      } catch {
-        // Best-effort checkpoint
-      }
+        const tmpPath = path.join(os.tmpdir(), `export-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite`);
+        await deps.db.execute(`VACUUM INTO '${tmpPath}'`);
+        const buffer = await fs.promises.readFile(tmpPath);
+        await fs.promises.unlink(tmpPath).catch(() => {});
 
-      const buffer = deps.db.serialize();
-      const dateStr = new Date().toISOString().slice(0, 10);
-      return reply
-        .header("Content-Type", "application/x-sqlite3")
-        .header("Content-Disposition", `attachment; filename="46bot-backup-${dateStr}.sqlite"`)
-        .send(buffer);
+        const dateStr = new Date().toISOString().slice(0, 10);
+        return reply
+          .header("Content-Type", "application/x-sqlite3")
+          .header("Content-Disposition", `attachment; filename="46bot-backup-${dateStr}.sqlite"`)
+          .send(buffer);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.log.error({ event: "db_export_failed", message });
+        return reply.code(500).send({ error: "Failed to export sqlite database" });
+      }
     });
   });
 }

@@ -5,29 +5,29 @@ import { migrate } from "../migrations.js";
 import { createMemoryRepository } from "./memory.js";
 
 describe("MemoryRepository", () => {
-  it("stores and deduplicates facts for the same subject", () => {
+  it("stores and deduplicates facts for the same subject", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createMemoryRepository(db);
 
       // Store initial fact
-      const m1 = repo.upsertMemory("chat-1", "Bé Na", "Học lớp 3", "user-1");
+      const m1 = await repo.upsertMemory("chat-1", "Bé Na", "Học lớp 3", "user-1");
       assert.equal(m1.subject, "Bé Na");
       assert.equal(m1.fact, "Học lớp 3");
 
       // Verify listed
-      let list = repo.listMemories("chat-1");
+      let list = await repo.listMemories("chat-1");
       assert.equal(list.length, 1);
       assert.equal(list[0].fact, "Học lớp 3");
 
       // Update fact with different case for subject ("bé na")
-      const m2 = repo.upsertMemory("chat-1", "bé na", "Năm nay lên lớp 4 rồi", "user-2");
+      const m2 = await repo.upsertMemory("chat-1", "bé na", "Năm nay lên lớp 4 rồi", "user-2");
       assert.equal(m2.id, m1.id);
       assert.equal(m2.fact, "Năm nay lên lớp 4 rồi");
 
       // List should still have 1 entry with updated fact
-      list = repo.listMemories("chat-1");
+      list = await repo.listMemories("chat-1");
       assert.equal(list.length, 1);
       assert.equal(list[0].id, m1.id);
       assert.equal(list[0].fact, "Năm nay lên lớp 4 rồi");
@@ -36,17 +36,17 @@ describe("MemoryRepository", () => {
     }
   });
 
-  it("isolates memories between different chats", () => {
+  it("isolates memories between different chats", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createMemoryRepository(db);
 
-      repo.upsertMemory("chat-1", "Bố", "Thích uống cà phê đen", "user-1");
-      repo.upsertMemory("chat-2", "Bố", "Thích uống trà xanh", "user-2");
+      await repo.upsertMemory("chat-1", "Bố", "Thích uống cà phê đen", "user-1");
+      await repo.upsertMemory("chat-2", "Bố", "Thích uống trà xanh", "user-2");
 
-      const chat1Memories = repo.listMemories("chat-1");
-      const chat2Memories = repo.listMemories("chat-2");
+      const chat1Memories = await repo.listMemories("chat-1");
+      const chat2Memories = await repo.listMemories("chat-2");
 
       assert.equal(chat1Memories.length, 1);
       assert.equal(chat1Memories[0].fact, "Thích uống cà phê đen");
@@ -58,33 +58,33 @@ describe("MemoryRepository", () => {
     }
   });
 
-  it("deletes a memory by subject", () => {
+  it("deletes a memory by subject", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createMemoryRepository(db);
 
-      repo.upsertMemory("chat-1", "Mẹ", "Dị ứng hành tây", "user-1");
-      assert.equal(repo.listMemories("chat-1").length, 1);
+      await repo.upsertMemory("chat-1", "Mẹ", "Dị ứng hành tây", "user-1");
+      assert.equal((await repo.listMemories("chat-1")).length, 1);
 
-      const deleted = repo.deleteMemory("chat-1", "mẹ");
+      const deleted = await repo.deleteMemory("chat-1", "mẹ");
       assert.equal(deleted, true);
-      assert.equal(repo.listMemories("chat-1").length, 0);
+      assert.equal((await repo.listMemories("chat-1")).length, 0);
 
-      const deletedAgain = repo.deleteMemory("chat-1", "mẹ");
+      const deletedAgain = await repo.deleteMemory("chat-1", "mẹ");
       assert.equal(deletedAgain, false);
     } finally {
       closeDatabase(db);
     }
   });
 
-  it("adds and searches stories in Memory Book", () => {
+  it("adds and searches stories in Memory Book", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createMemoryRepository(db);
 
-      const s1 = repo.addStory({
+      const s1 = await repo.addStory({
         chatId: "chat-1",
         title: "Chuyến đi Đà Lạt đầu tiên",
         story: "Cả nhà đi ngắm hoa cẩm tú cầu và uống sữa đậu nành nóng đêm ở chợ Đà Lạt.",
@@ -93,7 +93,7 @@ describe("MemoryRepository", () => {
         createdBy: "user-1",
       });
 
-      const s2 = repo.addStory({
+      const s2 = await repo.addStory({
         chatId: "chat-1",
         title: "Bé Na học bơi",
         story: "Hôm nay Na đã bơi được 25m không cần phao, bố mẹ rất tự hào.",
@@ -103,26 +103,26 @@ describe("MemoryRepository", () => {
       });
 
       // Search by keyword in title
-      const dalatResults = repo.searchStories("chat-1", "Đà Lạt");
+      const dalatResults = await repo.searchStories("chat-1", "Đà Lạt");
       assert.equal(dalatResults.length, 1);
       assert.equal(dalatResults[0].id, s1.id);
       assert.equal(dalatResults[0].title, "Chuyến đi Đà Lạt đầu tiên");
 
       // Search by keyword in story text
-      const swimResults = repo.searchStories("chat-1", "phao");
+      const swimResults = await repo.searchStories("chat-1", "phao");
       assert.equal(swimResults.length, 1);
       assert.equal(swimResults[0].id, s2.id);
 
       // Search by people
-      const naResults = repo.searchStories("chat-1", "Bé Na");
+      const naResults = await repo.searchStories("chat-1", "Bé Na");
       assert.equal(naResults.length, 2);
 
       // Search with empty query returns all stories
-      const allStories = repo.searchStories("chat-1", "");
+      const allStories = await repo.searchStories("chat-1", "");
       assert.equal(allStories.length, 2);
 
       // Stories are isolated per chat
-      const chat2Stories = repo.searchStories("chat-2", "Đà Lạt");
+      const chat2Stories = await repo.searchStories("chat-2", "Đà Lạt");
       assert.equal(chat2Stories.length, 0);
     } finally {
       closeDatabase(db);

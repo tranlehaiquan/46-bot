@@ -10,7 +10,7 @@ describe("Memory tools", () => {
   it("rejects prompt injection attempts in remember and memory_book_add", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createMemoryRepository(db);
       const tools = createMemoryTools(repo, { chatId: "chat-1", senderName: "Bố" });
 
@@ -44,7 +44,7 @@ describe("Memory tools", () => {
   it("executes remember and updates existing memory for the same subject", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createMemoryRepository(db);
       const tools = createMemoryTools(repo, { chatId: "chat-1", senderName: "Bố" });
 
@@ -84,7 +84,7 @@ describe("Memory tools", () => {
   it("rejects sensitive data in remember and memory_book_add", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createMemoryRepository(db);
       const tools = createMemoryTools(repo, { chatId: "chat-1", senderName: "Bố" });
 
@@ -130,7 +130,7 @@ describe("Memory tools", () => {
   it("executes forget and returns appropriate status", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createMemoryRepository(db);
       const tools = createMemoryTools(repo, { chatId: "chat-1", senderName: "Bố" });
 
@@ -158,7 +158,7 @@ describe("Memory tools", () => {
   it("adds and searches memory book stories", async () => {
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const repo = createMemoryRepository(db);
       const tools = createMemoryTools(repo, { chatId: "chat-1", senderName: "Mẹ" });
 

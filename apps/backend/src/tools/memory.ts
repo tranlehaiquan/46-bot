@@ -50,7 +50,7 @@ export function createMemoryTools(
         };
       }
 
-      const memory = repo.upsertMemory(chatId, subject, fact, senderName);
+      const memory = await repo.upsertMemory(chatId, subject, fact, senderName);
       return {
         success: true,
         subject: memory.subject,
@@ -66,7 +66,7 @@ export function createMemoryTools(
       subject: z.string().describe("Chủ thể cần quên thông tin (ví dụ: 'Bố', 'Bé Na')"),
     }),
     execute: async ({ subject }) => {
-      const deleted = repo.deleteMemory(chatId, subject);
+      const deleted = await repo.deleteMemory(chatId, subject);
       if (!deleted) {
         return {
           success: false,
@@ -90,7 +90,7 @@ export function createMemoryTools(
         .describe("Chủ thể cụ thể cần xem thông tin (nếu để trống sẽ hiển thị tất cả)"),
     }),
     execute: async ({ subject }) => {
-      const memories = repo.listMemories(chatId, subject);
+      const memories = await repo.listMemories(chatId, subject);
       if (memories.length === 0) {
         return {
           success: true,
@@ -145,7 +145,7 @@ export function createMemoryTools(
         };
       }
 
-      const entry = repo.addStory({
+      const entry = await repo.addStory({
         chatId,
         title,
         story,
@@ -170,7 +170,7 @@ export function createMemoryTools(
       query: z.string().describe("Từ khóa tìm kiếm (ví dụ: 'Đà Lạt', 'học bơi', 'Bé Na')"),
     }),
     execute: async ({ query }) => {
-      const results = repo.searchStories(chatId, query);
+      const results = await repo.searchStories(chatId, query);
       if (results.length === 0) {
         return {
           success: true,

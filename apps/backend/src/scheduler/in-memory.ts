@@ -54,7 +54,7 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
         continue;
       }
 
-      const allUpcoming = eventsRepo.listUpcomingEvents(chatId, 7, referenceDate);
+      const allUpcoming = await eventsRepo.listUpcomingEvents(chatId, 7, referenceDate);
       const todayEvents = allUpcoming.filter((e) => e.daysRemaining === 0);
       const upcomingMilestones = allUpcoming.filter(
         (e) =>
@@ -103,8 +103,8 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
         continue;
       }
 
-      const weekEvents = eventsRepo
-        .listUpcomingEvents(chatId, 7, referenceDate)
+      const weekEvents = (await eventsRepo
+        .listUpcomingEvents(chatId, 7, referenceDate))
         .filter((e) => e.daysRemaining > 0);
 
       const messageText = formatWeeklyOutlook({
@@ -129,19 +129,19 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
   }
 
   async function runEventReminders(referenceDate = clock.now()): Promise<void> {
-    const dueReminders: DueReminder[] = eventsRepo.findEventsDueForReminder(referenceDate);
+    const dueReminders: DueReminder[] = await eventsRepo.findEventsDueForReminder(referenceDate);
 
     for (const due of dueReminders) {
       const { event, occurrenceDateStr } = due;
 
-      if (eventsRepo.isReminderSent(event.id, occurrenceDateStr)) {
+      if (await eventsRepo.isReminderSent(event.id, occurrenceDateStr)) {
         continue;
       }
 
       const messageText = formatEventReminder(due);
       try {
         await zalo.sendMessage(event.chatId, messageText);
-        eventsRepo.recordReminderSent(event.id, occurrenceDateStr, clock.now().getTime());
+        await eventsRepo.recordReminderSent(event.id, occurrenceDateStr, clock.now().getTime());
         log?.info({
           event: "scheduler_reminder_sent",
           eventId: event.id,
@@ -166,11 +166,11 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
     }
 
     const { dateStr } = getLocalTimeInfo(referenceDate);
-    const dueLookups = lookupsRepo.findDueLookups(referenceDate);
+    const dueLookups = await lookupsRepo.findDueLookups(referenceDate);
 
     for (const lookup of dueLookups) {
       if (channelsRepo) {
-        const channel = channelsRepo.getChannel(lookup.chatId);
+        const channel = await channelsRepo.getChannel(lookup.chatId);
         if (channel && channel.status !== "active") {
           log?.info({
             event: "scheduler_lookup_skipped_channel",
@@ -183,16 +183,16 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
 
       const injectionCheck = detectPromptInjection(lookup.instruction);
       if (injectionCheck.isInjection) {
-        const claim = lookupsRepo.claimRun(lookup.id, dateStr, referenceDate.getTime());
+        const claim = await lookupsRepo.claimRun(lookup.id, dateStr, referenceDate.getTime());
         if (claim.claimed) {
-          lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
-          lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
-          lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
+          await lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
+          await lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
+          await lookupsRepo.recordRunFailure(claim.run.id, "Prompt injection detected in saved instruction");
         }
         continue;
       }
 
-      const claim = lookupsRepo.claimRun(lookup.id, dateStr, referenceDate.getTime());
+      const claim = await lookupsRepo.claimRun(lookup.id, dateStr, referenceDate.getTime());
       if (!claim.claimed) {
         continue;
       }
@@ -232,7 +232,7 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
           await zalo.sendMessage(lookup.chatId, chunk);
         }
 
-        lookupsRepo.recordRunSuccess(run.id, clock.now().getTime());
+        await lookupsRepo.recordRunSuccess(run.id, clock.now().getTime());
         log?.info({
           event: "scheduler_lookup_sent",
           lookupId: lookup.id,
@@ -241,7 +241,7 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
         });
       } catch (error) {
         const err = error instanceof Error ? error.message : String(error);
-        lookupsRepo.recordRunFailure(run.id, err);
+        await lookupsRepo.recordRunFailure(run.id, err);
         log?.error({
           event: "scheduler_lookup_error",
           lookupId: lookup.id,

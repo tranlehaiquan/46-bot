@@ -95,7 +95,7 @@ export function createEventTools(
       remindDaysBefore = 0,
       notes,
     }) => {
-      const event = repo.createEvent({
+      const event = await repo.createEvent({
         chatId,
         title,
         kind,
@@ -146,7 +146,7 @@ export function createEventTools(
         .describe("Số ngày sắp tới để tìm kiếm sự kiện (mặc định 30)"),
     }),
     execute: async ({ windowDays = 30 }) => {
-      const upcoming = repo.listUpcomingEvents(chatId, windowDays, new Date());
+      const upcoming = await repo.listUpcomingEvents(chatId, windowDays, new Date());
       return {
         success: true,
         total: upcoming.length,
@@ -183,7 +183,7 @@ export function createEventTools(
       notes: z.string().nullable().optional().describe("Ghi chú mới"),
     }),
     execute: async ({ id, ...updates }) => {
-      const updated = repo.updateEvent(id, updates);
+      const updated = await repo.updateEvent(id, updates);
       if (!updated) {
         return {
           success: false,
@@ -214,7 +214,7 @@ export function createEventTools(
       id: z.number().int().describe("ID của sự kiện cần xóa"),
     }),
     execute: async ({ id }) => {
-      const deleted = repo.deleteEvent(id);
+      const deleted = await repo.deleteEvent(id);
       if (!deleted) {
         return {
           success: false,
@@ -282,7 +282,7 @@ export function createEventTools(
       if (scope === "week") {
         startDate = getStartOfWeekUtc7(refDate);
         endDate = getEndOfWeekUtc7(refDate);
-        occurrences = repo.getEventsForRange(chatId, startDate, endDate);
+        occurrences = await repo.getEventsForRange(chatId, startDate, endDate);
         const sP = getUtc7Parts(startDate);
         const eP = getUtc7Parts(endDate);
         title = "LỊCH SỰ KIỆN TUẦN";
@@ -290,13 +290,13 @@ export function createEventTools(
       } else if (scope === "year") {
         startDate = createUtc7Date(targetYear, 1, 1);
         endDate = createUtc7Date(targetYear, 12, 31);
-        occurrences = repo.getEventsForYear(chatId, targetYear);
+        occurrences = await repo.getEventsForYear(chatId, targetYear);
         title = `TỔNG HỢP SỰ KIỆN NĂM ${targetYear}`;
         subtitle = `Danh sách các sự kiện quan trọng trong cả năm ${targetYear}`;
       } else {
         startDate = createUtc7Date(targetYear, targetMonth, 1);
         endDate = createUtc7Date(targetYear, targetMonth, getDaysInSolarMonth(targetYear, targetMonth));
-        occurrences = repo.getEventsForMonth(chatId, targetYear, targetMonth);
+        occurrences = await repo.getEventsForMonth(chatId, targetYear, targetMonth);
         title = `LỊCH SỰ KIỆN THÁNG ${targetMonth}/${targetYear}`;
         subtitle = `Danh sách sự kiện, sinh nhật, giỗ chạp trong tháng ${targetMonth}`;
       }

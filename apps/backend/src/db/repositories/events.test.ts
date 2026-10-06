@@ -13,15 +13,15 @@ describe("EventsRepository", () => {
   let db: SqliteDatabase;
   let repo: EventsRepository;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     db = openDatabase(":memory:");
-    migrate(db);
+    await migrate(db);
     repo = createEventsRepository(db);
   });
 
   describe("CRUD operations", () => {
-    it("creates and retrieves an event by id", () => {
-      const created = repo.createEvent({
+    it("creates and retrieves an event by id", async () => {
+      const created = await repo.createEvent({
         chatId: "chat-1",
         title: "Sinh nhật Mẹ",
         kind: "birthday",
@@ -47,19 +47,19 @@ describe("EventsRepository", () => {
       assert.equal(created.notes, "Mua hoa tặng mẹ");
       assert.equal(created.createdBy, "user-1");
 
-      const fetched = repo.getEventById(created.id);
+      const fetched = await repo.getEventById(created.id);
       assert.deepEqual(fetched, created);
     });
 
-    it("retrieves events by chat id", () => {
-      repo.createEvent({
+    it("retrieves events by chat id", async () => {
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Event 1",
         day: 1,
         month: 1,
         createdBy: "user-1",
       });
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-2",
         title: "Event 2",
         day: 2,
@@ -67,13 +67,13 @@ describe("EventsRepository", () => {
         createdBy: "user-2",
       });
 
-      const chat1Events = repo.getEventsByChat("chat-1");
+      const chat1Events = await repo.getEventsByChat("chat-1");
       assert.equal(chat1Events.length, 1);
       assert.equal(chat1Events[0]?.title, "Event 1");
     });
 
-    it("updates an event", () => {
-      const created = repo.createEvent({
+    it("updates an event", async () => {
+      const created = await repo.createEvent({
         chatId: "chat-1",
         title: "Họp phụ huynh",
         day: 10,
@@ -81,7 +81,7 @@ describe("EventsRepository", () => {
         createdBy: "user-1",
       });
 
-      const updated = repo.updateEvent(created.id, {
+      const updated = await repo.updateEvent(created.id, {
         title: "Họp phụ huynh học kỳ 1",
         day: 12,
         month: 10,
@@ -94,8 +94,8 @@ describe("EventsRepository", () => {
       assert.equal(updated.notes, "Mang theo sổ liên lạc");
     });
 
-    it("deletes an event", () => {
-      const created = repo.createEvent({
+    it("deletes an event", async () => {
+      const created = await repo.createEvent({
         chatId: "chat-1",
         title: "Xóa sự kiện này",
         day: 1,
@@ -103,20 +103,20 @@ describe("EventsRepository", () => {
         createdBy: "user-1",
       });
 
-      const deleted = repo.deleteEvent(created.id);
+      const deleted = await repo.deleteEvent(created.id);
       assert.equal(deleted, true);
-      assert.equal(repo.getEventById(created.id), undefined);
+      assert.equal(await repo.getEventById(created.id), undefined);
 
-      const deleteAgain = repo.deleteEvent(created.id);
+      const deleteAgain = await repo.deleteEvent(created.id);
       assert.equal(deleteAgain, false);
     });
   });
 
   describe("Next Occurrence Calculations", () => {
-    it("calculates next occurrence for solar yearly event (upcoming this year)", () => {
+    it("calculates next occurrence for solar yearly event (upcoming this year)", async () => {
       // Reference date: 2026-05-01
       const refDate = createUtc7Date(2026, 5, 1);
-      const event = repo.createEvent({
+      const event = await repo.createEvent({
         chatId: "chat-1",
         title: "Sinh nhật",
         calendar: "solar",
@@ -132,10 +132,10 @@ describe("EventsRepository", () => {
       assert.equal(occ.daysRemaining, 14);
     });
 
-    it("calculates next occurrence for solar yearly event (passed this year -> next year)", () => {
+    it("calculates next occurrence for solar yearly event (passed this year -> next year)", async () => {
       // Reference date: 2026-06-01 (May 15 has already passed)
       const refDate = createUtc7Date(2026, 6, 1);
-      const event = repo.createEvent({
+      const event = await repo.createEvent({
         chatId: "chat-1",
         title: "Sinh nhật",
         calendar: "solar",
@@ -151,10 +151,10 @@ describe("EventsRepository", () => {
       assert.ok(occ.daysRemaining > 300);
     });
 
-    it("calculates next occurrence for solar monthly recurrence", () => {
+    it("calculates next occurrence for solar monthly recurrence", async () => {
       // Reference date: 2026-05-10. Event on day 15 monthly.
       const refDate = createUtc7Date(2026, 5, 10);
-      const event = repo.createEvent({
+      const event = await repo.createEvent({
         chatId: "chat-1",
         title: "Đóng tiền nhà",
         day: 15,
@@ -176,11 +176,11 @@ describe("EventsRepository", () => {
       assert.equal(occ2.daysRemaining, 26);
     });
 
-    it("calculates next occurrence for lunar yearly event (giỗ / death anniversary)", () => {
+    it("calculates next occurrence for lunar yearly event (giỗ / death anniversary)", async () => {
       // Tết 2026 (1/1 lunar) is 2026-02-17 solar.
       // Reference date: 2026-02-10 (7 days before Tết).
       const refDate = createUtc7Date(2026, 2, 10);
-      const event = repo.createEvent({
+      const event = await repo.createEvent({
         chatId: "chat-1",
         title: "Mùng 1 Tết",
         kind: "gio",
@@ -203,9 +203,9 @@ describe("EventsRepository", () => {
       assert.equal(occAfter.dateStr, "2027-02-06");
     });
 
-    it("returns null for past one-off solar events", () => {
+    it("returns null for past one-off solar events", async () => {
       const refDate = createUtc7Date(2026, 10, 4);
-      const pastEvent = repo.createEvent({
+      const pastEvent = await repo.createEvent({
         chatId: "chat-1",
         title: "Sự kiện đã qua",
         calendar: "solar",
@@ -222,11 +222,11 @@ describe("EventsRepository", () => {
   });
 
   describe("listUpcomingEvents", () => {
-    it("returns events sorted chronologically within window", () => {
+    it("returns events sorted chronologically within window", async () => {
       const refDate = createUtc7Date(2026, 10, 1);
 
       // Event in 5 days (2026-10-06)
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Họp lớp",
         day: 6,
@@ -237,7 +237,7 @@ describe("EventsRepository", () => {
       });
 
       // Event in 2 days (2026-10-03)
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Đi khám răng",
         day: 3,
@@ -248,7 +248,7 @@ describe("EventsRepository", () => {
       });
 
       // Event in 60 days (outside 30-day window)
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Đi du lịch",
         day: 1,
@@ -258,7 +258,7 @@ describe("EventsRepository", () => {
         createdBy: "user-1",
       });
 
-      const upcoming = repo.listUpcomingEvents("chat-1", 30, refDate);
+      const upcoming = await repo.listUpcomingEvents("chat-1", 30, refDate);
       assert.equal(upcoming.length, 2);
       assert.equal(upcoming[0]?.event.title, "Đi khám răng");
       assert.equal(upcoming[0]?.daysRemaining, 2);
@@ -268,29 +268,29 @@ describe("EventsRepository", () => {
   });
 
   describe("Reminder Tracking & Due Reminders", () => {
-    it("tracks sent reminders idempotently", () => {
-      const ev = repo.createEvent({
+    it("tracks sent reminders idempotently", async () => {
+      const ev = await repo.createEvent({
         chatId: "chat-1",
         title: "Test Event",
         day: 5,
         month: 10,
         createdBy: "user-1",
       });
-      assert.equal(repo.isReminderSent(ev.id, "2026-10-05"), false);
-      repo.recordReminderSent(ev.id, "2026-10-05");
-      assert.equal(repo.isReminderSent(ev.id, "2026-10-05"), true);
-      assert.equal(repo.isReminderSent(ev.id, "2026-10-06"), false);
+      assert.equal(await repo.isReminderSent(ev.id, "2026-10-05"), false);
+      await repo.recordReminderSent(ev.id, "2026-10-05");
+      assert.equal(await repo.isReminderSent(ev.id, "2026-10-05"), true);
+      assert.equal(await repo.isReminderSent(ev.id, "2026-10-06"), false);
 
       // Duplicate record is ignored without throwing
-      repo.recordReminderSent(ev.id, "2026-10-05");
-      assert.equal(repo.isReminderSent(ev.id, "2026-10-05"), true);
+      await repo.recordReminderSent(ev.id, "2026-10-05");
+      assert.equal(await repo.isReminderSent(ev.id, "2026-10-05"), true);
     });
 
-    it("identifies events due for day-of and advance reminders", () => {
+    it("identifies events due for day-of and advance reminders", async () => {
       const refDate = createUtc7Date(2026, 10, 5);
 
       // Event happening today (day-of)
-      const ev1 = repo.createEvent({
+      const ev1 = await repo.createEvent({
         chatId: "chat-1",
         title: "Sinh nhật Ba",
         day: 5,
@@ -301,7 +301,7 @@ describe("EventsRepository", () => {
       });
 
       // Event happening in 3 days, with remindDaysBefore = 3 (advance alert due today)
-      const ev2 = repo.createEvent({
+      const ev2 = await repo.createEvent({
         chatId: "chat-1",
         title: "Giỗ Cụ",
         calendar: "solar",
@@ -313,7 +313,7 @@ describe("EventsRepository", () => {
       });
 
       // Event happening in 5 days, with remindDaysBefore = 3 (not due today)
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Khám sức khỏe",
         day: 10,
@@ -324,7 +324,7 @@ describe("EventsRepository", () => {
       });
 
       // Event in chat-2
-      const ev4 = repo.createEvent({
+      const ev4 = await repo.createEvent({
         chatId: "chat-2",
         title: "Họp chi bộ",
         day: 5,
@@ -335,7 +335,7 @@ describe("EventsRepository", () => {
       });
 
       // Query for chat-1
-      const dueChat1 = repo.findEventsDueForReminder(refDate, "chat-1");
+      const dueChat1 = await repo.findEventsDueForReminder(refDate, "chat-1");
       assert.equal(dueChat1.length, 2);
       assert.equal(dueChat1[0]?.event.id, ev1.id);
       assert.equal(dueChat1[0]?.isAdvanceNotice, false);
@@ -346,16 +346,16 @@ describe("EventsRepository", () => {
       assert.equal(dueChat1[1]?.daysRemaining, 3);
 
       // Query for all chats
-      const dueAll = repo.findEventsDueForReminder(refDate);
+      const dueAll = await repo.findEventsDueForReminder(refDate);
       assert.equal(dueAll.length, 3);
       assert.ok(dueAll.some((d) => d.event.id === ev4.id));
     });
   });
 
   describe("Timeframe and Range Occurrence Queries", () => {
-    it("retrieves one-off, recurring solar, and recurring lunar events for a date range", () => {
+    it("retrieves one-off, recurring solar, and recurring lunar events for a date range", async () => {
       // 1. One-off solar in range
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Đám cưới bạn",
         day: 15,
@@ -366,7 +366,7 @@ describe("EventsRepository", () => {
       });
 
       // 2. One-off solar outside range
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Sự kiện tháng 11",
         day: 15,
@@ -377,7 +377,7 @@ describe("EventsRepository", () => {
       });
 
       // 3. Yearly solar birthday falling in October
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Sinh nhật Chị",
         kind: "birthday",
@@ -388,7 +388,7 @@ describe("EventsRepository", () => {
       });
 
       // 4. Yearly lunar giỗ on 1st day of 9th lunar month (1/9 âm lịch in 2026 corresponds to 2026-10-10 dương lịch)
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Giỗ Ông Nội",
         kind: "gio",
@@ -401,7 +401,7 @@ describe("EventsRepository", () => {
 
       // 5. Weekly event (every Wednesday)
       // 2026-10-07 is Wednesday
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Họp tuần",
         day: 7,
@@ -413,7 +413,7 @@ describe("EventsRepository", () => {
 
       const startDate = createUtc7Date(2026, 10, 1);
       const endDate = createUtc7Date(2026, 10, 31);
-      const occurrences = repo.getEventsForRange("chat-1", startDate, endDate);
+      const occurrences = await repo.getEventsForRange("chat-1", startDate, endDate);
 
       // Verify occurrences in October 2026
       assert.ok(occurrences.length >= 4);
@@ -440,9 +440,9 @@ describe("EventsRepository", () => {
       assert.ok(!occurrences.some((o) => o.event.title === "Sự kiện tháng 11"));
     });
 
-    it("retrieves events for a specific week via getEventsForWeek", () => {
+    it("retrieves events for a specific week via getEventsForWeek", async () => {
       // 2026-10-05 is Monday, 2026-10-11 is Sunday
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Ăn tối thứ Tư",
         day: 7,
@@ -451,7 +451,7 @@ describe("EventsRepository", () => {
         recurrence: "none",
         createdBy: "user-1",
       });
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Sự kiện tuần sau",
         day: 14,
@@ -462,15 +462,15 @@ describe("EventsRepository", () => {
       });
 
       const refDate = createUtc7Date(2026, 10, 8); // Thursday
-      const weekEvents = repo.getEventsForWeek("chat-1", refDate);
+      const weekEvents = await repo.getEventsForWeek("chat-1", refDate);
 
       assert.equal(weekEvents.length, 1);
       assert.equal(weekEvents[0]?.event.title, "Ăn tối thứ Tư");
       assert.equal(weekEvents[0]?.occurrenceDateStr, "2026-10-07");
     });
 
-    it("retrieves events for a month and a full year", () => {
-      repo.createEvent({
+    it("retrieves events for a month and a full year", async () => {
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Tết Dương Lịch",
         day: 1,
@@ -479,7 +479,7 @@ describe("EventsRepository", () => {
         recurrence: "none",
         createdBy: "user-1",
       });
-      repo.createEvent({
+      await repo.createEvent({
         chatId: "chat-1",
         title: "Sinh nhật Ba",
         day: 25,
@@ -488,15 +488,15 @@ describe("EventsRepository", () => {
         createdBy: "user-1",
       });
 
-      const monthJan = repo.getEventsForMonth("chat-1", 2026, 1);
+      const monthJan = await repo.getEventsForMonth("chat-1", 2026, 1);
       assert.equal(monthJan.length, 1);
       assert.equal(monthJan[0]?.event.title, "Tết Dương Lịch");
 
-      const monthDec = repo.getEventsForMonth("chat-1", 2026, 12);
+      const monthDec = await repo.getEventsForMonth("chat-1", 2026, 12);
       assert.equal(monthDec.length, 1);
       assert.equal(monthDec[0]?.event.title, "Sinh nhật Ba");
 
-      const yearEvents = repo.getEventsForYear("chat-1", 2026);
+      const yearEvents = await repo.getEventsForYear("chat-1", 2026);
       assert.equal(yearEvents.length, 2);
     });
   });

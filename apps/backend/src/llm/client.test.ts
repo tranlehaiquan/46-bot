@@ -86,12 +86,12 @@ describe("buildSystemPrompt", () => {
 
     const db = openDatabase(":memory:");
     try {
-      migrate(db);
+      await migrate(db);
       const channelRepo = createChannelRepository(db);
       const lookupsRepo = createLookupRepository(db);
 
       // Active channel
-      channelRepo.upsertDiscovery({
+      await channelRepo.upsertDiscovery({
         chatId: "chat-active",
         name: "Active Family Chat",
         chatType: "GROUP",

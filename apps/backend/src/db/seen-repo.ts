@@ -1,24 +1,25 @@
 import type { SqliteDatabase } from "./connection.js";
 
 export interface SeenRepository {
-  hasSeen(messageId: string): boolean;
-  markSeen(messageId: string): boolean;
+  hasSeen(messageId: string): Promise<boolean>;
+  markSeen(messageId: string): Promise<boolean>;
 }
 
 export function createSeenRepository(db: SqliteDatabase): SeenRepository {
-  const checkStmt = db.prepare("SELECT 1 FROM seen_messages WHERE message_id = ?");
-  const insertStmt = db.prepare(
-    "INSERT OR IGNORE INTO seen_messages (message_id, ts) VALUES (?, ?)",
-  );
-
   return {
-    hasSeen(messageId: string): boolean {
-      const row = checkStmt.get(messageId);
-      return row !== undefined;
+    async hasSeen(messageId: string): Promise<boolean> {
+      const res = await db.execute({
+        sql: "SELECT 1 FROM seen_messages WHERE message_id = ?",
+        args: [messageId],
+      });
+      return res.rows.length > 0;
     },
-    markSeen(messageId: string): boolean {
-      const result = insertStmt.run(messageId, Date.now());
-      return result.changes > 0;
+    async markSeen(messageId: string): Promise<boolean> {
+      const res = await db.execute({
+        sql: "INSERT OR IGNORE INTO seen_messages (message_id, ts) VALUES (?, ?)",
+        args: [messageId, Date.now()],
+      });
+      return res.rowsAffected > 0;
     },
   };
 }
