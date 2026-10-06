@@ -49,6 +49,7 @@ export function useUpdateChannel() {
     }) => api.updateChannel(chatId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["channels"] });
+      queryClient.invalidateQueries({ queryKey: ["calendarEvents"] });
     },
   });
 }

@@ -109,7 +109,11 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     });
   }
 
-  if (message.eventName !== "message.text.received" || message.isBot) {
+  const isSupportedEvent =
+    message.eventName === "message.text.received" ||
+    message.eventName === "message.image.received";
+
+  if (!isSupportedEvent || message.isBot) {
     return;
   }
 
@@ -173,12 +177,16 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     const history = messageRepo ? await messageRepo.getRecent(message.chatId, 20) : [];
 
     if (messageRepo) {
+      const isImage = message.eventName === "message.image.received";
+      const storedContent = isImage && message.photo
+        ? (message.text ? `${message.text}\n[Ảnh: ${message.photo}]` : `[Ảnh: ${message.photo}]`)
+        : message.text;
       await messageRepo.insert({
         chatId: message.chatId,
         senderId: message.senderId,
         senderName: message.senderName,
         role: "user",
-        content: message.text,
+        content: storedContent,
       });
     }
 
@@ -257,6 +265,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
             senderId: message.senderId,
             senderName: message.senderName,
             content: message.text,
+            photo: message.eventName === "message.image.received" ? message.photo : undefined,
           },
           tools,
         });

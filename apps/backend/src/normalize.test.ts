@@ -100,4 +100,42 @@ describe("normalizeDelivery and isMentionedOrReplied", () => {
     assert.ok(msg);
     assert.equal(isMentionedOrReplied(msg, "my-bot-id"), true);
   });
+
+  it("extracts photo and caption from message.image.received payload", () => {
+    const payload = {
+      event_name: "message.image.received",
+      message: {
+        message_id: "m-img-1",
+        photo: "https://example.com/image.png",
+        caption: "Xem hóa đơn này",
+        chat: { id: "group-1", chat_type: "GROUP" },
+        from: { id: "user-3", display_name: "Charlie", is_bot: false },
+      },
+    };
+
+    const msg = normalizeDelivery(payload);
+    assert.ok(msg);
+    assert.equal(msg.eventName, "message.image.received");
+    assert.equal(msg.photo, "https://example.com/image.png");
+    assert.equal(msg.caption, "Xem hóa đơn này");
+    assert.equal(msg.text, "Xem hóa đơn này");
+    assert.equal(isMentionedOrReplied(msg, "bot-id-1"), false);
+  });
+
+  it("recognizes @ in caption for group message", () => {
+    const payload = {
+      event_name: "message.image.received",
+      message: {
+        message_id: "m-img-2",
+        photo: "https://example.com/image2.png",
+        caption: "@bot hãy tóm tắt ảnh này",
+        chat: { id: "group-1", chat_type: "GROUP" },
+        from: { id: "user-3", display_name: "Charlie", is_bot: false },
+      },
+    };
+
+    const msg = normalizeDelivery(payload);
+    assert.ok(msg);
+    assert.equal(isMentionedOrReplied(msg), true);
+  });
 });

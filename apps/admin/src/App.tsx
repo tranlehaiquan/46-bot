@@ -102,6 +102,21 @@ function AdminApp() {
     }
   };
 
+  const handleRenameChannel = async (chatId: string, name: string) => {
+    try {
+      const updated = await updateChannelMutation.mutateAsync({
+        chatId,
+        updates: { name },
+      });
+      if (selectedChannel?.chatId === chatId) {
+        setSelectedChannel(updated);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to rename channel");
+      throw err;
+    }
+  };
+
   const handleChannelUpdated = (updated: Channel) => {
     setSelectedChannel(updated);
   };
@@ -132,6 +147,7 @@ function AdminApp() {
               selectedChannel={selectedChannel}
               onSelectChannel={handleSelectChannel}
               onUpdateStatus={handleUpdateStatus}
+              onRenameChannel={handleRenameChannel}
             />
 
             {selectedChannel ? (

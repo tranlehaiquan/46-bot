@@ -97,6 +97,19 @@ export function ChannelDetail({
     }
   };
 
+  const handleRename = async (newName: string) => {
+    try {
+      const updated = await updateChannelMutation.mutateAsync({
+        chatId: channel.chatId,
+        updates: { name: newName },
+      });
+      onChannelUpdated(updated);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to rename channel");
+      throw err;
+    }
+  };
+
   return (
     <div className="glass-panel flex flex-col h-[calc(100vh-120px)] overflow-hidden">
       <ChannelHeader
@@ -104,6 +117,7 @@ export function ChannelDetail({
         loading={isRefreshing}
         onStatusChange={handleStatusChange}
         onRefresh={handleRefresh}
+        onRename={handleRename}
       />
 
       <Tabs

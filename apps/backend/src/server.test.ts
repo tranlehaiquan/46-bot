@@ -60,7 +60,7 @@ function envelope(overrides?: {
         text: overrides?.text ?? "@bot xin chao",
         message_id: overrides?.messageId ?? "msg-1",
         date: 1750316131602,
-        photo: "https://cdn.example/photo.jpg",
+        photo: overrides?.photo ?? "https://cdn.example/photo.jpg",
         mentions: overrides?.mentions,
         quote: overrides?.quote,
         ...overrides?.extra,
@@ -274,7 +274,7 @@ describe("group discovery", () => {
     await app.close();
   });
 
-  it("replies to a private text chat and stays silent for other groups, bot senders, and images", async () => {
+  it("replies to a private text or image chat and stays silent for other groups, bot senders, and unmentioned group images", async () => {
     const { app, zalo, queue } = testApp("group-1");
     await post(app, JSON.stringify(envelope({ isBot: true, messageId: "bot-msg" })));
     await post(app, JSON.stringify(envelope({ chatId: "group-2", messageId: "other-group", text: "no mention here" })));
@@ -301,7 +301,29 @@ describe("group discovery", () => {
       ),
     );
     await queue.drain();
-    assert.deepEqual(zalo.sends, [{ chatId: "user-9", text: CANNED_REPLY }]);
+    assert.deepEqual(zalo.sends, [
+      { chatId: "user-9", text: CANNED_REPLY },
+      { chatId: "user-8", text: CANNED_REPLY },
+    ]);
+    await app.close();
+  });
+
+  it("replies to a group image when mentioned via caption", async () => {
+    const { app, zalo, queue } = testApp("group-1");
+    await post(
+      app,
+      JSON.stringify(
+        envelope({
+          chatId: "group-1",
+          chatType: "GROUP",
+          eventName: "message.image.received",
+          messageId: "image-group-mentioned",
+          extra: { caption: "@bot xem hinh nay giup minh", photo: "https://example.com/pic.png" },
+        }),
+      ),
+    );
+    await queue.drain();
+    assert.deepEqual(zalo.sends, [{ chatId: "group-1", text: CANNED_REPLY }]);
     await app.close();
   });
 
@@ -439,6 +461,64 @@ describe("LLM conversation and database integration", () => {
     assert.equal(history[0].content, "@bot Chao buoi sang");
     assert.equal(history[1].role, "assistant");
     assert.equal(history[1].content, "Chao ban! Chuc mot ngay tot lanh.");
+
+    await app.close();
+    closeDatabase(db);
+  });
+
+  it("processes photo message with multimodal parameters and stores photo in history", async () => {
+    const db = openDatabase(":memory:");
+    await migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+
+    let passedPhoto: string | undefined;
+    let passedContent: string | undefined;
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        passedPhoto = params.incomingMessage.photo;
+        passedContent = params.incomingMessage.content;
+        return "Buc anh rat dep!";
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      llmClient: mockLlm,
+    });
+
+    const photoMsg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      eventName: "message.image.received",
+      messageId: "msg-photo-1",
+      senderId: "user-1",
+      senderName: "Bob",
+      text: "",
+      extra: {
+        photo: "https://cdn.example/receipt.png",
+        caption: "@bot doc hoa don nay giup toi",
+      },
+    });
+
+    await post(app, JSON.stringify(photoMsg));
+    await queue.drain();
+
+    assert.equal(passedPhoto, "https://cdn.example/receipt.png");
+    assert.equal(passedContent, "@bot doc hoa don nay giup toi");
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: "Buc anh rat dep!" },
+    ]);
+
+    const history = await messageRepo.getRecent("group-1");
+    assert.equal(history.length, 2);
+    assert.equal(history[0].role, "user");
+    assert.ok(history[0].content.includes("[Ảnh: https://cdn.example/receipt.png]"));
+    assert.ok(history[0].content.includes("@bot doc hoa don nay giup toi"));
+    assert.equal(history[1].role, "assistant");
+    assert.equal(history[1].content, "Buc anh rat dep!");
 
     await app.close();
     closeDatabase(db);

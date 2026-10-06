@@ -20,6 +20,8 @@ export type IncomingMessage = {
   senderName: string;
   isBot: boolean;
   text: string;
+  photo?: string;
+  caption?: string;
   mentions: Mention[];
   quote?: QuotedMessage;
   raw: unknown;
@@ -55,7 +57,11 @@ export function normalizeDelivery(body: unknown): IncomingMessage | undefined {
     return undefined;
   }
 
-  const text = typeof messageRecord.text === "string" ? messageRecord.text : "";
+  const photo = typeof messageRecord.photo === "string" ? messageRecord.photo : undefined;
+  const caption = typeof messageRecord.caption === "string" ? messageRecord.caption : undefined;
+  const text = typeof messageRecord.text === "string" && messageRecord.text.length > 0
+    ? messageRecord.text
+    : caption ?? "";
   const mentions = parseMentions(messageRecord.mentions);
   const quote = parseQuote(messageRecord.quote ?? messageRecord.reply_to ?? messageRecord.reply_to_message);
 
@@ -68,6 +74,8 @@ export function normalizeDelivery(body: unknown): IncomingMessage | undefined {
     senderName: typeof fromRecord.display_name === "string" ? fromRecord.display_name : "",
     isBot: fromRecord.is_bot === true,
     text,
+    photo,
+    caption,
     mentions,
     quote,
     raw: body,
@@ -100,8 +108,8 @@ export function isMentionedOrReplied(message: IncomingMessage, botId?: string): 
     return true;
   }
 
-  // Fallback: check @ in text
-  if (message.text.includes("@")) {
+  // Fallback: check @ in text or caption
+  if (message.text.includes("@") || (message.caption && message.caption.includes("@"))) {
     return true;
   }
 

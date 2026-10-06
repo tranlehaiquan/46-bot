@@ -80,6 +80,7 @@ export interface LlmClient {
       senderId: string;
       senderName: string;
       content: string;
+      photo?: string;
     };
     tools?: ToolSet;
   }): Promise<string>;
@@ -99,7 +100,7 @@ export function createLlmClient(options: LlmClientOptions): LlmClient {
 
   return {
     async generateReply(params): Promise<string> {
-      const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+      const messages: NonNullable<Parameters<typeof generateText>[0]["messages"]> = [];
 
       for (const msg of params.history) {
         if (msg.role === "assistant") {
@@ -120,10 +121,50 @@ export function createLlmClient(options: LlmClientOptions): LlmClient {
         ? `${params.incomingMessage.senderName}`
         : params.incomingMessage.senderId;
 
-      messages.push({
-        role: "user",
-        content: formatUserMessageTag(currentSender, params.incomingMessage.content),
-      });
+      const userText =
+        params.incomingMessage.content ||
+        (params.incomingMessage.photo ? "Hãy mô tả hoặc phân tích hình ảnh này." : "");
+
+      if (params.incomingMessage.photo) {
+        if (options.provider === "gemini") {
+          try {
+            messages.push({
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: formatUserMessageTag(currentSender, userText),
+                },
+                {
+                  type: "image",
+                  image: new URL(params.incomingMessage.photo),
+                },
+              ],
+            });
+          } catch {
+            messages.push({
+              role: "user",
+              content: formatUserMessageTag(
+                currentSender,
+                `${userText}\n[Hình ảnh đính kèm: ${params.incomingMessage.photo}]`,
+              ),
+            });
+          }
+        } else {
+          messages.push({
+            role: "user",
+            content: formatUserMessageTag(
+              currentSender,
+              `${userText}\n[Ghi chú: Người dùng đã gửi một hình ảnh kèm theo]`,
+            ),
+          });
+        }
+      } else {
+        messages.push({
+          role: "user",
+          content: formatUserMessageTag(currentSender, userText),
+        });
+      }
 
       const system = buildSystemPrompt(
         params.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,

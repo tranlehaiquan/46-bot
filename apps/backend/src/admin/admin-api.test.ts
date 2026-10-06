@@ -164,6 +164,19 @@ describe("Admin REST API", () => {
       assert.equal(repeatPatchRes.statusCode, 200);
       assert.equal(zalo.sends.length, 1);
 
+      // Renaming channel alone without changing status
+      const renameOnlyRes = await app.inject({
+        method: "PATCH",
+        url: "/api/admin/channels/group-100",
+        headers: { authorization: `Bearer ${adminPassword}` },
+        payload: JSON.stringify({ name: "Renamed Family Channel" }),
+      });
+      assert.equal(renameOnlyRes.statusCode, 200);
+      const renameOnlyBody = JSON.parse(renameOnlyRes.body);
+      assert.equal(renameOnlyBody.ok, true);
+      assert.equal(renameOnlyBody.channel.name, "Renamed Family Channel");
+      assert.equal(renameOnlyBody.channel.status, "active");
+
       await app.close();
     } finally {
       closeDatabase(db);
