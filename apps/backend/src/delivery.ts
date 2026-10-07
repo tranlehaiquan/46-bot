@@ -383,7 +383,8 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       }
     }
 
-    const chunks = splitText(replyText, 2000);
+    const effectiveReply = replyText.trim() || FALLBACK_ERROR_MESSAGE;
+    const chunks = splitText(effectiveReply, 2000).filter((c) => c.trim().length > 0);
     for (const chunk of chunks) {
       await zalo.sendMessage(message.chatId, chunk);
     }

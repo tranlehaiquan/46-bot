@@ -8,6 +8,7 @@ export interface StationInfo {
   name: string;
   region: Region;
   rssSlug?: string;
+  webSlug?: string;
   drawDays?: number[]; // 0 = Sun, 1 = Mon, ..., 6 = Sat
   drawTime: string;
 }
@@ -59,6 +60,7 @@ export const STATIONS: Record<string, StationInfo> = {
     name: "TP. Hồ Chí Minh",
     region: "mien-nam",
     rssSlug: "ho-chi-minh-xshcm",
+    webSlug: "xshcm-xstp",
     drawDays: [1, 6], // Thứ 2, Thứ 7
     drawTime: "16:15",
   },
@@ -219,6 +221,7 @@ export const STATIONS: Record<string, StationInfo> = {
     name: "Đà Lạt (Lâm Đồng)",
     region: "mien-nam",
     rssSlug: "lam-dong-xsld",
+    webSlug: "xsld-xsdl",
     drawDays: [0],
     drawTime: "16:15",
   },
@@ -253,6 +256,7 @@ export const STATIONS: Record<string, StationInfo> = {
     name: "Quảng Nam",
     region: "mien-trung",
     rssSlug: "quang-nam-xsqnm",
+    webSlug: "xsqnm-xsqna",
     drawDays: [2],
     drawTime: "17:15",
   },
@@ -261,6 +265,7 @@ export const STATIONS: Record<string, StationInfo> = {
     name: "Đà Nẵng",
     region: "mien-trung",
     rssSlug: "da-nang-xsdng",
+    webSlug: "xsdng-xsdna",
     drawDays: [3, 6], // Thứ 4, Thứ 7
     drawTime: "17:15",
   },
@@ -1026,10 +1031,66 @@ export async function fetchLotteryResults(
       }
     }
 
+    // If not found in recent RSS items, fallback to direct date web page on xskt.com.vn
+    const dateParts = targetDate.split("/");
+    if (dateParts.length === 3) {
+      const day = parseInt(dateParts[0], 10);
+      const month = parseInt(dateParts[1], 10);
+      const year = dateParts[2];
+      const webSlug = station.webSlug || station.code;
+      const webUrl = `https://xskt.com.vn/${webSlug}/ngay-${day}-${month}-${year}`;
+
+      try {
+        const webRes = await fetchFn(webUrl, {
+          headers: { "User-Agent": "Mozilla/5.0" },
+          redirect: "follow",
+        });
+        if (webRes.ok) {
+          const webHtml = await webRes.text();
+          const webPrizes = parseXsktHtmlResult(webHtml);
+          if (Object.keys(webPrizes).length > 0) {
+            const result: LotteryResultData = {
+              stationCode: station.code,
+              stationName: station.name,
+              region: station.region,
+              date: targetDate,
+              prizes: webPrizes,
+            };
+
+            resultCache.set(cacheKey, { data: result, cachedAt: Date.now() });
+            return result;
+          }
+        }
+      } catch {
+        // Fallback error ignored
+      }
+    }
+
     return null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Parses prizes from an HTML result box on xskt.com.vn (useful for historical draws).
+ */
+export function parseXsktHtmlResult(html: string): Record<string, string[]> {
+  const prizes: Record<string, string[]> = {};
+  const boxMatch = html.match(/<div class="box-ketqua">[\s\S]*?<\/table>/);
+  if (!boxMatch) return prizes;
+
+  const rowRegex = /<tr><td[^>]*>(?:G|Giải\s*)?([0-9]|ĐB|db)<\/td><td[^>]*>([\s\S]*?)<\/td>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = rowRegex.exec(boxMatch[0])) !== null) {
+    const key = m[1].toUpperCase();
+    const rawNumbers = m[2].replace(/<[^>]+>/g, " ");
+    const numbers = rawNumbers.split(/\s+/).map((n) => n.replace(/\D/g, "")).filter(Boolean);
+    if (numbers.length > 0) {
+      prizes[key] = numbers;
+    }
+  }
+  return prizes;
 }
 
 /**

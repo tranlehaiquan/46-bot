@@ -102,10 +102,15 @@ export type LlmClientOptions = {
 };
 
 export function createLlmClient(options: LlmClientOptions): LlmClient {
+  const actualModelName =
+    options.provider === "gemini" && options.modelName === "gemini-3.8-flash"
+      ? "gemini-2.5-flash"
+      : options.modelName;
+
   const model =
     options.provider === "gemini"
-      ? createGoogleGenerativeAI({ apiKey: options.apiKey })(options.modelName)
-      : createDeepSeek({ apiKey: options.apiKey })(options.modelName);
+      ? createGoogleGenerativeAI({ apiKey: options.apiKey })(actualModelName)
+      : createDeepSeek({ apiKey: options.apiKey })(actualModelName);
 
   return {
     async generateReply(params): Promise<string> {
@@ -147,7 +152,7 @@ export function createLlmClient(options: LlmClientOptions): LlmClient {
                 {
                   type: "file",
                   data: new URL(params.incomingMessage.photo),
-                  mediaType: "image",
+                  mediaType: "image/jpeg",
                 },
               ],
             });
@@ -190,7 +195,27 @@ export function createLlmClient(options: LlmClientOptions): LlmClient {
         stopWhen: stepCountIs(4),
       });
 
-      return result.text.trim();
+      const trimmedText = result.text.trim();
+      if (trimmedText) {
+        return trimmedText;
+      }
+
+      // Check if a tool was executed in any step with a message
+      if (result.steps) {
+        for (const step of result.steps) {
+          if (step.toolResults && step.toolResults.length > 0) {
+            for (const tr of step.toolResults) {
+              const anyTr = tr as any;
+              const res = anyTr.result ?? anyTr.output;
+              if (res && typeof res === "object" && typeof res.message === "string" && res.message) {
+                return res.message;
+              }
+            }
+          }
+        }
+      }
+
+      return FALLBACK_ERROR_MESSAGE;
     },
   };
 }
