@@ -5,4 +5,5 @@ export * from "./web-search.js";
 export * from "./memory.js";
 export * from "./weather.js";
 export * from "./lookups.js";
+export * from "./lottery.js";
 

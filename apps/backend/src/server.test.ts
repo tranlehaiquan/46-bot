@@ -1034,5 +1034,56 @@ describe("LLM conversation and database integration", () => {
 
     await app.close();
   });
+
+  it("supports lottery checking tool execution through conversational flow", async () => {
+    let lotteryToolCalled = false;
+    let checkedStation = "";
+    let checkedTicket = "";
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        assert.ok(params.tools, "Tools should be provided to LLM");
+        const tools = params.tools as Record<string, { execute?: (args: any, opt?: any) => Promise<any> }>;
+        assert.ok(tools.lottery_check, "lottery_check tool should exist");
+
+        // Simulate tool call execution
+        const res = await tools.lottery_check.execute?.({
+          station: "TP.HCM",
+          ticketNumber: "750136",
+          date: "05/10/2026",
+        });
+
+        assert.ok(res);
+        lotteryToolCalled = true;
+        checkedStation = "TP.HCM";
+        checkedTicket = "750136";
+
+        return "Vé số 750136 đài TP.HCM ngày 05/10 đã trúng Giải Đặc Biệt rồi nhé cả nhà ơi!";
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      llmClient: mockLlm,
+    });
+
+    const msg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Dò giùm vé số đài Sài Gòn số 750136 với",
+      messageId: "msg-lottery-1",
+    });
+
+    await post(app, JSON.stringify(msg));
+    await queue.drain();
+
+    assert.equal(lotteryToolCalled, true);
+    assert.equal(checkedStation, "TP.HCM");
+    assert.equal(checkedTicket, "750136");
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: "Vé số 750136 đài TP.HCM ngày 05/10 đã trúng Giải Đặc Biệt rồi nhé cả nhà ơi!" },
+    ]);
+
+    await app.close();
+  });
 });
 
