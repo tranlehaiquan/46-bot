@@ -112,7 +112,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       return reply.code(401).send({ message: "Unauthorized" });
     }
     const payload = Buffer.isBuffer(request.body) ? request.body : undefined;
-    console.log(payload)
     await reply.code(200).send({ message: "Success" });
     queue.enqueue(() =>
       handleDelivery({

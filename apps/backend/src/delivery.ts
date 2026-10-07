@@ -119,6 +119,10 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     return;
   }
 
+  log.info({
+    payload: parsed
+  })
+
   const message = normalizeDelivery(parsed);
   if (!message) {
     if (config.familyChatIds.length === 0) {
@@ -271,9 +275,9 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
 
     const listTools = listRepo
       ? createListTools(listRepo, {
-          chatId: message.chatId,
-          senderName: message.senderName || message.senderId,
-        })
+        chatId: message.chatId,
+        senderName: message.senderName || message.senderId,
+      })
       : undefined;
 
     let publicBaseUrl: string | undefined;
@@ -285,12 +289,12 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
 
     const eventTools = eventsRepo
       ? createEventTools(eventsRepo, {
-          chatId: message.chatId,
-          senderName: message.senderName || message.senderId,
-          zalo,
-          publicBaseUrl,
-          outputDir: getEventsImageDir(config.dbPath),
-        })
+        chatId: message.chatId,
+        senderName: message.senderName || message.senderId,
+        zalo,
+        publicBaseUrl,
+        outputDir: getEventsImageDir(config.dbPath),
+      })
       : undefined;
 
     const holidayTools = createHolidayTools(eventsRepo, {
@@ -304,18 +308,18 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
 
     const memoryTools = memoryRepo
       ? createMemoryTools(memoryRepo, {
-          chatId: message.chatId,
-          senderName: message.senderName || message.senderId,
-        })
+        chatId: message.chatId,
+        senderName: message.senderName || message.senderId,
+      })
       : undefined;
 
     const weatherTools = createWeatherTool();
 
     const lookupTools = lookupsRepo
       ? createLookupTools(lookupsRepo, {
-          chatId: message.chatId,
-          senderName: message.senderName || message.senderId,
-        })
+        chatId: message.chatId,
+        senderName: message.senderName || message.senderId,
+      })
       : undefined;
 
     const tools =
