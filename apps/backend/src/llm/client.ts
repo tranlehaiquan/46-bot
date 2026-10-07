@@ -102,15 +102,10 @@ export type LlmClientOptions = {
 };
 
 export function createLlmClient(options: LlmClientOptions): LlmClient {
-  const actualModelName =
-    options.provider === "gemini" && options.modelName === "gemini-3.8-flash"
-      ? "gemini-2.5-flash"
-      : options.modelName;
-
   const model =
     options.provider === "gemini"
-      ? createGoogleGenerativeAI({ apiKey: options.apiKey })(actualModelName)
-      : createDeepSeek({ apiKey: options.apiKey })(actualModelName);
+      ? createGoogleGenerativeAI({ apiKey: options.apiKey })(options.modelName)
+      : createDeepSeek({ apiKey: options.apiKey })(options.modelName);
 
   return {
     async generateReply(params): Promise<string> {
