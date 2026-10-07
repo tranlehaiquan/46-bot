@@ -251,18 +251,6 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
           : "none";
     const formattedText = formatIncomingText(message);
 
-    log.info({
-      event: "llm_generate_start",
-      chat_id: message.chatId,
-      sender_id: message.senderId,
-      has_photo: Boolean(activePhoto),
-      photo_url: activePhoto,
-      photo_source: photoSource,
-      history_count: history.length,
-      has_tools: Boolean(tools),
-      llm_provider: config.llmProvider,
-      llm_model: config.llmModel,
-    });
 
     if (messageRepo) {
       const isDirectImage = message.eventName === "message.image.received" && !!message.photo;
@@ -336,6 +324,19 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
         : undefined;
 
     const memories = memoryRepo ? await memoryRepo.listMemories(message.chatId) : undefined;
+
+    log.info({
+      event: "llm_generate_start",
+      chat_id: message.chatId,
+      sender_id: message.senderId,
+      has_photo: Boolean(activePhoto),
+      photo_url: activePhoto,
+      photo_source: photoSource,
+      history_count: history.length,
+      has_tools: Boolean(tools),
+      llm_provider: config.llmProvider,
+      llm_model: config.llmModel,
+    });
 
     let replyText: string;
     const injectionCheck = detectPromptInjection(message.text);
