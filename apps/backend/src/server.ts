@@ -111,7 +111,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!secretsMatch(secretHeader, deps.config.webhookSecret)) {
       return reply.code(401).send({ message: "Unauthorized" });
     }
-
+    console.log(request.body)
     const payload = Buffer.isBuffer(request.body) ? request.body : undefined;
     await reply.code(200).send({ message: "Success" });
     queue.enqueue(() =>
