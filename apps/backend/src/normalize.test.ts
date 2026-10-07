@@ -138,4 +138,30 @@ describe("normalizeDelivery and isMentionedOrReplied", () => {
     assert.ok(msg);
     assert.equal(isMentionedOrReplied(msg), true);
   });
+
+  it("extracts photo and fromName from quoted message in quote object", () => {
+    const payload = {
+      event_name: "message.text.received",
+      message: {
+        message_id: "m-reply-img",
+        text: "thử lại xem",
+        chat: { id: "group-1", chat_type: "GROUP" },
+        from: { id: "user-4", display_name: "Win", is_bot: false },
+        quote: {
+          message_id: "m-original-img",
+          from: { id: "user-5", display_name: "Hạnh Hạnh" },
+          photo: "https://example.com/quoted-flight.jpg",
+          text: "ĐI TRUNG QUỐC",
+        },
+      },
+    };
+
+    const msg = normalizeDelivery(payload);
+    assert.ok(msg);
+    assert.equal(msg.text, "thử lại xem");
+    assert.ok(msg.quote);
+    assert.equal(msg.quote.fromName, "Hạnh Hạnh");
+    assert.equal(msg.quote.photo, "https://example.com/quoted-flight.jpg");
+    assert.equal(msg.quote.text, "ĐI TRUNG QUỐC");
+  });
 });

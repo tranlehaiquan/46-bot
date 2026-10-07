@@ -524,6 +524,59 @@ describe("LLM conversation and database integration", () => {
     closeDatabase(db);
   });
 
+  it("processes reply message that quotes a photo message", async () => {
+    const db = openDatabase(":memory:");
+    await migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+
+    let passedPhoto: string | undefined;
+    let passedContent: string | undefined;
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        passedPhoto = params.incomingMessage.photo;
+        passedContent = params.incomingMessage.content;
+        return "Day la chuyen bay di Trung Quoc.";
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      llmClient: mockLlm,
+    });
+
+    const quoteMsg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      eventName: "message.text.received",
+      messageId: "msg-quote-photo-1",
+      senderId: "user-win",
+      senderName: "Win",
+      text: "@bot thử lại xem",
+      quote: {
+        message_id: "msg-hanh-1",
+        from: { id: "user-hanh", display_name: "Hạnh Hạnh" },
+        photo: "https://cdn.example/flight-promo.png",
+        text: "ĐI TRUNG QUỐC",
+      },
+    });
+
+    await post(app, JSON.stringify(quoteMsg));
+    await queue.drain();
+
+    assert.equal(passedPhoto, "https://cdn.example/flight-promo.png");
+    assert.ok(passedContent?.includes("ĐI TRUNG QUỐC"));
+    assert.ok(passedContent?.includes("@bot thử lại xem"));
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: "Day la chuyen bay di Trung Quoc." },
+    ]);
+
+    await app.close();
+    closeDatabase(db);
+  });
+
   it("blocks prompt injection attempts without invoking LLM and replies with safety refusal", async () => {
     let llmInvoked = false;
     const mockLlm: LlmClient = {

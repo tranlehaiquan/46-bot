@@ -12,7 +12,7 @@ import {
   PROMPT_INJECTION_REFUSAL_MESSAGE,
 } from "./llm/prompt-security.js";
 import type { Logger } from "./logger.js";
-import { isMentionedOrReplied, normalizeDelivery } from "./normalize.js";
+import { isMentionedOrReplied, normalizeDelivery, type IncomingMessage } from "./normalize.js";
 import { createEventTools } from "./tools/events.js";
 import { createHolidayTools } from "./tools/holidays.js";
 import { createListTools } from "./tools/lists.js";
@@ -34,6 +34,44 @@ export function getPendingApprovalMessage(chatId: string): string {
 }
 export function getChannelActivatedMessage(): string {
   return "Kênh/nhóm này đã được quản trị viên phê duyệt. Bạn có thể bắt đầu trò chuyện với bot nhé.";
+}
+
+export function formatIncomingText(message: IncomingMessage): string {
+  if (!message.quote) {
+    return message.text;
+  }
+  const quoteSender = message.quote.fromName || (message.quote.isBot ? "Bot" : "thành viên");
+  const quoteSnippet = message.quote.text
+    ? `"${message.quote.text}"`
+    : (message.quote.photo ? "[Hình ảnh]" : "");
+  if (!quoteSnippet) {
+    return message.text;
+  }
+  return `[Đang trả lời ${quoteSender}: ${quoteSnippet}]\n${message.text}`;
+}
+
+export function resolveIncomingPhoto(message: IncomingMessage, history: Array<{ content: string }>): string | undefined {
+  if (message.eventName === "message.image.received" && message.photo) {
+    return message.photo;
+  }
+  if (message.quote?.photo) {
+    return message.quote.photo;
+  }
+  if (message.quote?.text) {
+    const match = message.quote.text.match(/\[Ảnh:\s*(https?:\/\/[^\s\]]+)\]/);
+    if (match?.[1]) {
+      return match[1];
+    }
+    for (const h of history) {
+      if (h.content.includes(message.quote.text) || message.quote.text.includes(h.content.slice(0, 30))) {
+        const hMatch = h.content.match(/\[Ảnh:\s*(https?:\/\/[^\s\]]+)\]/);
+        if (hMatch?.[1]) {
+          return hMatch[1];
+        }
+      }
+    }
+  }
+  return undefined;
 }
 
 export type DeliveryDependencies = {
@@ -175,12 +213,17 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     }
 
     const history = messageRepo ? await messageRepo.getRecent(message.chatId, 20) : [];
+    const activePhoto = resolveIncomingPhoto(message, history);
+    const formattedText = formatIncomingText(message);
 
     if (messageRepo) {
-      const isImage = message.eventName === "message.image.received";
-      const storedContent = isImage && message.photo
-        ? (message.text ? `${message.text}\n[Ảnh: ${message.photo}]` : `[Ảnh: ${message.photo}]`)
-        : message.text;
+      const isDirectImage = message.eventName === "message.image.received" && !!message.photo;
+      const storedContent = isDirectImage
+        ? (formattedText ? `${formattedText}\n[Ảnh: ${message.photo}]` : `[Ảnh: ${message.photo}]`)
+        : (activePhoto && !formattedText.includes("[Ảnh:")
+          ? (formattedText ? `${formattedText}\n[Ảnh: ${activePhoto}]` : `[Ảnh: ${activePhoto}]`)
+          : formattedText);
+
       await messageRepo.insert({
         chatId: message.chatId,
         senderId: message.senderId,
@@ -264,8 +307,8 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
           incomingMessage: {
             senderId: message.senderId,
             senderName: message.senderName,
-            content: message.text,
-            photo: message.eventName === "message.image.received" ? message.photo : undefined,
+            content: formattedText,
+            photo: activePhoto,
           },
           tools,
         });

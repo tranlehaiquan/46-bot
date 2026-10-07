@@ -7,8 +7,10 @@ export type Mention = {
 export type QuotedMessage = {
   messageId?: string;
   fromId?: string;
+  fromName?: string;
   isBot?: boolean;
   text?: string;
+  photo?: string;
 };
 
 export type IncomingMessage = {
@@ -145,11 +147,26 @@ function parseQuote(rawQuote: unknown): QuotedMessage | undefined {
   }
   const q = rawQuote as Record<string, unknown>;
   const from = q.from as Record<string, unknown> | undefined;
+  const photo =
+    typeof q.photo === "string"
+      ? q.photo
+      : typeof q.url === "string"
+        ? q.url
+        : undefined;
+  const text =
+    typeof q.text === "string"
+      ? q.text
+      : typeof q.caption === "string"
+        ? q.caption
+        : undefined;
+
   return {
     messageId: messageIdOf(q.message_id),
     fromId: from && typeof from.id === "string" ? from.id : typeof q.from_id === "string" ? q.from_id : undefined,
+    fromName: from && typeof from.display_name === "string" ? from.display_name : undefined,
     isBot: from?.is_bot === true || q.is_bot === true,
-    text: typeof q.text === "string" ? q.text : undefined,
+    text,
+    photo,
   };
 }
 
