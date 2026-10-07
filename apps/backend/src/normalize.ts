@@ -29,6 +29,61 @@ export type IncomingMessage = {
   raw: unknown;
 };
 
+export function extractPhotoUrl(record: Record<string, unknown> | undefined): string | undefined {
+  if (!record) {
+    return undefined;
+  }
+  if (typeof record.photo === "string" && record.photo.trim().length > 0) {
+    return record.photo.trim();
+  }
+  if (typeof record.url === "string" && record.url.trim().length > 0) {
+    return record.url.trim();
+  }
+  if (typeof record.image === "string" && record.image.trim().length > 0) {
+    return record.image.trim();
+  }
+  if (typeof record.media_url === "string" && record.media_url.trim().length > 0) {
+    return record.media_url.trim();
+  }
+  if (typeof record.href === "string" && record.href.trim().length > 0) {
+    return record.href.trim();
+  }
+  if (Array.isArray(record.attachments) && record.attachments.length > 0) {
+    const first = record.attachments[0];
+    if (typeof first === "string" && first.trim().length > 0) {
+      return first.trim();
+    }
+    if (first && typeof first === "object") {
+      const firstRec = first as Record<string, unknown>;
+      if (typeof firstRec.url === "string" && firstRec.url.trim().length > 0) {
+        return firstRec.url.trim();
+      }
+      if (typeof firstRec.photo === "string" && firstRec.photo.trim().length > 0) {
+        return firstRec.photo.trim();
+      }
+      if (typeof firstRec.src === "string" && firstRec.src.trim().length > 0) {
+        return firstRec.src.trim();
+      }
+      if (firstRec.payload && typeof firstRec.payload === "object") {
+        const payloadRec = firstRec.payload as Record<string, unknown>;
+        if (typeof payloadRec.url === "string" && payloadRec.url.trim().length > 0) {
+          return payloadRec.url.trim();
+        }
+        if (typeof payloadRec.photo === "string" && payloadRec.photo.trim().length > 0) {
+          return payloadRec.photo.trim();
+        }
+      }
+    }
+  }
+  if (record.photo && typeof record.photo === "object") {
+    const photoRec = record.photo as Record<string, unknown>;
+    if (typeof photoRec.url === "string" && photoRec.url.trim().length > 0) {
+      return photoRec.url.trim();
+    }
+  }
+  return undefined;
+}
+
 export function normalizeDelivery(body: unknown): IncomingMessage | undefined {
   if (!body || typeof body !== "object") {
     return undefined;
@@ -59,7 +114,7 @@ export function normalizeDelivery(body: unknown): IncomingMessage | undefined {
     return undefined;
   }
 
-  const photo = typeof messageRecord.photo === "string" ? messageRecord.photo : undefined;
+  const photo = extractPhotoUrl(messageRecord);
   const caption = typeof messageRecord.caption === "string" ? messageRecord.caption : undefined;
   const text = typeof messageRecord.text === "string" && messageRecord.text.length > 0
     ? messageRecord.text
@@ -147,12 +202,7 @@ function parseQuote(rawQuote: unknown): QuotedMessage | undefined {
   }
   const q = rawQuote as Record<string, unknown>;
   const from = q.from as Record<string, unknown> | undefined;
-  const photo =
-    typeof q.photo === "string"
-      ? q.photo
-      : typeof q.url === "string"
-        ? q.url
-        : undefined;
+  const photo = extractPhotoUrl(q) ?? (from ? extractPhotoUrl(from) : undefined);
   const text =
     typeof q.text === "string"
       ? q.text

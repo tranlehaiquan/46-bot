@@ -74,6 +74,20 @@ export function resolveIncomingPhoto(message: IncomingMessage, history: Array<{ 
   return undefined;
 }
 
+export function getMessageRecordKeys(raw: unknown): string[] | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const root = raw as Record<string, unknown>;
+  const result = root.result && typeof root.result === "object"
+    ? (root.result as Record<string, unknown>)
+    : root;
+  const msg = result.message && typeof result.message === "object"
+    ? (result.message as Record<string, unknown>)
+    : undefined;
+  return msg ? Object.keys(msg) : undefined;
+}
+
 export type DeliveryDependencies = {
   payload: Buffer | undefined;
   config: AppConfig;
@@ -126,6 +140,8 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     });
   }
 
+  const messageKeys = getMessageRecordKeys(parsed);
+
   if (config.familyChatIds.length === 0) {
     log.info({
       event: "discovery",
@@ -134,6 +150,12 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       sender_id: message.senderId,
       sender_name: message.senderName,
       message_id: message.messageId,
+      has_photo: Boolean(message.photo),
+      photo_url: message.photo,
+      has_caption: Boolean(message.caption),
+      has_quote: Boolean(message.quote),
+      quote_has_photo: Boolean(message.quote?.photo),
+      message_keys: messageKeys,
       raw: message.raw,
     });
   } else {
@@ -144,6 +166,12 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       chat_type: message.chatType,
       sender_id: message.senderId,
       message_id: message.messageId,
+      has_photo: Boolean(message.photo),
+      photo_url: message.photo,
+      has_caption: Boolean(message.caption),
+      has_quote: Boolean(message.quote),
+      quote_has_photo: Boolean(message.quote?.photo),
+      message_keys: messageKeys,
     });
   }
 
@@ -214,7 +242,27 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
 
     const history = messageRepo ? await messageRepo.getRecent(message.chatId, 20) : [];
     const activePhoto = resolveIncomingPhoto(message, history);
+    const photoSource = message.photo
+      ? "direct"
+      : message.quote?.photo
+        ? "quote_photo"
+        : activePhoto
+          ? "quote_history"
+          : "none";
     const formattedText = formatIncomingText(message);
+
+    log.info({
+      event: "llm_generate_start",
+      chat_id: message.chatId,
+      sender_id: message.senderId,
+      has_photo: Boolean(activePhoto),
+      photo_url: activePhoto,
+      photo_source: photoSource,
+      history_count: history.length,
+      has_tools: Boolean(tools),
+      llm_provider: config.llmProvider,
+      llm_model: config.llmModel,
+    });
 
     if (messageRepo) {
       const isDirectImage = message.eventName === "message.image.received" && !!message.photo;
@@ -312,9 +360,21 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
           },
           tools,
         });
+        log.info({
+          event: "llm_generate_success",
+          chat_id: message.chatId,
+          has_photo: Boolean(activePhoto),
+          reply_length: replyText.length,
+        });
       } catch (error) {
         const errMessage = error instanceof Error ? error.message : String(error);
-        log.error({ event: "llm_error", message: errMessage });
+        log.error({
+          event: "llm_error",
+          chat_id: message.chatId,
+          has_photo: Boolean(activePhoto),
+          photo_url: activePhoto,
+          message: errMessage,
+        });
         replyText = FALLBACK_ERROR_MESSAGE;
       }
     }
@@ -323,6 +383,11 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     for (const chunk of chunks) {
       await zalo.sendMessage(message.chatId, chunk);
     }
+    log.info({
+      event: "zalo_reply_sent",
+      chat_id: message.chatId,
+      chunks_count: chunks.length,
+    });
 
     if (messageRepo) {
       await messageRepo.insert({
