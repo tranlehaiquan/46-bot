@@ -8,6 +8,14 @@ import type { ChannelStatus } from "../db/repositories/channels.js";
 import { getChannelActivatedMessage } from "../delivery.js";
 import { getUpcomingHolidays } from "../holidays/index.js";
 import { getNextOccurrence, createUtc7Date, getUtc7Parts } from "../db/repositories/events.js";
+import {
+  resolveEffectiveSettings,
+  toMaskedSettings,
+  createLlmClientFromSettings,
+  DynamicLlmClient,
+} from "./settings-helper.js";
+import { createLlmClient } from "../llm/client.js";
+import { tavily } from "@tavily/core";
 
 function parseJsonBody(body: unknown): Record<string, unknown> {
   if (Buffer.isBuffer(body)) {
@@ -475,6 +483,164 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         const message = err instanceof Error ? err.message : String(err);
         deps.log.error({ event: "db_export_failed", message });
         return reply.code(500).send({ error: "Failed to export sqlite database" });
+      }
+    });
+
+    // 8. Settings: Get, Update, Test
+    adminScope.get("/api/admin/settings", async (_request, reply) => {
+      const { effective, dbEntries } = await resolveEffectiveSettings(deps.settingsRepo, deps.config);
+      const settings = toMaskedSettings(effective, dbEntries, deps.config);
+      return reply.send({ ok: true, settings });
+    });
+
+    adminScope.patch("/api/admin/settings", async (request, reply) => {
+      if (!deps.settingsRepo) {
+        return reply.code(503).send({ error: "Settings repository unavailable" });
+      }
+
+      const body = parseJsonBody(request.body);
+      const updates: Record<string, string | null> = {};
+
+      if (typeof body.llmProvider === "string") {
+        if (body.llmProvider !== "gemini" && body.llmProvider !== "deepseek") {
+          return reply.code(400).send({ error: "Invalid llmProvider. Must be 'gemini' or 'deepseek'." });
+        }
+        updates.llm_provider = body.llmProvider;
+      }
+
+      if (typeof body.geminiModel === "string") {
+        const val = body.geminiModel.trim();
+        if (val) updates.gemini_model = val;
+      }
+
+      if (typeof body.deepseekModel === "string") {
+        const val = body.deepseekModel.trim();
+        if (val) updates.deepseek_model = val;
+      }
+
+      const handleKey = (keyParam: unknown, dbKey: string) => {
+        if (typeof keyParam === "string") {
+          const trimmed = keyParam.trim();
+          if (trimmed === "") {
+            updates[dbKey] = null;
+          } else if (!trimmed.includes("...") && !trimmed.includes("***")) {
+            updates[dbKey] = trimmed;
+          }
+        }
+      };
+
+      handleKey(body.geminiApiKey, "gemini_api_key");
+      handleKey(body.deepseekApiKey, "deepseek_api_key");
+      handleKey(body.tavilyApiKey, "tavily_api_key");
+
+      if (Object.keys(updates).length > 0) {
+        await deps.settingsRepo.setMany(updates);
+      }
+
+      const { effective, dbEntries } = await resolveEffectiveSettings(deps.settingsRepo, deps.config);
+
+      if (deps.llmClient instanceof DynamicLlmClient) {
+        const newClient = createLlmClientFromSettings(effective);
+        if (newClient) {
+          deps.llmClient.setClient(newClient);
+        }
+      }
+
+      const settings = toMaskedSettings(effective, dbEntries, deps.config);
+      return reply.send({ ok: true, settings });
+    });
+
+    adminScope.post("/api/admin/settings/test", async (request, reply) => {
+      const body = parseJsonBody(request.body);
+      const testType = typeof body.testType === "string" ? body.testType : "llm";
+      const { effective } = await resolveEffectiveSettings(deps.settingsRepo, deps.config);
+
+      if (testType === "tavily") {
+        let key =
+          typeof body.tavilyApiKey === "string" &&
+          !body.tavilyApiKey.includes("...") &&
+          !body.tavilyApiKey.includes("***") &&
+          body.tavilyApiKey.trim()
+            ? body.tavilyApiKey.trim()
+            : effective.tavilyApiKey;
+
+        if (!key) {
+          return reply.code(400).send({ ok: false, error: "Chưa cấu hình Tavily API Key." });
+        }
+
+        try {
+          const client = tavily({ apiKey: key });
+          const res = await client.search("Tin tức hôm nay", { maxResults: 1 });
+          return reply.send({
+            ok: true,
+            message: "Kết nối Tavily Search thành công!",
+            sampleResult: res.results[0]?.title ?? "Search completed",
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return reply.code(400).send({ ok: false, error: `Kiểm tra Tavily thất bại: ${message}` });
+        }
+      }
+
+      // Default: LLM test
+      const provider =
+        body.provider === "gemini" || body.provider === "deepseek"
+          ? body.provider
+          : effective.llmProvider;
+
+      let apiKey: string | undefined;
+      if (
+        typeof body.apiKey === "string" &&
+        !body.apiKey.includes("...") &&
+        !body.apiKey.includes("***") &&
+        body.apiKey.trim()
+      ) {
+        apiKey = body.apiKey.trim();
+      } else {
+        apiKey = provider === "gemini" ? effective.geminiApiKey : effective.deepseekApiKey;
+      }
+
+      if (!apiKey) {
+        return reply.code(400).send({
+          ok: false,
+          error: `Chưa có API Key cho provider ${provider}. Vui lòng nhập API Key.`,
+        });
+      }
+
+      const model =
+        typeof body.model === "string" && body.model.trim()
+          ? body.model.trim()
+          : provider === "gemini"
+            ? effective.geminiModel
+            : effective.deepseekModel;
+
+      try {
+        const testClient = createLlmClient({
+          provider,
+          apiKey,
+          modelName: model,
+        });
+
+        const replyText = await testClient.generateReply({
+          incomingMessage: {
+            senderId: "admin-test",
+            senderName: "Admin",
+            content: "Ping. Trả lời đúng một câu ngắn: Kết nối thành công.",
+          },
+          history: [],
+        });
+
+        return reply.send({
+          ok: true,
+          message: `Kết nối thành công tới ${provider} (${model})!`,
+          reply: replyText,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.code(400).send({
+          ok: false,
+          error: `Kết nối thất bại: ${message}`,
+        });
       }
     });
   });

@@ -1,5 +1,4 @@
-import React from "react";
-import { Bot, LogOut, Radio, Clock, CalendarDays, MessageSquare } from "lucide-react";
+import { Bot, LogOut, Radio, Clock, CalendarDays, MessageSquare, Sliders } from "lucide-react";
 import { api, type Channel } from "../api";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -13,8 +12,8 @@ export function Navbar({
 }: {
   channels: Channel[];
   onLogout: () => void;
-  currentPage: "channels" | "calendar";
-  onNavigate: (page: "channels" | "calendar") => void;
+  currentPage: "channels" | "calendar" | "settings";
+  onNavigate: (page: "channels" | "calendar" | "settings") => void;
 }) {
   const pendingCount = channels.filter((c) => c.status === "pending").length;
   const activeCount = channels.filter((c) => c.status === "active").length;
@@ -55,6 +54,14 @@ export function Navbar({
         >
           <CalendarDays size={15} />
           <span>Calendar</span>
+        </button>
+        <button
+          id="nav-settings"
+          onClick={() => onNavigate("settings")}
+          className={tabClasses(currentPage === "settings")}
+        >
+          <Sliders size={15} />
+          <span>Settings</span>
         </button>
       </div>
 

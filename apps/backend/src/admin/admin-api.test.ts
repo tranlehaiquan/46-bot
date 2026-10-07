@@ -7,6 +7,7 @@ import { createMessageRepository } from "../db/message-repo.js";
 import { createEventsRepository } from "../db/repositories/events.js";
 import { createMemoryRepository } from "../db/repositories/memory.js";
 import { createLookupRepository } from "../db/repositories/lookups.js";
+import { createSettingsRepository } from "../db/repositories/settings.js";
 import { buildServer } from "../server.js";
 import { createLogger } from "../logger.js";
 import type { ZaloClient } from "../zalo-client.js";
@@ -652,5 +653,124 @@ describe("Admin REST API", () => {
       closeDatabase(db);
     }
   });
+
+  it("handles getting and updating runtime settings via admin API", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      await migrate(db);
+      const settingsRepo = createSettingsRepository(db);
+      const config = mockConfig();
+      config.geminiApiKey = "AQ.test-gemini-key-123456";
+      config.tavilyApiKey = "tvly-test-tavily-key-9999";
+
+      const app = buildServer({
+        config,
+        log: createLogger(),
+        zalo: fakeZalo(),
+        db,
+        settingsRepo,
+      });
+
+      // Login
+      const loginRes = await app.inject({
+        method: "POST",
+        url: "/api/admin/login",
+        payload: { password: adminPassword },
+      });
+      const token = JSON.parse(loginRes.body).token;
+      const authHeaders = { Authorization: `Bearer ${token}` };
+
+      // 1. Get initial settings (from config)
+      const getRes1 = await app.inject({
+        method: "GET",
+        url: "/api/admin/settings",
+        headers: authHeaders,
+      });
+      assert.equal(getRes1.statusCode, 200);
+      const body1 = JSON.parse(getRes1.body);
+      assert.equal(body1.ok, true);
+      assert.equal(body1.settings.llmProvider, "deepseek");
+      assert.equal(body1.settings.hasGeminiApiKey, true);
+      assert.equal(body1.settings.geminiApiKeySource, "env");
+      assert.match(body1.settings.geminiApiKeyMasked, /AQ\.t\.\.\.3456/);
+      assert.equal(body1.settings.hasTavilyApiKey, true);
+      assert.equal(body1.settings.tavilyApiKeySource, "env");
+
+      // 2. Reject invalid llmProvider
+      const invalidRes = await app.inject({
+        method: "PATCH",
+        url: "/api/admin/settings",
+        headers: authHeaders,
+        payload: { llmProvider: "openai" },
+      });
+      assert.equal(invalidRes.statusCode, 400);
+
+      // 3. Update settings: switch to gemini, set new keys and models
+      const patchRes = await app.inject({
+        method: "PATCH",
+        url: "/api/admin/settings",
+        headers: authHeaders,
+        payload: {
+          llmProvider: "gemini",
+          geminiModel: "gemini-2.5-flash",
+          geminiApiKey: "AQ.custom-gemini-key-8888",
+          deepseekModel: "deepseek-reasoner",
+          deepseekApiKey: "sk-custom-deepseek-key-7777",
+          tavilyApiKey: "tvly-custom-tavily-key-6666",
+        },
+      });
+      assert.equal(patchRes.statusCode, 200);
+      const patchBody = JSON.parse(patchRes.body);
+      assert.equal(patchBody.ok, true);
+      assert.equal(patchBody.settings.llmProvider, "gemini");
+      assert.equal(patchBody.settings.geminiModel, "gemini-2.5-flash");
+      assert.equal(patchBody.settings.geminiApiKeySource, "db");
+      assert.equal(patchBody.settings.deepseekModel, "deepseek-reasoner");
+      assert.equal(patchBody.settings.deepseekApiKeySource, "db");
+      assert.equal(patchBody.settings.tavilyApiKeySource, "db");
+
+      // Verify stored in DB
+      assert.equal(await settingsRepo.get("llm_provider"), "gemini");
+      assert.equal(await settingsRepo.get("gemini_api_key"), "AQ.custom-gemini-key-8888");
+      assert.equal(await settingsRepo.get("deepseek_api_key"), "sk-custom-deepseek-key-7777");
+
+      // 4. Update with masked placeholder should preserve existing DB key
+      const maskedPatch = await app.inject({
+        method: "PATCH",
+        url: "/api/admin/settings",
+        headers: authHeaders,
+        payload: {
+          geminiApiKey: "AQ.c...8888",
+        },
+      });
+      assert.equal(maskedPatch.statusCode, 200);
+      assert.equal(await settingsRepo.get("gemini_api_key"), "AQ.custom-gemini-key-8888");
+
+      // 5. Update with empty string should delete DB override
+      const deletePatch = await app.inject({
+        method: "PATCH",
+        url: "/api/admin/settings",
+        headers: authHeaders,
+        payload: {
+          geminiApiKey: "",
+        },
+      });
+      assert.equal(deletePatch.statusCode, 200);
+      assert.equal(await settingsRepo.get("gemini_api_key"), null);
+      // Reverted to env
+      const getResFinal = await app.inject({
+        method: "GET",
+        url: "/api/admin/settings",
+        headers: authHeaders,
+      });
+      const finalBody = JSON.parse(getResFinal.body);
+      assert.equal(finalBody.settings.geminiApiKeySource, "env");
+
+      await app.close();
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });
+
 

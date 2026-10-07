@@ -22,6 +22,9 @@ import { registerAdminRoutes } from "./admin/routes.js";
 import { createWordChainRepository, type WordChainRepository } from "./db/repositories/word-chain.js";
 import { WordChainService } from "./word-chain/service.js";
 
+import type { SettingsRepository } from "./db/repositories/settings.js";
+import { DynamicLlmClient } from "./admin/settings-helper.js";
+
 export const BODY_LIMIT = 64 * 1024;
 
 export type ServerDeps = {
@@ -37,6 +40,7 @@ export type ServerDeps = {
   memoryRepo?: MemoryRepository;
   channelRepo?: ChannelRepository;
   lookupsRepo?: LookupRepository;
+  settingsRepo?: SettingsRepository;
   wordChainRepo?: WordChainRepository;
   wordChainService?: WordChainService;
   llmClient?: LlmClient;
@@ -120,6 +124,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         })
       : undefined);
 
+  if (deps.llmClient && !(deps.llmClient instanceof DynamicLlmClient)) {
+    deps.llmClient = new DynamicLlmClient(deps.llmClient);
+  }
+
   app.post("/webhooks/zalo", async (request, reply) => {
     const header = request.headers["x-bot-api-secret-token"];
     const secretHeader = Array.isArray(header) ? header[0] : header;
@@ -141,6 +149,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         memoryRepo: deps.memoryRepo,
         channelRepo: deps.channelRepo,
         lookupsRepo: deps.lookupsRepo,
+        settingsRepo: deps.settingsRepo,
         wordChainRepo,
         wordChainService,
         llmClient: deps.llmClient,

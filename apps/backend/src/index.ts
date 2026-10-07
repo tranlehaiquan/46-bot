@@ -7,10 +7,16 @@ import { createEventsRepository } from "./db/repositories/events.js";
 import { createMemoryRepository } from "./db/repositories/memory.js";
 import { createChannelRepository } from "./db/repositories/channels.js";
 import { createLookupRepository } from "./db/repositories/lookups.js";
+import { createSettingsRepository } from "./db/repositories/settings.js";
 import { createWordChainRepository } from "./db/repositories/word-chain.js";
 import { WordChainService } from "./word-chain/service.js";
 import { createSeenRepository } from "./db/seen-repo.js";
 import { createLlmClient } from "./llm/client.js";
+import {
+  resolveEffectiveSettings,
+  createLlmClientFromSettings,
+  DynamicLlmClient,
+} from "./admin/settings-helper.js";
 import { createLogger } from "./logger.js";
 import { boot, installShutdown, shutdown } from "./lifecycle.js";
 import { WorkQueue } from "./queue.js";
@@ -83,6 +89,7 @@ async function main(): Promise<void> {
   const memoryRepo = createMemoryRepository(db);
   const channelRepo = createChannelRepository(db);
   const lookupsRepo = createLookupRepository(db);
+  const settingsRepo = createSettingsRepository(db);
   const wordChainRepo = createWordChainRepository(db);
   const zalo = createZaloClient(config.zaloBotToken);
   const wordChainService = new WordChainService({
@@ -96,11 +103,15 @@ async function main(): Promise<void> {
     await channelRepo.seedChannels(config.familyChatIds);
   }
 
-  const llmClient = createLlmClient({
-    provider: config.llmProvider,
-    apiKey: config.llmApiKey,
-    modelName: config.llmModel,
-  });
+  const { effective } = await resolveEffectiveSettings(settingsRepo, config);
+  const baseLlm =
+    createLlmClientFromSettings(effective) ??
+    createLlmClient({
+      provider: config.llmProvider,
+      apiKey: config.llmApiKey,
+      modelName: config.llmModel,
+    });
+  const llmClient = new DynamicLlmClient(baseLlm);
 
   const app = buildServer({
     config,
@@ -115,6 +126,7 @@ async function main(): Promise<void> {
     memoryRepo,
     channelRepo,
     lookupsRepo,
+    settingsRepo,
     wordChainRepo,
     wordChainService,
     llmClient,

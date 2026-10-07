@@ -5,6 +5,7 @@ import type { EventsRepository } from "./db/repositories/events.js";
 import type { MemoryRepository } from "./db/repositories/memory.js";
 import type { ChannelRepository } from "./db/repositories/channels.js";
 import type { LookupRepository } from "./db/repositories/lookups.js";
+import type { SettingsRepository } from "./db/repositories/settings.js";
 import type { SeenRepository } from "./db/seen-repo.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
 import {
@@ -105,6 +106,7 @@ export type DeliveryDependencies = {
   memoryRepo?: MemoryRepository;
   channelRepo?: ChannelRepository;
   lookupsRepo?: LookupRepository;
+  settingsRepo?: SettingsRepository;
   wordChainRepo?: WordChainRepository;
   wordChainService?: WordChainService;
   llmClient?: LlmClient;
@@ -124,6 +126,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     memoryRepo,
     channelRepo,
     lookupsRepo,
+    settingsRepo,
     wordChainRepo,
     wordChainService,
     llmClient,
@@ -401,8 +404,11 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       senderName: message.senderName || message.senderId,
     });
 
-    const searchTools = config.tavilyApiKey
-      ? createWebSearchTool(config.tavilyApiKey)
+    const effectiveTavilyKey =
+      (settingsRepo ? await settingsRepo.get("tavily_api_key") : null) || config.tavilyApiKey;
+
+    const searchTools = effectiveTavilyKey
+      ? createWebSearchTool(effectiveTavilyKey)
       : undefined;
 
     const memoryTools = memoryRepo
@@ -457,6 +463,13 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
 
     const memories = memoryRepo ? await memoryRepo.listMemories(message.chatId) : undefined;
 
+    const effectiveProvider =
+      (settingsRepo ? await settingsRepo.get("llm_provider") : null) || config.llmProvider;
+    const effectiveModel =
+      (settingsRepo
+        ? await settingsRepo.get(effectiveProvider === "deepseek" ? "deepseek_model" : "gemini_model")
+        : null) || config.llmModel;
+
     log.info({
       event: "llm_generate_start",
       chat_id: message.chatId,
@@ -466,8 +479,8 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       photo_source: photoSource,
       history_count: history.length,
       has_tools: Boolean(tools),
-      llm_provider: config.llmProvider,
-      llm_model: config.llmModel,
+      llm_provider: effectiveProvider,
+      llm_model: effectiveModel,
     });
 
     let replyText: string;

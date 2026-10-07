@@ -16,6 +16,10 @@ import {
   type HolidayOccurrence,
   type CalendarEventOccurrence,
   type ScheduledLookup,
+  type AdminSettings,
+  type UpdateSettingsInput,
+  type TestSettingsInput,
+  type TestSettingsResult,
 } from "../api";
 
 export const queryKeys = {
@@ -24,6 +28,7 @@ export const queryKeys = {
   events: (chatId: string) => ["events", chatId] as const,
   memories: (chatId: string) => ["memories", chatId] as const,
   lookups: (chatId: string) => ["lookups", chatId] as const,
+  settings: () => ["settings"] as const,
   holidays: (year: number) => ["holidays", year] as const,
   calendarEvents: (year: number, month: number, chatId?: string) =>
     ["calendarEvents", year, month, chatId ?? "all"] as const,
@@ -234,3 +239,28 @@ export function useCalendarEvents(
     queryFn: () => api.getCalendarEvents(year, month, chatId),
   });
 }
+
+// --- Settings ---
+export function useSettings(): UseQueryResult<AdminSettings, Error> {
+  return useQuery({
+    queryKey: queryKeys.settings(),
+    queryFn: () => api.getSettings(),
+  });
+}
+
+export function useUpdateSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (updates: UpdateSettingsInput) => api.updateSettings(updates),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.settings(), updated);
+    },
+  });
+}
+
+export function useTestSettings() {
+  return useMutation({
+    mutationFn: (input: TestSettingsInput) => api.testSettings(input),
+  });
+}
+

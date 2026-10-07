@@ -316,5 +316,64 @@ export const api = {
     window.URL.revokeObjectURL(url);
     document.body.removeChild(link);
   },
+
+  async getSettings(): Promise<AdminSettings> {
+    const res = await request<{ ok: boolean; settings: AdminSettings }>("/api/admin/settings");
+    return res.settings;
+  },
+
+  async updateSettings(updates: UpdateSettingsInput): Promise<AdminSettings> {
+    const res = await request<{ ok: boolean; settings: AdminSettings }>("/api/admin/settings", {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+    return res.settings;
+  },
+
+  async testSettings(input: TestSettingsInput): Promise<TestSettingsResult> {
+    return await request<TestSettingsResult>("/api/admin/settings/test", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+};
+
+export type AdminSettings = {
+  llmProvider: "gemini" | "deepseek";
+  geminiModel: string;
+  hasGeminiApiKey: boolean;
+  geminiApiKeyMasked: string | null;
+  geminiApiKeySource: "db" | "env" | "none";
+  deepseekModel: string;
+  hasDeepseekApiKey: boolean;
+  deepseekApiKeyMasked: string | null;
+  deepseekApiKeySource: "db" | "env" | "none";
+  hasTavilyApiKey: boolean;
+  tavilyApiKeyMasked: string | null;
+  tavilyApiKeySource: "db" | "env" | "none";
+};
+
+export type UpdateSettingsInput = {
+  llmProvider?: "gemini" | "deepseek";
+  geminiModel?: string;
+  geminiApiKey?: string;
+  deepseekModel?: string;
+  deepseekApiKey?: string;
+  tavilyApiKey?: string;
+};
+
+export type TestSettingsInput = {
+  provider?: "gemini" | "deepseek";
+  apiKey?: string;
+  model?: string;
+  testType?: "llm" | "tavily";
+  tavilyApiKey?: string;
+};
+
+export type TestSettingsResult = {
+  ok: boolean;
+  message?: string;
+  reply?: string;
+  error?: string;
 };
 

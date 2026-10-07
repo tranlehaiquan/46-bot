@@ -7,6 +7,7 @@ import { Navbar } from "./components/Navbar";
 import { ChannelList } from "./components/ChannelList";
 import { ChannelDetail } from "./components/ChannelDetail";
 import { CalendarPage } from "./components/CalendarPage";
+import { SettingsPage } from "./components/SettingsPage";
 import { MessageSquareOff, AlertCircle } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { useChannels, useUpdateChannel } from "./hooks/useAdminQueries";
@@ -30,9 +31,14 @@ function AdminApp() {
   const [, chatParams] = useRoute("/chat/:chatId");
   const [, channelParams] = useRoute("/channels/:chatId");
   const [isCalendarRoute] = useRoute("/calendar");
+  const [isSettingsRoute] = useRoute("/settings");
 
   const routeChatId = chatParams?.chatId || channelParams?.chatId || null;
-  const currentPage: "channels" | "calendar" = isCalendarRoute ? "calendar" : "channels";
+  const currentPage: "channels" | "calendar" | "settings" = isSettingsRoute
+    ? "settings"
+    : isCalendarRoute
+      ? "calendar"
+      : "channels";
 
   // TanStack Query for channels
   const channelsQuery = useChannels();
@@ -61,22 +67,24 @@ function AdminApp() {
       } else {
         setSelectedChannel(null);
       }
-    } else if (!isCalendarRoute) {
+    } else if (!isCalendarRoute && !isSettingsRoute) {
       // Default /admin or /admin/ route without chatId: select first channel and update URL
       const first = channels[0];
       setSelectedChannel(first);
       navigate(`/chat/${encodeURIComponent(first.chatId)}`, { replace: true });
     }
-  }, [routeChatId, channels, isCalendarRoute, navigate]);
+  }, [routeChatId, channels, isCalendarRoute, isSettingsRoute, navigate]);
 
   const handleSelectChannel = (channel: Channel) => {
     setSelectedChannel(channel);
     navigate(`/chat/${encodeURIComponent(channel.chatId)}`);
   };
 
-  const handleNavigatePage = (page: "channels" | "calendar") => {
+  const handleNavigatePage = (page: "channels" | "calendar" | "settings") => {
     if (page === "calendar") {
       navigate("/calendar");
+    } else if (page === "settings") {
+      navigate("/settings");
     } else {
       if (selectedChannel) {
         navigate(`/chat/${encodeURIComponent(selectedChannel.chatId)}`);
@@ -138,7 +146,9 @@ function AdminApp() {
       />
 
       <main className="flex-1 px-6 pb-6">
-        {isCalendarRoute ? (
+        {isSettingsRoute ? (
+          <SettingsPage />
+        ) : isCalendarRoute ? (
           <CalendarPage channels={channels} />
         ) : (
           <div className="grid grid-cols-[360px_1fr] gap-5 items-start">

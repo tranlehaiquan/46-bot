@@ -178,5 +178,11 @@ export async function migrate(db: SqliteDatabase): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_wc_stats_chat_player ON word_chain_stats(chat_id, player_id);
     CREATE INDEX IF NOT EXISTS idx_wc_stats_chat_score ON word_chain_stats(chat_id, total_score DESC);
     CREATE INDEX IF NOT EXISTS idx_wc_stats_global_score ON word_chain_stats(total_score DESC);
+
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 }
