@@ -7,6 +7,8 @@ import { createEventsRepository } from "./db/repositories/events.js";
 import { createMemoryRepository } from "./db/repositories/memory.js";
 import { createChannelRepository } from "./db/repositories/channels.js";
 import { createLookupRepository } from "./db/repositories/lookups.js";
+import { createWordChainRepository } from "./db/repositories/word-chain.js";
+import { WordChainService } from "./word-chain/service.js";
 import { createSeenRepository } from "./db/seen-repo.js";
 import { createLlmClient } from "./llm/client.js";
 import { createLogger } from "./logger.js";
@@ -81,6 +83,15 @@ async function main(): Promise<void> {
   const memoryRepo = createMemoryRepository(db);
   const channelRepo = createChannelRepository(db);
   const lookupsRepo = createLookupRepository(db);
+  const wordChainRepo = createWordChainRepository(db);
+  const zalo = createZaloClient(config.zaloBotToken);
+  const wordChainService = new WordChainService({
+    repo: wordChainRepo,
+    onTimeout: async (chatId, message) => {
+      await zalo.sendMessage(chatId, message);
+    },
+  });
+
   if (config.familyChatIds.length > 0) {
     await channelRepo.seedChannels(config.familyChatIds);
   }
@@ -91,7 +102,6 @@ async function main(): Promise<void> {
     modelName: config.llmModel,
   });
 
-  const zalo = createZaloClient(config.zaloBotToken);
   const app = buildServer({
     config,
     log,
@@ -105,6 +115,8 @@ async function main(): Promise<void> {
     memoryRepo,
     channelRepo,
     lookupsRepo,
+    wordChainRepo,
+    wordChainService,
     llmClient,
   });
 
@@ -139,6 +151,7 @@ async function main(): Promise<void> {
       () => app.close(),
       queue,
       () => {
+        wordChainService.dispose();
         closeDatabase(db);
         log.info({ event: "db_closed" });
       },

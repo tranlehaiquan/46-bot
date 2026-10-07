@@ -17,9 +17,10 @@ import type { ZaloClient } from "./zalo-client.js";
 import fastifyStatic from "@fastify/static";
 import path from "node:path";
 import fs from "node:fs";
-import { registerAdminRoutes } from "./admin/routes.js";
-
 import type { SqliteDatabase } from "./db/connection.js";
+import { registerAdminRoutes } from "./admin/routes.js";
+import { createWordChainRepository, type WordChainRepository } from "./db/repositories/word-chain.js";
+import { WordChainService } from "./word-chain/service.js";
 
 export const BODY_LIMIT = 64 * 1024;
 
@@ -36,6 +37,8 @@ export type ServerDeps = {
   memoryRepo?: MemoryRepository;
   channelRepo?: ChannelRepository;
   lookupsRepo?: LookupRepository;
+  wordChainRepo?: WordChainRepository;
+  wordChainService?: WordChainService;
   llmClient?: LlmClient;
 };
 
@@ -105,6 +108,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   app.get("/health", async () => ({ ok: true }));
 
+  const wordChainRepo = deps.wordChainRepo ?? (deps.db ? createWordChainRepository(deps.db) : undefined);
+  const wordChainService =
+    deps.wordChainService ??
+    (wordChainRepo
+      ? new WordChainService({
+          repo: wordChainRepo,
+          onTimeout: async (chatId, message) => {
+            await deps.zalo.sendMessage(chatId, message);
+          },
+        })
+      : undefined);
+
   app.post("/webhooks/zalo", async (request, reply) => {
     const header = request.headers["x-bot-api-secret-token"];
     const secretHeader = Array.isArray(header) ? header[0] : header;
@@ -126,6 +141,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         memoryRepo: deps.memoryRepo,
         channelRepo: deps.channelRepo,
         lookupsRepo: deps.lookupsRepo,
+        wordChainRepo,
+        wordChainService,
         llmClient: deps.llmClient,
         seen,
       }),

@@ -132,5 +132,51 @@ export async function migrate(db: SqliteDatabase): Promise<void> {
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_lookup_runs_lookup_fire ON scheduled_lookup_runs(lookup_id, fire_date);
+
+    CREATE TABLE IF NOT EXISTS word_chain_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      current_word TEXT NOT NULL,
+      starter_word TEXT NOT NULL,
+      total_words INTEGER NOT NULL DEFAULT 0,
+      started_at INTEGER NOT NULL,
+      ended_at INTEGER,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_wc_sessions_chat_status ON word_chain_sessions(chat_id, status);
+
+    CREATE TABLE IF NOT EXISTS word_chain_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL REFERENCES word_chain_sessions(id) ON DELETE CASCADE,
+      chat_id TEXT NOT NULL,
+      word TEXT NOT NULL,
+      player_id TEXT NOT NULL,
+      player_name TEXT NOT NULL,
+      turn_index INTEGER NOT NULL,
+      points INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_wc_history_session ON word_chain_history(session_id);
+    CREATE INDEX IF NOT EXISTS idx_wc_history_chat ON word_chain_history(chat_id);
+
+    CREATE TABLE IF NOT EXISTS word_chain_stats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      player_id TEXT NOT NULL,
+      player_name TEXT NOT NULL,
+      total_score INTEGER NOT NULL DEFAULT 0,
+      words_chained INTEGER NOT NULL DEFAULT 0,
+      highest_streak INTEGER NOT NULL DEFAULT 0,
+      games_played INTEGER NOT NULL DEFAULT 0,
+      games_won INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_wc_stats_chat_player ON word_chain_stats(chat_id, player_id);
+    CREATE INDEX IF NOT EXISTS idx_wc_stats_chat_score ON word_chain_stats(chat_id, total_score DESC);
+    CREATE INDEX IF NOT EXISTS idx_wc_stats_global_score ON word_chain_stats(total_score DESC);
   `);
 }
