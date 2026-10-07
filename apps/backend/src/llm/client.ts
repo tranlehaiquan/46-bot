@@ -137,8 +137,9 @@ export function createLlmClient(options: LlmClientOptions): LlmClient {
                   text: formatUserMessageTag(currentSender, userText),
                 },
                 {
-                  type: "image",
-                  image: new URL(params.incomingMessage.photo),
+                  type: "file",
+                  data: new URL(params.incomingMessage.photo),
+                  mediaType: "image",
                 },
               ],
             });
