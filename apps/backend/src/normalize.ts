@@ -29,58 +29,74 @@ export type IncomingMessage = {
   raw: unknown;
 };
 
+const PHOTO_KEYS = [
+  "photo_url",
+  "photo",
+  "url",
+  "image_url",
+  "image",
+  "picture_url",
+  "picture",
+  "media_url",
+  "href",
+  "src",
+];
+
+function findStringProperty(record: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const val = record[key];
+    if (typeof val === "string" && val.trim().length > 0) {
+      return val.trim();
+    }
+  }
+  return undefined;
+}
+
 export function extractPhotoUrl(record: Record<string, unknown> | undefined): string | undefined {
   if (!record) {
     return undefined;
   }
-  if (typeof record.photo === "string" && record.photo.trim().length > 0) {
-    return record.photo.trim();
+
+  // 1. Check direct properties
+  const directMatch = findStringProperty(record, PHOTO_KEYS);
+  if (directMatch) {
+    return directMatch;
   }
-  if (typeof record.url === "string" && record.url.trim().length > 0) {
-    return record.url.trim();
-  }
-  if (typeof record.image === "string" && record.image.trim().length > 0) {
-    return record.image.trim();
-  }
-  if (typeof record.media_url === "string" && record.media_url.trim().length > 0) {
-    return record.media_url.trim();
-  }
-  if (typeof record.href === "string" && record.href.trim().length > 0) {
-    return record.href.trim();
-  }
+
+  // 2. Check attachments array
   if (Array.isArray(record.attachments) && record.attachments.length > 0) {
-    const first = record.attachments[0];
-    if (typeof first === "string" && first.trim().length > 0) {
-      return first.trim();
-    }
-    if (first && typeof first === "object") {
-      const firstRec = first as Record<string, unknown>;
-      if (typeof firstRec.url === "string" && firstRec.url.trim().length > 0) {
-        return firstRec.url.trim();
+    for (const item of record.attachments) {
+      if (typeof item === "string" && item.trim().length > 0) {
+        return item.trim();
       }
-      if (typeof firstRec.photo === "string" && firstRec.photo.trim().length > 0) {
-        return firstRec.photo.trim();
-      }
-      if (typeof firstRec.src === "string" && firstRec.src.trim().length > 0) {
-        return firstRec.src.trim();
-      }
-      if (firstRec.payload && typeof firstRec.payload === "object") {
-        const payloadRec = firstRec.payload as Record<string, unknown>;
-        if (typeof payloadRec.url === "string" && payloadRec.url.trim().length > 0) {
-          return payloadRec.url.trim();
+      if (item && typeof item === "object") {
+        const itemRec = item as Record<string, unknown>;
+        const match = findStringProperty(itemRec, PHOTO_KEYS);
+        if (match) {
+          return match;
         }
-        if (typeof payloadRec.photo === "string" && payloadRec.photo.trim().length > 0) {
-          return payloadRec.photo.trim();
+        if (itemRec.payload && typeof itemRec.payload === "object") {
+          const payloadMatch = findStringProperty(itemRec.payload as Record<string, unknown>, PHOTO_KEYS);
+          if (payloadMatch) {
+            return payloadMatch;
+          }
         }
       }
     }
   }
-  if (record.photo && typeof record.photo === "object") {
-    const photoRec = record.photo as Record<string, unknown>;
-    if (typeof photoRec.url === "string" && photoRec.url.trim().length > 0) {
-      return photoRec.url.trim();
+
+  // 3. Check nested objects: photo, image, picture, media
+  const nestedObjectKeys = ["photo", "image", "picture", "media"];
+  for (const objKey of nestedObjectKeys) {
+    const nested = record[objKey];
+    if (nested && typeof nested === "object") {
+      const match = findStringProperty(nested as Record<string, unknown>, PHOTO_KEYS);
+      if (match) {
+        return match;
+      }
     }
   }
+
   return undefined;
 }
 

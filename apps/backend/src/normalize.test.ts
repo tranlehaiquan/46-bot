@@ -164,4 +164,49 @@ describe("normalizeDelivery and isMentionedOrReplied", () => {
     assert.equal(msg.quote.photo, "https://example.com/quoted-flight.jpg");
     assert.equal(msg.quote.text, "ĐI TRUNG QUỐC");
   });
+
+  it("extracts photo from message.image.received payload with photo_url field", () => {
+    const payload = {
+      event_name: "message.image.received",
+      message: {
+        date: 1791345757488,
+        chat: { chat_type: "PRIVATE", id: "user-quan" },
+        caption: "",
+        message_id: "m-photo-url-1",
+        message_type: "CHAT_PHOTO",
+        from: { id: "user-quan", is_bot: false, display_name: "Quan Tran" },
+        photo_url: "https://photo-stal-22.zdn.vn/no/jpg/1ed3899a09bfd8e181ae/test.jpg",
+      },
+    };
+
+    const msg = normalizeDelivery(payload);
+    assert.ok(msg);
+    assert.equal(msg.eventName, "message.image.received");
+    assert.equal(msg.photo, "https://photo-stal-22.zdn.vn/no/jpg/1ed3899a09bfd8e181ae/test.jpg");
+    assert.equal(msg.caption, "");
+    assert.equal(msg.text, "");
+    assert.equal(isMentionedOrReplied(msg), true);
+  });
+
+  it("extracts photo from attachments with photo_url or payload", () => {
+    const payload = {
+      event_name: "message.image.received",
+      message: {
+        message_id: "m-att-1",
+        chat: { id: "chat-1", chat_type: "GROUP" },
+        from: { id: "user-1", display_name: "User" },
+        attachments: [
+          {
+            payload: {
+              photo_url: "https://example.com/attachment-photo.jpg",
+            },
+          },
+        ],
+      },
+    };
+
+    const msg = normalizeDelivery(payload);
+    assert.ok(msg);
+    assert.equal(msg.photo, "https://example.com/attachment-photo.jpg");
+  });
 });

@@ -119,10 +119,6 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     return;
   }
 
-  log.info({
-    payload: parsed
-  })
-
   const message = normalizeDelivery(parsed);
   if (!message) {
     if (config.familyChatIds.length === 0) {

@@ -38,9 +38,15 @@ function envelope(overrides?: {
   senderName?: string;
   isBot?: boolean;
   text?: string;
+  photo?: string;
   messageId?: string;
   mentions?: Array<{ uid: string }>;
-  quote?: { message_id?: string; from?: { id: string; is_bot?: boolean } };
+  quote?: {
+    message_id?: string;
+    from?: { id: string; is_bot?: boolean; display_name?: string };
+    photo?: string;
+    text?: string;
+  };
   extra?: Record<string, unknown>;
 }) {
   return {
@@ -519,6 +525,55 @@ describe("LLM conversation and database integration", () => {
     assert.ok(history[0].content.includes("@bot doc hoa don nay giup toi"));
     assert.equal(history[1].role, "assistant");
     assert.equal(history[1].content, "Buc anh rat dep!");
+
+    await app.close();
+    closeDatabase(db);
+  });
+
+  it("processes photo message with photo_url and empty caption", async () => {
+    const db = openDatabase(":memory:");
+    await migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+
+    let passedPhoto: string | undefined;
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        passedPhoto = params.incomingMessage.photo;
+        return "Buc anh rat dep!";
+      },
+    };
+
+    const { app, zalo, queue } = testApp("user-quan", undefined, {
+      seenRepo,
+      messageRepo,
+      llmClient: mockLlm,
+    });
+
+    const photoMsg = {
+      event_name: "message.image.received",
+      message: {
+        date: 1791345757488,
+        chat: { chat_type: "PRIVATE", id: "user-quan" },
+        caption: "",
+        message_id: "msg-zalo-photo-url",
+        message_type: "CHAT_PHOTO",
+        from: { id: "user-quan", is_bot: false, display_name: "Quan Tran" },
+        photo_url: "https://photo-stal-22.zdn.vn/no/jpg/1ed3899a09bfd8e181ae/2aOboR3n2fxvrE9DiEnLuaMTMUyq3v8H5nlsw0Ei.jpg",
+      },
+    };
+
+    await post(app, JSON.stringify(photoMsg));
+    await queue.drain();
+
+    assert.equal(
+      passedPhoto,
+      "https://photo-stal-22.zdn.vn/no/jpg/1ed3899a09bfd8e181ae/2aOboR3n2fxvrE9DiEnLuaMTMUyq3v8H5nlsw0Ei.jpg",
+    );
+    assert.deepEqual(zalo.sends, [
+      { chatId: "user-quan", text: "Buc anh rat dep!" },
+    ]);
 
     await app.close();
     closeDatabase(db);
