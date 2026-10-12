@@ -63,10 +63,39 @@ export function formatMemoriesSection(memories?: MemoryItem[]): string {
   return `\n\n### Things you know about this family:\n<memory_context>\n${lines.join("\n")}\n</memory_context>`;
 }
 
+export type GroupMemberContextItem = {
+  senderId: string;
+  senderName: string;
+  alias?: string | null;
+  relationship?: string | null;
+  notes?: string | null;
+};
+
+export function formatGroupMembersSection(
+  members?: GroupMemberContextItem[],
+  currentSpeakerId?: string,
+): string {
+  if (!members || members.length === 0) {
+    return "";
+  }
+  const lines = members.map((m) => {
+    const isSpeaker = m.senderId === currentSpeakerId;
+    const parts = [`id="${m.senderId}"`, `name="${m.senderName}"`];
+    if (m.alias) parts.push(`alias="${m.alias}"`);
+    if (m.relationship) parts.push(`relationship="${m.relationship}"`);
+    if (m.notes) parts.push(`notes="${m.notes}"`);
+    if (isSpeaker) parts.push(`active_speaker="true"`);
+    return `  <member ${parts.join(" ")} />`;
+  });
+  return `\n\n### Danh sách thành viên nhóm:\n<group_members>\n${lines.join("\n")}\n</group_members>`;
+}
+
 export function buildSystemPrompt(
   basePrompt = DEFAULT_SYSTEM_PROMPT,
   now = new Date(),
   memories?: MemoryItem[],
+  groupMembers?: GroupMemberContextItem[],
+  currentSpeakerId?: string,
 ): string {
   const formattedTime = new Intl.DateTimeFormat("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
@@ -75,7 +104,8 @@ export function buildSystemPrompt(
   }).format(now);
 
   const memorySection = formatMemoriesSection(memories);
-  return `${basePrompt}${memorySection}\n\n- Thời gian hiện tại (Việt Nam, GMT+7): ${formattedTime}.`;
+  const groupMembersSection = formatGroupMembersSection(groupMembers, currentSpeakerId);
+  return `${basePrompt}${memorySection}${groupMembersSection}\n\n- Thời gian hiện tại (Việt Nam, GMT+7): ${formattedTime}.`;
 }
 
 export type ToolSet = NonNullable<Parameters<typeof generateText>[0]["tools"]>;
@@ -84,6 +114,7 @@ export interface LlmClient {
   generateReply(params: {
     systemPrompt?: string;
     memories?: MemoryItem[];
+    groupMembers?: GroupMemberContextItem[];
     history: MessageRow[];
     incomingMessage: {
       senderId: string;
@@ -180,6 +211,8 @@ export function createLlmClient(options: LlmClientOptions): LlmClient {
         params.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
         new Date(),
         params.memories,
+        params.groupMembers,
+        params.incomingMessage.senderId,
       );
 
       const result = await generateText({

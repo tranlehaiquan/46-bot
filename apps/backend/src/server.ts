@@ -24,6 +24,10 @@ import { WordChainService } from "./word-chain/service.js";
 
 import type { SettingsRepository } from "./db/repositories/settings.js";
 import { DynamicLlmClient } from "./admin/settings-helper.js";
+import {
+  createGroupMemberRepository,
+  type GroupMemberRepository,
+} from "./db/repositories/group-members.js";
 
 export const BODY_LIMIT = 64 * 1024;
 
@@ -43,6 +47,7 @@ export type ServerDeps = {
   settingsRepo?: SettingsRepository;
   wordChainRepo?: WordChainRepository;
   wordChainService?: WordChainService;
+  groupMemberRepo?: GroupMemberRepository;
   llmClient?: LlmClient;
 };
 
@@ -124,6 +129,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         })
       : undefined);
 
+  const groupMemberRepo =
+    deps.groupMemberRepo ?? (deps.db ? createGroupMemberRepository(deps.db) : undefined);
+
   if (deps.llmClient && !(deps.llmClient instanceof DynamicLlmClient)) {
     deps.llmClient = new DynamicLlmClient(deps.llmClient);
   }
@@ -152,6 +160,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         settingsRepo: deps.settingsRepo,
         wordChainRepo,
         wordChainService,
+        groupMemberRepo,
         llmClient: deps.llmClient,
         seen,
       }),

@@ -68,6 +68,30 @@ describe("buildSystemPrompt", () => {
     assert.equal(promptWithUndefined.includes("### Things you know about this family:"), false);
   });
 
+  it("injects group members section with active speaker label when members are provided", () => {
+    const fixedDate = new Date("2026-10-04T12:00:00.000Z");
+    const members = [
+      { senderId: "user-1", senderName: "Nam Nguyen", alias: "Bố", notes: "Thích cà phê đen" },
+      { senderId: "user-2", senderName: "Mai Le", alias: "Mẹ", relationship: "Mẹ" },
+    ];
+
+    const prompt = buildSystemPrompt(DEFAULT_SYSTEM_PROMPT, fixedDate, undefined, members, "user-1");
+    assert.match(prompt, /### Danh sách thành viên nhóm:/);
+    assert.match(prompt, /<group_members>/);
+    assert.match(prompt, /<member id="user-1" name="Nam Nguyen" alias="Bố" notes="Thích cà phê đen" active_speaker="true" \/>/);
+    assert.match(prompt, /<member id="user-2" name="Mai Le" alias="Mẹ" relationship="Mẹ" \/>/);
+    assert.match(prompt, /<\/group_members>/);
+  });
+
+  it("omits group members section when empty or undefined", () => {
+    const fixedDate = new Date("2026-10-04T12:00:00.000Z");
+    const promptEmpty = buildSystemPrompt(DEFAULT_SYSTEM_PROMPT, fixedDate, undefined, []);
+    assert.equal(promptEmpty.includes("<group_members>"), false);
+
+    const promptUndef = buildSystemPrompt(DEFAULT_SYSTEM_PROMPT, fixedDate, undefined, undefined);
+    assert.equal(promptUndef.includes("<group_members>"), false);
+  });
+
   it("asserts DEFAULT_SYSTEM_PROMPT names the lookup tools for internet lookups and retains event_add for calendar", () => {
     assert.match(DEFAULT_SYSTEM_PROMPT, /lookup_schedule_create/);
     assert.match(DEFAULT_SYSTEM_PROMPT, /lookup_schedule_list/);

@@ -23,7 +23,9 @@ import { createWeatherTool } from "./tools/weather.js";
 import { createLotteryTool } from "./tools/lottery.js";
 import { createWebSearchTool } from "./tools/web-search.js";
 import { createWordChainTools } from "./tools/word-chain.js";
+import { createGroupMemberTools } from "./tools/group-members.js";
 import type { WordChainRepository } from "./db/repositories/word-chain.js";
+import type { GroupMemberRepository } from "./db/repositories/group-members.js";
 import type { WordChainService } from "./word-chain/service.js";
 import { splitSyllables, matchesChain } from "./word-chain/dictionary.js";
 import { splitText } from "./utils/split-text.js";
@@ -109,6 +111,7 @@ export type DeliveryDependencies = {
   settingsRepo?: SettingsRepository;
   wordChainRepo?: WordChainRepository;
   wordChainService?: WordChainService;
+  groupMemberRepo?: GroupMemberRepository;
   llmClient?: LlmClient;
   seen?: Set<string>;
 };
@@ -129,6 +132,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     settingsRepo,
     wordChainRepo,
     wordChainService,
+    groupMemberRepo,
     llmClient,
     seen,
   } = input;
@@ -276,6 +280,24 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     if (isGroup && !isAllowedGroup) {
       await zalo.sendMessage(message.chatId, getOnboardingMessage(message.chatId));
       return;
+    }
+  }
+
+  // Record group member activity
+  if (isGroup && groupMemberRepo) {
+    try {
+      await groupMemberRepo.recordActivity(
+        message.chatId,
+        message.senderId,
+        message.senderName || message.senderId,
+      );
+    } catch (err) {
+      log.warn({
+        event: "group_member_activity_error",
+        chat_id: message.chatId,
+        sender_id: message.senderId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -438,6 +460,15 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
           })
         : undefined;
 
+    const groupMemberTools =
+      isGroup && groupMemberRepo
+        ? createGroupMemberTools(groupMemberRepo, {
+            chatId: message.chatId,
+            currentSenderId: message.senderId,
+            currentSenderName: message.senderName || message.senderId,
+          })
+        : undefined;
+
     const tools =
       listTools ||
       eventTools ||
@@ -447,7 +478,8 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       weatherTools ||
       lookupTools ||
       lotteryTools ||
-      wordChainTools
+      wordChainTools ||
+      groupMemberTools
         ? {
             ...listTools,
             ...eventTools,
@@ -458,10 +490,21 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
             ...lookupTools,
             ...lotteryTools,
             ...wordChainTools,
+            ...groupMemberTools,
           }
         : undefined;
 
     const memories = memoryRepo ? await memoryRepo.listMemories(message.chatId) : undefined;
+
+    const rawGroupMembers =
+      isGroup && groupMemberRepo ? await groupMemberRepo.listMembers(message.chatId) : undefined;
+    const groupMembers = rawGroupMembers?.map((m) => ({
+      senderId: m.senderId,
+      senderName: m.senderName,
+      alias: m.alias,
+      relationship: m.relationship,
+      notes: m.notes,
+    }));
 
     const effectiveProvider =
       (settingsRepo ? await settingsRepo.get("llm_provider") : null) || config.llmProvider;
@@ -497,6 +540,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       try {
         replyText = await llmClient.generateReply({
           memories,
+          groupMembers,
           history,
           incomingMessage: {
             senderId: message.senderId,

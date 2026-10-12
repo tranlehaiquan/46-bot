@@ -113,4 +113,35 @@ describe("SQLite database layer", () => {
       closeDatabase(db);
     }
   });
+
+  it("verifies group_members table creation and unique constraint", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      await migrate(db);
+      const now = Date.now();
+      await db.execute({
+        sql: `INSERT INTO group_members (chat_id, sender_id, sender_name, alias, relationship, notes, created_at, last_seen_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: ["group-1", "user-1", "Nam Nguyen", "Bố", "Cha", "Thích cà phê", now, now],
+      });
+
+      // Duplicate (chat_id, sender_id) should fail
+      await assert.rejects(async () => {
+        await db.execute({
+          sql: `INSERT INTO group_members (chat_id, sender_id, sender_name, created_at, last_seen_at)
+                VALUES (?, ?, ?, ?, ?)`,
+          args: ["group-1", "user-1", "Nam Nguyen", now, now],
+        });
+      }, /UNIQUE constraint failed/);
+
+      // Same user in another group succeeds
+      await db.execute({
+        sql: `INSERT INTO group_members (chat_id, sender_id, sender_name, created_at, last_seen_at)
+              VALUES (?, ?, ?, ?, ?)`,
+        args: ["group-2", "user-1", "Nam Nguyen", now, now],
+      });
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });

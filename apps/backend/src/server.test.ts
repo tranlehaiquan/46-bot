@@ -8,6 +8,10 @@ import { migrate } from "./db/migrations.js";
 import { createEventsRepository, type EventsRepository } from "./db/repositories/events.js";
 import { createMemoryRepository, type MemoryRepository } from "./db/repositories/memory.js";
 import { createSeenRepository, type SeenRepository } from "./db/seen-repo.js";
+import {
+  createGroupMemberRepository,
+  type GroupMemberRepository,
+} from "./db/repositories/group-members.js";
 import { CANNED_REPLY, getOnboardingMessage } from "./delivery.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
 import { PROMPT_INJECTION_REFUSAL_MESSAGE } from "./llm/prompt-security.js";
@@ -84,6 +88,7 @@ function testApp(
     listRepo?: ListRepository;
     eventsRepo?: EventsRepository;
     memoryRepo?: MemoryRepository;
+    groupMemberRepo?: GroupMemberRepository;
     llmClient?: LlmClient;
   },
 ) {
@@ -102,6 +107,7 @@ function testApp(
     listRepo: options?.listRepo,
     eventsRepo: options?.eventsRepo,
     memoryRepo: options?.memoryRepo,
+    groupMemberRepo: options?.groupMemberRepo,
     llmClient: options?.llmClient,
   });
   return { app, zalo, queue };
@@ -1084,6 +1090,97 @@ describe("LLM conversation and database integration", () => {
     ]);
 
     await app.close();
+  });
+
+  it("supports group member discovery, prompt enrichment, and group member tools execution through conversational flow", async () => {
+    const db = openDatabase(":memory:");
+    await migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+    const groupMemberRepo = createGroupMemberRepository(db);
+
+    const mockLlm: LlmClient = {
+      async generateReply(params) {
+        const tools = params.tools as Record<string, { execute?: (args: any, opt?: any) => Promise<any> }>;
+        assert.ok(tools.list_group_members, "list_group_members tool should exist");
+        assert.ok(tools.update_group_member, "update_group_member tool should exist");
+
+        // Execute update_group_member tool to register alias and notes for sender
+        await tools.update_group_member.execute?.({
+          alias: "Bố",
+          relationship: "Cha",
+          notes: "Thích cà phê sữa",
+        });
+
+        return "Dạ con đã ghi nhớ thông tin của Bố rồi ạ!";
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      groupMemberRepo,
+      llmClient: mockLlm,
+    });
+
+    const msg1 = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Nhớ mình là Bố nhé, thích uống cà phê sữa",
+      senderId: "user-1",
+      senderName: "Nam Nguyen",
+      messageId: "msg-member-1",
+    });
+
+    await post(app, JSON.stringify(msg1));
+    await queue.drain();
+
+    // Verify member was recorded and updated in database
+    const member1 = await groupMemberRepo.getMember("group-1", "user-1");
+    assert.ok(member1);
+    assert.equal(member1.senderName, "Nam Nguyen");
+    assert.equal(member1.alias, "Bố");
+    assert.equal(member1.relationship, "Cha");
+    assert.equal(member1.notes, "Thích cà phê sữa");
+
+    // Second message from another member (user-2)
+    let secondCallMembers: any;
+    const mockLlm2: LlmClient = {
+      async generateReply(params) {
+        secondCallMembers = params.groupMembers;
+        return "Chào Mẹ!";
+      },
+    };
+
+    const { app: app2, queue: queue2 } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      groupMemberRepo,
+      llmClient: mockLlm2,
+    });
+
+    const msg2 = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Chào con",
+      senderId: "user-2",
+      senderName: "Mai Le",
+      messageId: "msg-member-2",
+    });
+
+    await post(app2, JSON.stringify(msg2));
+    await queue2.drain();
+
+    assert.ok(secondCallMembers);
+    assert.equal(secondCallMembers.length, 2);
+    const foundUser1 = secondCallMembers.find((m: any) => m.senderId === "user-1");
+    assert.ok(foundUser1);
+    assert.equal(foundUser1.alias, "Bố");
+    assert.equal(foundUser1.notes, "Thích cà phê sữa");
+
+    await app.close();
+    await app2.close();
+    closeDatabase(db);
   });
 });
 

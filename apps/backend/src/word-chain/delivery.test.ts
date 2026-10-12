@@ -57,7 +57,15 @@ describe("Word Chain Delivery Pipeline & Fast-path Commands", () => {
       const zalo: ZaloClient = {
         async sendMessage(chatId, text) {
           sentMessages.push({ chatId, text });
-          return { message_id: "m-1" };
+        },
+        async getWebhookInfo() {
+          return { url: "" };
+        },
+        async setWebhook() {
+          return { outcome: "webhook.ok" };
+        },
+        async testWebhook() {
+          return { outcome: "webhook.ok" };
         },
       };
       const log = createLogger();

@@ -184,5 +184,20 @@ export async function migrate(db: SqliteDatabase): Promise<void> {
       value TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS group_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      sender_name TEXT NOT NULL,
+      alias TEXT,
+      relationship TEXT,
+      notes TEXT,
+      created_at INTEGER NOT NULL,
+      last_seen_at INTEGER NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_group_members_chat_sender ON group_members(chat_id, sender_id);
+    CREATE INDEX IF NOT EXISTS idx_group_members_chat ON group_members(chat_id);
   `);
 }
