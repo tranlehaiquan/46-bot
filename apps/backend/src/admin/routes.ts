@@ -13,6 +13,7 @@ import {
   toMaskedSettings,
   createLlmClientFromSettings,
   DynamicLlmClient,
+  testCrawl4AiConnection,
 } from "./settings-helper.js";
 import { createLlmClient } from "../llm/client.js";
 import { tavily } from "@tavily/core";
@@ -532,6 +533,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       handleKey(body.geminiApiKey, "gemini_api_key");
       handleKey(body.deepseekApiKey, "deepseek_api_key");
       handleKey(body.tavilyApiKey, "tavily_api_key");
+      handleKey(body.crawl4aiApiKey ?? body.crawl4aiApiToken, "crawl4ai_api_token");
 
       if (Object.keys(updates).length > 0) {
         await deps.settingsRepo.setMany(updates);
@@ -550,10 +552,54 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       return reply.send({ ok: true, settings });
     });
 
+    adminScope.post("/api/admin/settings/test-crawl4ai", async (request, reply) => {
+      const body = parseJsonBody(request.body);
+      const { effective } = await resolveEffectiveSettings(deps.settingsRepo, deps.config);
+      const rawKey = body.token ?? body.crawl4aiApiKey ?? body.crawl4aiApiToken;
+      const key =
+        typeof rawKey === "string" &&
+        !rawKey.includes("...") &&
+        !rawKey.includes("***") &&
+        rawKey.trim()
+          ? rawKey.trim()
+          : effective.crawl4aiApiToken;
+
+      if (!key) {
+        return reply.code(400).send({ ok: false, error: "Chưa cấu hình Crawl4AI API Token." });
+      }
+
+      const result = await testCrawl4AiConnection(key);
+      if (!result.success) {
+        return reply.code(400).send({ ok: false, error: result.error });
+      }
+      return reply.send({ ok: true, message: result.message });
+    });
+
     adminScope.post("/api/admin/settings/test", async (request, reply) => {
       const body = parseJsonBody(request.body);
       const testType = typeof body.testType === "string" ? body.testType : "llm";
       const { effective } = await resolveEffectiveSettings(deps.settingsRepo, deps.config);
+
+      if (testType === "crawl4ai") {
+        const rawKey = body.crawl4aiApiKey ?? body.crawl4aiApiToken ?? body.apiKey;
+        const key =
+          typeof rawKey === "string" &&
+          !rawKey.includes("...") &&
+          !rawKey.includes("***") &&
+          rawKey.trim()
+            ? rawKey.trim()
+            : effective.crawl4aiApiToken;
+
+        if (!key) {
+          return reply.code(400).send({ ok: false, error: "Chưa cấu hình Crawl4AI API Token." });
+        }
+
+        const result = await testCrawl4AiConnection(key);
+        if (!result.success) {
+          return reply.code(400).send({ ok: false, error: result.error });
+        }
+        return reply.send({ ok: true, message: result.message });
+      }
 
       if (testType === "tavily") {
         let key =

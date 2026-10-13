@@ -21,6 +21,7 @@ import {
   useSettings,
   useUpdateSettings,
   useTestSettings,
+  useTestCrawl4Ai,
 } from "../hooks/useAdminQueries";
 import type { AdminSettings } from "../api";
 
@@ -40,6 +41,7 @@ export function SettingsPage() {
   const { data: settings, isLoading, isError, refetch } = useSettings();
   const updateSettingsMutation = useUpdateSettings();
   const testSettingsMutation = useTestSettings();
+  const testCrawl4AiMutation = useTestCrawl4Ai();
 
   const [provider, setProvider] = useState<"gemini" | "deepseek">("gemini");
   const [geminiModel, setGeminiModel] = useState("gemini-3.8-flash");
@@ -53,14 +55,17 @@ export function SettingsPage() {
   const [tavilyApiKey, setTavilyApiKey] = useState("");
   const [showTavilyKey, setShowTavilyKey] = useState(false);
 
+  const [crawl4aiApiToken, setCrawl4aiApiToken] = useState("");
+  const [showCrawl4aiToken, setShowCrawl4aiToken] = useState(false);
+
   const [statusMessage, setStatusMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
-  const [testingTarget, setTestingTarget] = useState<"gemini" | "deepseek" | "tavily" | null>(null);
+  const [testingTarget, setTestingTarget] = useState<"gemini" | "deepseek" | "tavily" | "crawl4ai" | null>(null);
   const [testResult, setTestResult] = useState<{
-    target: "gemini" | "deepseek" | "tavily";
+    target: "gemini" | "deepseek" | "tavily" | "crawl4ai";
     ok: boolean;
     message: string;
     detail?: string;
@@ -93,11 +98,15 @@ export function SettingsPage() {
       if (tavilyApiKey.trim()) {
         updates.tavilyApiKey = tavilyApiKey.trim();
       }
+      if (crawl4aiApiToken.trim()) {
+        updates.crawl4aiApiKey = crawl4aiApiToken.trim();
+      }
 
       await updateSettingsMutation.mutateAsync(updates);
       setGeminiApiKey("");
       setDeepseekApiKey("");
       setTavilyApiKey("");
+      setCrawl4aiApiToken("");
       setStatusMessage({
         type: "success",
         text: "Đã lưu cài đặt thành công! Cấu hình mới được áp dụng ngay lập tức.",
@@ -109,7 +118,9 @@ export function SettingsPage() {
     }
   };
 
-  const handleResetKey = async (keyName: "geminiApiKey" | "deepseekApiKey" | "tavilyApiKey") => {
+  const handleResetKey = async (
+    keyName: "geminiApiKey" | "deepseekApiKey" | "tavilyApiKey" | "crawl4aiApiKey"
+  ) => {
     if (!confirm("Bạn có chắc muốn xóa ghi đè database cho API Key này để quay về giá trị mặc định trong file .env?")) {
       return;
     }
@@ -128,11 +139,19 @@ export function SettingsPage() {
     }
   };
 
-  const handleTestConnection = async (target: "gemini" | "deepseek" | "tavily") => {
+  const handleTestConnection = async (target: "gemini" | "deepseek" | "tavily" | "crawl4ai") => {
     setTestingTarget(target);
     setTestResult(null);
     try {
-      if (target === "tavily") {
+      if (target === "crawl4ai") {
+        const candidate = crawl4aiApiToken.trim() || undefined;
+        const res = await testCrawl4AiMutation.mutateAsync(candidate);
+        setTestResult({
+          target: "crawl4ai",
+          ok: res.ok,
+          message: res.message || "Kết nối Crawl4AI Cloud thành công!",
+        });
+      } else if (target === "tavily") {
         const res = await testSettingsMutation.mutateAsync({
           testType: "tavily",
           tavilyApiKey: tavilyApiKey.trim() || undefined,
@@ -705,6 +724,109 @@ export function SettingsPage() {
           </div>
           <p className="text-[11px] text-slate-400">
             Khóa API bắt đầu bằng <code className="text-indigo-300 font-mono">tvly-...</code> từ Tavily AI Search API.
+          </p>
+        </div>
+      </div>
+
+      {/* Crawl4AI Web Scraping & Crawling Configuration */}
+      <div className="glass-panel p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-white/5 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+              <Globe size={18} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-white">Crawl4AI Cloud (Đọc & trích xuất nội dung web)</h2>
+              <p className="text-xs text-slate-400">Đọc nội dung chi tiết bài viết, trang web và trích xuất Markdown cho LLM</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={testingTarget === "crawl4ai"}
+              onClick={() => handleTestConnection("crawl4ai")}
+            >
+              <Zap size={14} className="text-amber-400" />
+              <span>Kiểm tra kết nối</span>
+            </Button>
+          </div>
+        </div>
+
+        {testResult && testResult.target === "crawl4ai" && (
+          <div
+            className={`p-3.5 rounded-lg text-xs flex items-start gap-2.5 ${
+              testResult.ok
+                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
+                : "bg-rose-500/10 border border-rose-500/20 text-rose-300"
+            }`}
+          >
+            {testResult.ok ? (
+              <CheckCircle2 size={16} className="shrink-0 text-emerald-400 mt-0.5" />
+            ) : (
+              <AlertCircle size={16} className="shrink-0 text-rose-400 mt-0.5" />
+            )}
+            <div className="space-y-1">
+              <div className="font-medium">{testResult.message}</div>
+              {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2 max-w-xl">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+              <Key size={13} className="text-cyan-400" />
+              <span>Crawl4AI API Token</span>
+            </label>
+            <div className="flex items-center gap-2">
+              {renderKeySourceBadge(settings.crawl4aiApiTokenSource)}
+              {settings.crawl4aiApiTokenSource === "db" && (
+                <button
+                  onClick={() => handleResetKey("crawl4aiApiKey")}
+                  className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1"
+                  title="Khôi phục về token từ .env"
+                >
+                  <RotateCcw size={11} />
+                  <span>Đặt lại</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="relative">
+            <Input
+              id="input-crawl4ai-token"
+              type={showCrawl4aiToken ? "text" : "password"}
+              placeholder={
+                settings.crawl4aiApiTokenMasked
+                  ? `Hiện tại: ${settings.crawl4aiApiTokenMasked} (để trống nếu không đổi)`
+                  : "Nhập Crawl4AI API Token"
+              }
+              value={crawl4aiApiToken}
+              onChange={(e) => setCrawl4aiApiToken(e.target.value)}
+              className="pr-10 font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => setShowCrawl4aiToken(!showCrawl4aiToken)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+            >
+              {showCrawl4aiToken ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Lấy API Token tại bảng điều khiển{" "}
+            <a
+              href="https://crawl4ai.com/dashboard/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-cyan-400 hover:underline"
+            >
+              crawl4ai.com/dashboard
+            </a>
+            .
           </p>
         </div>
       </div>

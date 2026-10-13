@@ -1,4 +1,6 @@
-import type { SqliteDatabase } from "../connection.js";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { createDrizzleDb, type SqliteDatabase } from "../connection.js";
+import { wordChainHistory, wordChainSessions, wordChainStats } from "../schema/index.js";
 
 export type WordChainSessionStatus = "active" | "finished" | "timed_out";
 
@@ -81,110 +83,102 @@ export interface WordChainRepository {
   getLeaderboard(chatId?: string, limit?: number): Promise<LeaderboardEntry[]>;
 }
 
-function mapSessionRow(row: any): WordChainSessionRow {
+function toSessionRow(row: typeof wordChainSessions.$inferSelect): WordChainSessionRow {
   return {
-    id: Number(row.id),
-    chatId: String(row.chat_id ?? row.chatId),
-    status: (row.status as WordChainSessionStatus),
-    currentWord: String(row.current_word ?? row.currentWord),
-    starterWord: String(row.starter_word ?? row.starterWord),
-    totalWords: Number(row.total_words ?? row.totalWords ?? 0),
-    startedAt: Number(row.started_at ?? row.startedAt),
-    endedAt: row.ended_at || row.endedAt ? Number(row.ended_at ?? row.endedAt) : undefined,
-    updatedAt: Number(row.updated_at ?? row.updatedAt),
+    id: row.id,
+    chatId: row.chatId,
+    status: row.status as WordChainSessionStatus,
+    currentWord: row.currentWord,
+    starterWord: row.starterWord,
+    totalWords: row.totalWords,
+    startedAt: row.startedAt,
+    endedAt: row.endedAt ?? undefined,
+    updatedAt: row.updatedAt,
   };
 }
 
-function mapHistoryRow(row: any): WordChainHistoryRow {
+function toHistoryRow(row: typeof wordChainHistory.$inferSelect): WordChainHistoryRow {
   return {
-    id: Number(row.id),
-    sessionId: Number(row.session_id ?? row.sessionId),
-    chatId: String(row.chat_id ?? row.chatId),
-    word: String(row.word),
-    playerId: String(row.player_id ?? row.playerId),
-    playerName: String(row.player_name ?? row.playerName),
-    turnIndex: Number(row.turn_index ?? row.turnIndex),
-    points: Number(row.points ?? 1),
-    createdAt: Number(row.created_at ?? row.createdAt),
+    id: row.id,
+    sessionId: row.sessionId,
+    chatId: row.chatId,
+    word: row.word,
+    playerId: row.playerId,
+    playerName: row.playerName,
+    turnIndex: row.turnIndex,
+    points: row.points,
+    createdAt: row.createdAt,
   };
 }
 
-function mapStatsRow(row: any): WordChainPlayerStatsRow {
+function toStatsRow(row: typeof wordChainStats.$inferSelect): WordChainPlayerStatsRow {
   return {
-    id: Number(row.id),
-    chatId: String(row.chat_id ?? row.chatId),
-    playerId: String(row.player_id ?? row.playerId),
-    playerName: String(row.player_name ?? row.playerName),
-    totalScore: Number(row.total_score ?? row.totalScore ?? 0),
-    wordsChained: Number(row.words_chained ?? row.wordsChained ?? 0),
-    highestStreak: Number(row.highest_streak ?? row.highestStreak ?? 0),
-    gamesPlayed: Number(row.games_played ?? row.gamesPlayed ?? 0),
-    gamesWon: Number(row.games_won ?? row.gamesWon ?? 0),
-    updatedAt: Number(row.updated_at ?? row.updatedAt),
+    id: row.id,
+    chatId: row.chatId,
+    playerId: row.playerId,
+    playerName: row.playerName,
+    totalScore: row.totalScore,
+    wordsChained: row.wordsChained,
+    highestStreak: row.highestStreak,
+    gamesPlayed: row.gamesPlayed,
+    gamesWon: row.gamesWon,
+    updatedAt: row.updatedAt,
   };
 }
 
 export function createWordChainRepository(db: SqliteDatabase): WordChainRepository {
+  const orm = createDrizzleDb(db);
   return {
     async getActiveSession(chatId: string): Promise<WordChainSessionRow | undefined> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id, status, current_word, starter_word, total_words, started_at, ended_at, updated_at
-              FROM word_chain_sessions
-              WHERE chat_id = ? AND status = 'active'
-              ORDER BY id DESC LIMIT 1`,
-        args: [chatId],
-      });
-      return res.rows[0] ? mapSessionRow(res.rows[0]) : undefined;
+      const [row] = await orm
+        .select()
+        .from(wordChainSessions)
+        .where(and(eq(wordChainSessions.chatId, chatId), eq(wordChainSessions.status, "active")))
+        .orderBy(desc(wordChainSessions.id))
+        .limit(1);
+      return row ? toSessionRow(row) : undefined;
     },
 
     async getSessionById(id: number): Promise<WordChainSessionRow | undefined> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id, status, current_word, starter_word, total_words, started_at, ended_at, updated_at
-              FROM word_chain_sessions
-              WHERE id = ?`,
-        args: [id],
-      });
-      return res.rows[0] ? mapSessionRow(res.rows[0]) : undefined;
+      const [row] = await orm.select().from(wordChainSessions).where(eq(wordChainSessions.id, id)).limit(1);
+      return row ? toSessionRow(row) : undefined;
     },
 
     async createSession(chatId: string, starterWord: string): Promise<WordChainSessionRow> {
       const now = Date.now();
-      // First, cancel any lingering active sessions for this chat
-      await db.execute({
-        sql: `UPDATE word_chain_sessions
-              SET status = 'timed_out', ended_at = ?, updated_at = ?
-              WHERE chat_id = ? AND status = 'active'`,
-        args: [now, now, chatId],
-      });
+      await orm
+        .update(wordChainSessions)
+        .set({ status: "timed_out", endedAt: now, updatedAt: now })
+        .where(and(eq(wordChainSessions.chatId, chatId), eq(wordChainSessions.status, "active")));
 
-      const res = await db.execute({
-        sql: `INSERT INTO word_chain_sessions (chat_id, status, current_word, starter_word, total_words, started_at, updated_at)
-              VALUES (?, 'active', ?, ?, 0, ?, ?)
-              RETURNING id, chat_id, status, current_word, starter_word, total_words, started_at, ended_at, updated_at`,
-        args: [chatId, starterWord, starterWord, now, now],
-      });
-
-      return mapSessionRow(res.rows[0]);
+      const [row] = await orm
+        .insert(wordChainSessions)
+        .values({
+          chatId,
+          status: "active",
+          currentWord: starterWord,
+          starterWord,
+          totalWords: 0,
+          startedAt: now,
+          updatedAt: now,
+        })
+        .returning();
+      return toSessionRow(row);
     },
 
     async updateSessionWord(sessionId: number, currentWord: string, totalWords: number): Promise<void> {
-      const now = Date.now();
-      await db.execute({
-        sql: `UPDATE word_chain_sessions
-              SET current_word = ?, total_words = ?, updated_at = ?
-              WHERE id = ?`,
-        args: [currentWord, totalWords, now, sessionId],
-      });
+      await orm
+        .update(wordChainSessions)
+        .set({ currentWord, totalWords, updatedAt: Date.now() })
+        .where(eq(wordChainSessions.id, sessionId));
     },
 
     async endSession(sessionId: number, status: "finished" | "timed_out"): Promise<void> {
       const now = Date.now();
-      await db.execute({
-        sql: `UPDATE word_chain_sessions
-              SET status = ?, ended_at = ?, updated_at = ?
-              WHERE id = ?`,
-        args: [status, now, now, sessionId],
-      });
+      await orm
+        .update(wordChainSessions)
+        .set({ status, endedAt: now, updatedAt: now })
+        .where(eq(wordChainSessions.id, sessionId));
     },
 
     async recordWordHistory(input: {
@@ -196,42 +190,35 @@ export function createWordChainRepository(db: SqliteDatabase): WordChainReposito
       turnIndex: number;
       points: number;
     }): Promise<void> {
-      const now = Date.now();
-      await db.execute({
-        sql: `INSERT INTO word_chain_history (session_id, chat_id, word, player_id, player_name, turn_index, points, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          input.sessionId,
-          input.chatId,
-          input.word,
-          input.playerId,
-          input.playerName,
-          input.turnIndex,
-          input.points,
-          now,
-        ],
+      await orm.insert(wordChainHistory).values({
+        sessionId: input.sessionId,
+        chatId: input.chatId,
+        word: input.word,
+        playerId: input.playerId,
+        playerName: input.playerName,
+        turnIndex: input.turnIndex,
+        points: input.points,
+        createdAt: Date.now(),
       });
     },
 
     async getSessionWords(sessionId: number): Promise<string[]> {
-      const res = await db.execute({
-        sql: `SELECT word FROM word_chain_history
-              WHERE session_id = ?
-              ORDER BY turn_index ASC`,
-        args: [sessionId],
-      });
-      return res.rows.map((r: any) => String(r.word));
+      const rows = await orm
+        .select({ word: wordChainHistory.word })
+        .from(wordChainHistory)
+        .where(eq(wordChainHistory.sessionId, sessionId))
+        .orderBy(wordChainHistory.turnIndex);
+      return rows.map((r) => r.word);
     },
 
     async getSessionHistory(sessionId: number): Promise<WordChainHistoryRow[]> {
-      const res = await db.execute({
-        sql: `SELECT id, session_id, chat_id, word, player_id, player_name, turn_index, points, created_at
-              FROM word_chain_history
-              WHERE session_id = ?
-              ORDER BY turn_index ASC`,
-        args: [sessionId],
-      });
-      return res.rows.map(mapHistoryRow);
+      return (
+        await orm
+          .select()
+          .from(wordChainHistory)
+          .where(eq(wordChainHistory.sessionId, sessionId))
+          .orderBy(wordChainHistory.turnIndex)
+      ).map(toHistoryRow);
     },
 
     async updatePlayerStats(input: {
@@ -247,48 +234,29 @@ export function createWordChainRepository(db: SqliteDatabase): WordChainReposito
       const existing = await this.getPlayerStats(input.chatId, input.playerId);
 
       if (!existing) {
-        await db.execute({
-          sql: `INSERT INTO word_chain_stats (
-                  chat_id, player_id, player_name, total_score, words_chained,
-                  highest_streak, games_played, games_won, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-          args: [
-            input.chatId,
-            input.playerId,
-            input.playerName,
-            input.pointsAdded,
-            input.wordsAdded,
-            input.currentStreak,
-            input.wonGame ? 1 : 0,
-            now,
-          ],
+        await orm.insert(wordChainStats).values({
+          chatId: input.chatId,
+          playerId: input.playerId,
+          playerName: input.playerName,
+          totalScore: input.pointsAdded,
+          wordsChained: input.wordsAdded,
+          highestStreak: input.currentStreak,
+          gamesPlayed: 1,
+          gamesWon: input.wonGame ? 1 : 0,
+          updatedAt: now,
         });
       } else {
-        const newScore = existing.totalScore + input.pointsAdded;
-        const newWords = existing.wordsChained + input.wordsAdded;
-        const newHighestStreak = Math.max(existing.highestStreak, input.currentStreak);
-        const newGamesWon = existing.gamesWon + (input.wonGame ? 1 : 0);
-
-        await db.execute({
-          sql: `UPDATE word_chain_stats
-                SET player_name = ?,
-                    total_score = ?,
-                    words_chained = ?,
-                    highest_streak = ?,
-                    games_won = ?,
-                    updated_at = ?
-                WHERE chat_id = ? AND player_id = ?`,
-          args: [
-            input.playerName,
-            newScore,
-            newWords,
-            newHighestStreak,
-            newGamesWon,
-            now,
-            input.chatId,
-            input.playerId,
-          ],
-        });
+        await orm
+          .update(wordChainStats)
+          .set({
+            playerName: input.playerName,
+            totalScore: existing.totalScore + input.pointsAdded,
+            wordsChained: existing.wordsChained + input.wordsAdded,
+            highestStreak: Math.max(existing.highestStreak, input.currentStreak),
+            gamesWon: existing.gamesWon + (input.wonGame ? 1 : 0),
+            updatedAt: now,
+          })
+          .where(and(eq(wordChainStats.chatId, input.chatId), eq(wordChainStats.playerId, input.playerId)));
       }
     },
 
@@ -296,62 +264,74 @@ export function createWordChainRepository(db: SqliteDatabase): WordChainReposito
       if (playerIds.length === 0) return;
       const now = Date.now();
       for (const pid of playerIds) {
-        await db.execute({
-          sql: `UPDATE word_chain_stats
-                SET games_played = games_played + 1, updated_at = ?
-                WHERE chat_id = ? AND player_id = ?`,
-          args: [now, chatId, pid],
-        });
+        await orm
+          .update(wordChainStats)
+          .set({ gamesPlayed: sql`${wordChainStats.gamesPlayed} + 1`, updatedAt: now })
+          .where(and(eq(wordChainStats.chatId, chatId), eq(wordChainStats.playerId, pid)));
       }
     },
 
     async getPlayerStats(chatId: string, playerId: string): Promise<WordChainPlayerStatsRow | undefined> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id, player_id, player_name, total_score, words_chained,
-                     highest_streak, games_played, games_won, updated_at
-              FROM word_chain_stats
-              WHERE chat_id = ? AND player_id = ?`,
-        args: [chatId, playerId],
-      });
-      return res.rows[0] ? mapStatsRow(res.rows[0]) : undefined;
+      const [row] = await orm
+        .select()
+        .from(wordChainStats)
+        .where(and(eq(wordChainStats.chatId, chatId), eq(wordChainStats.playerId, playerId)))
+        .limit(1);
+      return row ? toStatsRow(row) : undefined;
     },
 
     async getLeaderboard(chatId?: string, limit = 10): Promise<LeaderboardEntry[]> {
-      let res;
       if (chatId) {
-        res = await db.execute({
-          sql: `SELECT player_id, player_name, chat_id, total_score, words_chained, highest_streak, games_won
-                FROM word_chain_stats
-                WHERE chat_id = ?
-                ORDER BY total_score DESC, highest_streak DESC
-                LIMIT ?`,
-          args: [chatId, limit],
-        });
-      } else {
-        // Global leaderboard across all channels (aggregate per player_id)
-        res = await db.execute({
-          sql: `SELECT player_id, MAX(player_name) as player_name,
-                       SUM(total_score) as total_score,
-                       SUM(words_chained) as words_chained,
-                       MAX(highest_streak) as highest_streak,
-                       SUM(games_won) as games_won
-                FROM word_chain_stats
-                GROUP BY player_id
-                ORDER BY total_score DESC, highest_streak DESC
-                LIMIT ?`,
-          args: [limit],
-        });
+        const rows = await orm
+          .select({
+            playerId: wordChainStats.playerId,
+            playerName: wordChainStats.playerName,
+            chatId: wordChainStats.chatId,
+            totalScore: wordChainStats.totalScore,
+            wordsChained: wordChainStats.wordsChained,
+            highestStreak: wordChainStats.highestStreak,
+            gamesWon: wordChainStats.gamesWon,
+          })
+          .from(wordChainStats)
+          .where(eq(wordChainStats.chatId, chatId))
+          .orderBy(desc(wordChainStats.totalScore), desc(wordChainStats.highestStreak))
+          .limit(limit);
+
+        return rows.map((r, idx) => ({
+          rank: idx + 1,
+          playerId: r.playerId,
+          playerName: r.playerName,
+          chatId: r.chatId,
+          totalScore: r.totalScore,
+          wordsChained: r.wordsChained,
+          highestStreak: r.highestStreak,
+          gamesWon: r.gamesWon,
+        }));
       }
 
-      return res.rows.map((r: any, idx: number) => ({
+      const rows = await orm
+        .select({
+          playerId: wordChainStats.playerId,
+          playerName: sql<string>`MAX(${wordChainStats.playerName})`.as("player_name"),
+          totalScore: sql<number>`SUM(${wordChainStats.totalScore})`.as("total_score"),
+          wordsChained: sql<number>`SUM(${wordChainStats.wordsChained})`.as("words_chained"),
+          highestStreak: sql<number>`MAX(${wordChainStats.highestStreak})`.as("highest_streak"),
+          gamesWon: sql<number>`SUM(${wordChainStats.gamesWon})`.as("games_won"),
+        })
+        .from(wordChainStats)
+        .groupBy(wordChainStats.playerId)
+        .orderBy(desc(sql`SUM(${wordChainStats.totalScore})`), desc(sql`MAX(${wordChainStats.highestStreak})`))
+        .limit(limit);
+
+      return rows.map((r, idx) => ({
         rank: idx + 1,
-        playerId: String(r.player_id ?? r.playerId),
-        playerName: String(r.player_name ?? r.playerName),
-        chatId: r.chat_id ? String(r.chat_id) : undefined,
-        totalScore: Number(r.total_score ?? 0),
-        wordsChained: Number(r.words_chained ?? 0),
-        highestStreak: Number(r.highest_streak ?? 0),
-        gamesWon: Number(r.games_won ?? 0),
+        playerId: r.playerId,
+        playerName: r.playerName,
+        chatId: undefined,
+        totalScore: Number(r.totalScore ?? 0),
+        wordsChained: Number(r.wordsChained ?? 0),
+        highestStreak: Number(r.highestStreak ?? 0),
+        gamesWon: Number(r.gamesWon ?? 0),
       }));
     },
   };

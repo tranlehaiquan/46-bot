@@ -766,6 +766,31 @@ describe("Admin REST API", () => {
       const finalBody = JSON.parse(getResFinal.body);
       assert.equal(finalBody.settings.geminiApiKeySource, "env");
 
+      // 6. Set Crawl4AI API token
+      const crawlPatch = await app.inject({
+        method: "PATCH",
+        url: "/api/admin/settings",
+        headers: authHeaders,
+        payload: {
+          crawl4aiApiKey: "c4ai-test-key-5555",
+        },
+      });
+      assert.equal(crawlPatch.statusCode, 200);
+      assert.equal(await settingsRepo.get("crawl4ai_api_token"), "c4ai-test-key-5555");
+      const crawlPatchBody = JSON.parse(crawlPatch.body);
+      assert.equal(crawlPatchBody.settings.hasCrawl4aiApiToken, true);
+      assert.equal(crawlPatchBody.settings.crawl4aiApiTokenSource, "db");
+
+      // 7. Test /api/admin/settings/test-crawl4ai endpoint
+      const testCrawlEmpty = await app.inject({
+        method: "POST",
+        url: "/api/admin/settings/test-crawl4ai",
+        headers: authHeaders,
+        payload: { token: "" },
+      });
+      // Falls back to effective key in DB, or if empty token without db returns 400
+      assert.ok(testCrawlEmpty.statusCode === 200 || testCrawlEmpty.statusCode === 400);
+
       await app.close();
     } finally {
       closeDatabase(db);

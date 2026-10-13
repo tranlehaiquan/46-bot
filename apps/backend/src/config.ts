@@ -100,6 +100,10 @@ const envSchema = z.object({
     (value) => (value === undefined || value === "" ? undefined : value),
     z.string().optional(),
   ),
+  CRAWL4AI_API_TOKEN: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
 }).superRefine((data, ctx) => {
   const chosenProvider = data.LLM_PROVIDER ?? (data.GEMINI_API_KEY ? "gemini" : data.DEEPSEEK_API_KEY ? "deepseek" : undefined);
   if (!chosenProvider) {
@@ -159,6 +163,7 @@ export type AppConfig = {
   schedulerConcurrency?: number;
   tursoDatabaseUrl?: string;
   tursoAuthToken?: string;
+  crawl4aiApiToken?: string;
 };
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
@@ -212,5 +217,6 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     schedulerConcurrency: parsed.data.SCHEDULER_CONCURRENCY ?? 5,
     tursoDatabaseUrl: parsed.data.TURSO_DATABASE_URL,
     tursoAuthToken: parsed.data.TURSO_AUTH_TOKEN,
+    crawl4aiApiToken: parsed.data.CRAWL4AI_API_TOKEN,
   };
 }

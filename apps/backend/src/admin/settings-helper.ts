@@ -9,6 +9,7 @@ export type EffectiveSettings = {
   deepseekModel: string;
   deepseekApiKey?: string;
   tavilyApiKey?: string;
+  crawl4aiApiToken?: string;
 };
 
 export type MaskedSettings = {
@@ -24,6 +25,9 @@ export type MaskedSettings = {
   hasTavilyApiKey: boolean;
   tavilyApiKeyMasked: string | null;
   tavilyApiKeySource: "db" | "env" | "none";
+  hasCrawl4aiApiToken: boolean;
+  crawl4aiApiTokenMasked: string | null;
+  crawl4aiApiTokenSource: "db" | "env" | "none";
 };
 
 export function maskSecret(secret?: string): string | null {
@@ -50,6 +54,7 @@ export async function resolveEffectiveSettings(
   const deepseekApiKey = dbEntries.deepseek_api_key || config.deepseekApiKey;
 
   const tavilyApiKey = dbEntries.tavily_api_key || config.tavilyApiKey;
+  const crawl4aiApiToken = dbEntries.crawl4ai_api_token || config.crawl4aiApiToken;
 
   return {
     effective: {
@@ -59,6 +64,7 @@ export async function resolveEffectiveSettings(
       deepseekModel,
       deepseekApiKey,
       tavilyApiKey,
+      crawl4aiApiToken,
     },
     dbEntries,
   };
@@ -87,6 +93,12 @@ export function toMaskedSettings(
       ? "env"
       : "none";
 
+  const crawl4aiSource: "db" | "env" | "none" = dbEntries.crawl4ai_api_token
+    ? "db"
+    : config.crawl4aiApiToken
+      ? "env"
+      : "none";
+
   return {
     llmProvider: effective.llmProvider,
     geminiModel: effective.geminiModel,
@@ -100,7 +112,37 @@ export function toMaskedSettings(
     hasTavilyApiKey: Boolean(effective.tavilyApiKey),
     tavilyApiKeyMasked: maskSecret(effective.tavilyApiKey),
     tavilyApiKeySource: tavilySource,
+    hasCrawl4aiApiToken: Boolean(effective.crawl4aiApiToken),
+    crawl4aiApiTokenMasked: maskSecret(effective.crawl4aiApiToken),
+    crawl4aiApiTokenSource: crawl4aiSource,
   };
+}
+
+export async function testCrawl4AiConnection(
+  token: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  if (!token || token.trim() === "") {
+    return { success: false, error: "Crawl4AI API token is required" };
+  }
+  try {
+    const res = await fetchFn("https://api.crawl4ai.com/scrape", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token.trim()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url: "https://example.com" }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return { success: false, error: `Crawl4AI test failed (${res.status}): ${text || res.statusText}` };
+    }
+    return { success: true, message: "Kết nối Crawl4AI Cloud API thành công" };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to connect to Crawl4AI API" };
+  }
 }
 
 export class DynamicLlmClient implements LlmClient {

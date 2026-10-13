@@ -1,6 +1,21 @@
-import type { SqliteDatabase } from "./connection.js";
+import { migrate as runDrizzleMigrations } from "drizzle-orm/libsql/migrator";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+import { createDrizzleDb, type SqliteDatabase } from "./connection.js";
 
 export async function migrate(db: SqliteDatabase): Promise<void> {
+  const existingTables = await db.execute(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '__drizzle_migrations' LIMIT 1",
+  );
+
+  if (existingTables.rows.length === 0) {
+    await runDrizzleMigrations(createDrizzleDb(db), { migrationsFolder });
+    return;
+  }
+
+  // Legacy installations predate Drizzle's migration journal. Their schema is
+  // intentionally identical to the baseline migration, so preserve its data
+  // and make the legacy DDL idempotent rather than replaying CREATE TABLE.
   await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS seen_messages (
       message_id TEXT PRIMARY KEY,
@@ -201,3 +216,5 @@ export async function migrate(db: SqliteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_group_members_chat ON group_members(chat_id);
   `);
 }
+
+const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), "../../drizzle");

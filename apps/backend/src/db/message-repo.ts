@@ -1,4 +1,6 @@
-import type { SqliteDatabase } from "./connection.js";
+import { and, desc, eq } from "drizzle-orm";
+import { createDrizzleDb, type SqliteDatabase } from "./connection.js";
+import { messages } from "./schema/index.js";
 
 export type MessageRow = {
   id: number;
@@ -23,49 +25,16 @@ export interface MessageRepository {
 }
 
 export function createMessageRepository(db: SqliteDatabase): MessageRepository {
+  const orm = createDrizzleDb(db);
   return {
     async insert(params): Promise<MessageRow> {
       const ts = params.ts ?? Date.now();
-      const res = await db.execute({
-        sql: `INSERT INTO messages (chat_id, sender_id, sender_name, role, content, ts) VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [
-          params.chatId,
-          params.senderId,
-          params.senderName,
-          params.role,
-          params.content,
-          ts,
-        ],
-      });
-      return {
-        id: Number(res.lastInsertRowid),
-        chatId: params.chatId,
-        senderId: params.senderId,
-        senderName: params.senderName,
-        role: params.role,
-        content: params.content,
-        ts,
-      };
+      const [message] = await orm.insert(messages).values({ ...params, role: params.role, ts }).returning();
+      return message as MessageRow;
     },
     async getRecent(chatId: string, limit = 20): Promise<MessageRow[]> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id as chatId, sender_id as senderId, sender_name as senderName, role, content, ts
-              FROM messages
-              WHERE chat_id = ?
-              ORDER BY ts DESC, id DESC
-              LIMIT ?`,
-        args: [chatId, limit],
-      });
-      const rows: MessageRow[] = res.rows.map((row: any) => ({
-        id: Number(row.id),
-        chatId: String(row.chatId),
-        senderId: String(row.senderId),
-        senderName: String(row.senderName),
-        role: row.role as "user" | "assistant",
-        content: String(row.content),
-        ts: Number(row.ts),
-      }));
-      return rows.reverse();
+      const rows = await orm.select().from(messages).where(eq(messages.chatId, chatId)).orderBy(desc(messages.ts), desc(messages.id)).limit(limit);
+      return rows.reverse() as MessageRow[];
     },
   };
 }

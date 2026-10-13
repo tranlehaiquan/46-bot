@@ -336,6 +336,13 @@ export const api = {
       body: JSON.stringify(input),
     });
   },
+
+  async testCrawl4AiSettings(token?: string): Promise<TestSettingsResult> {
+    return await request<TestSettingsResult>("/api/admin/settings/test-crawl4ai", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    });
+  },
 };
 
 export type AdminSettings = {
@@ -351,6 +358,9 @@ export type AdminSettings = {
   hasTavilyApiKey: boolean;
   tavilyApiKeyMasked: string | null;
   tavilyApiKeySource: "db" | "env" | "none";
+  hasCrawl4aiApiToken: boolean;
+  crawl4aiApiTokenMasked: string | null;
+  crawl4aiApiTokenSource: "db" | "env" | "none";
 };
 
 export type UpdateSettingsInput = {
@@ -360,14 +370,17 @@ export type UpdateSettingsInput = {
   deepseekModel?: string;
   deepseekApiKey?: string;
   tavilyApiKey?: string;
+  crawl4aiApiKey?: string;
+  crawl4aiApiToken?: string;
 };
 
 export type TestSettingsInput = {
   provider?: "gemini" | "deepseek";
   apiKey?: string;
   model?: string;
-  testType?: "llm" | "tavily";
+  testType?: "llm" | "tavily" | "crawl4ai";
   tavilyApiKey?: string;
+  crawl4aiApiKey?: string;
 };
 
 export type TestSettingsResult = {
