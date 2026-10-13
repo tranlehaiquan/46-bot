@@ -1,4 +1,6 @@
-import type { SqliteDatabase } from "../connection.js";
+import { and, eq } from "drizzle-orm";
+import { createDrizzleDb, type SqliteDatabase } from "../connection.js";
+import { events, remindersSent } from "../schema/index.js";
 import { lunarToSolar, solarToLunar } from "../../lunar/index.js";
 
 export type EventKind = "event" | "reminder" | "birthday" | "anniversary" | "gio" | "appointment";
@@ -283,100 +285,58 @@ export function getNextOccurrence(
   return null;
 }
 
-function mapEventRow(row: any): EventRow {
+function toEventRow(row: typeof events.$inferSelect): EventRow {
   return {
-    id: Number(row.id),
-    chatId: String(row.chat_id ?? row.chatId),
-    title: String(row.title),
+    id: row.id,
+    chatId: row.chatId,
+    title: row.title,
     kind: row.kind as EventKind,
     calendar: row.calendar as EventCalendar,
-    day: Number(row.day),
-    month: Number(row.month),
-    year: row.year !== null && row.year !== undefined ? Number(row.year) : null,
-    isLeapMonth: Number(row.is_leap_month ?? row.isLeapMonth) === 1,
+    day: row.day,
+    month: row.month,
+    year: row.year ?? null,
+    isLeapMonth: row.isLeapMonth === 1,
     recurrence: row.recurrence as EventRecurrence,
-    remindDaysBefore: Number(row.remind_days_before ?? row.remindDaysBefore),
-    notes: row.notes !== null && row.notes !== undefined ? String(row.notes) : null,
-    createdBy: String(row.created_by ?? row.createdBy),
-    ts: Number(row.ts),
+    remindDaysBefore: row.remindDaysBefore,
+    notes: row.notes ?? null,
+    createdBy: row.createdBy,
+    ts: row.ts,
   };
 }
 
 export function createEventsRepository(db: SqliteDatabase): EventsRepository {
+  const orm = createDrizzleDb(db);
   const repo: EventsRepository = {
     async createEvent(input: CreateEventInput): Promise<EventRow> {
       const now = Date.now();
-      const kind = input.kind ?? "event";
-      const calendar = input.calendar ?? "solar";
-      const recurrence = input.recurrence ?? "none";
-      const remindDaysBefore = input.remindDaysBefore ?? 0;
-      const isLeap = input.isLeapMonth ? 1 : 0;
-      const year = input.year ?? null;
-      const notes = input.notes ?? null;
-
-      const result = await db.execute({
-        sql: `INSERT INTO events (
-          chat_id, title, kind, calendar, day, month, year,
-          is_leap_month, recurrence, remind_days_before, notes, created_by, ts
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          input.chatId,
-          input.title.trim(),
-          kind,
-          calendar,
-          input.day,
-          input.month,
-          year,
-          isLeap,
-          recurrence,
-          remindDaysBefore,
-          notes,
-          input.createdBy,
-          now,
-        ],
-      });
-
-      return {
-        id: Number(result.lastInsertRowid),
-        chatId: input.chatId,
-        title: input.title.trim(),
-        kind,
-        calendar,
-        day: input.day,
-        month: input.month,
-        year,
-        isLeapMonth: Boolean(input.isLeapMonth),
-        recurrence,
-        remindDaysBefore,
-        notes,
-        createdBy: input.createdBy,
-        ts: now,
-      };
+      const [row] = await orm
+        .insert(events)
+        .values({
+          chatId: input.chatId,
+          title: input.title.trim(),
+          kind: input.kind ?? "event",
+          calendar: input.calendar ?? "solar",
+          day: input.day,
+          month: input.month,
+          year: input.year ?? null,
+          isLeapMonth: input.isLeapMonth ? 1 : 0,
+          recurrence: input.recurrence ?? "none",
+          remindDaysBefore: input.remindDaysBefore ?? 0,
+          notes: input.notes ?? null,
+          createdBy: input.createdBy,
+          ts: now,
+        })
+        .returning();
+      return toEventRow(row);
     },
 
     async getEventById(id: number): Promise<EventRow | undefined> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id as chatId, title, kind, calendar, day, month, year,
-                     is_leap_month as isLeapMonth, recurrence, remind_days_before as remindDaysBefore,
-                     notes, created_by as createdBy, ts
-              FROM events
-              WHERE id = ?`,
-        args: [id],
-      });
-      return res.rows[0] ? mapEventRow(res.rows[0]) : undefined;
+      const [row] = await orm.select().from(events).where(eq(events.id, id)).limit(1);
+      return row ? toEventRow(row) : undefined;
     },
 
     async getEventsByChat(chatId: string): Promise<EventRow[]> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id as chatId, title, kind, calendar, day, month, year,
-                     is_leap_month as isLeapMonth, recurrence, remind_days_before as remindDaysBefore,
-                     notes, created_by as createdBy, ts
-              FROM events
-              WHERE chat_id = ?
-              ORDER BY id ASC`,
-        args: [chatId],
-      });
-      return res.rows.map(mapEventRow);
+      return (await orm.select().from(events).where(eq(events.chatId, chatId)).orderBy(events.id)).map(toEventRow);
     },
 
     async updateEvent(id: number, updates: UpdateEventInput): Promise<EventRow | undefined> {
@@ -391,29 +351,34 @@ export function createEventsRepository(db: SqliteDatabase): EventsRepository {
       const day = updates.day !== undefined ? updates.day : existing.day;
       const month = updates.month !== undefined ? updates.month : existing.month;
       const year = updates.year !== undefined ? updates.year : existing.year;
-      const isLeap = updates.isLeapMonth !== undefined ? (updates.isLeapMonth ? 1 : 0) : existing.isLeapMonth ? 1 : 0;
+      const isLeapMonth = updates.isLeapMonth !== undefined ? updates.isLeapMonth : existing.isLeapMonth;
       const recurrence = updates.recurrence !== undefined ? updates.recurrence : existing.recurrence;
       const remindDaysBefore =
         updates.remindDaysBefore !== undefined ? updates.remindDaysBefore : existing.remindDaysBefore;
       const notes = updates.notes !== undefined ? updates.notes : existing.notes;
 
-      await db.execute({
-        sql: `UPDATE events
-              SET title = ?, kind = ?, calendar = ?, day = ?, month = ?, year = ?,
-                  is_leap_month = ?, recurrence = ?, remind_days_before = ?, notes = ?
-              WHERE id = ?`,
-        args: [title, kind, calendar, day, month, year, isLeap, recurrence, remindDaysBefore, notes, id],
-      });
+      await orm
+        .update(events)
+        .set({
+          title,
+          kind,
+          calendar,
+          day,
+          month,
+          year,
+          isLeapMonth: isLeapMonth ? 1 : 0,
+          recurrence,
+          remindDaysBefore,
+          notes,
+        })
+        .where(eq(events.id, id));
 
       return repo.getEventById(id);
     },
 
     async deleteEvent(id: number): Promise<boolean> {
-      const res = await db.execute({
-        sql: `DELETE FROM events WHERE id = ?`,
-        args: [id],
-      });
-      return res.rowsAffected > 0;
+      const deleted = await orm.delete(events).where(eq(events.id, id)).returning();
+      return deleted.length > 0;
     },
 
     async listUpcomingEvents(chatId: string, windowDays = 30, referenceDate = new Date()): Promise<UpcomingEvent[]> {
@@ -583,30 +548,20 @@ export function createEventsRepository(db: SqliteDatabase): EventsRepository {
     },
 
     async getAllEvents(): Promise<EventRow[]> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id as chatId, title, kind, calendar, day, month, year,
-                     is_leap_month as isLeapMonth, recurrence, remind_days_before as remindDaysBefore,
-                     notes, created_by as createdBy, ts
-              FROM events
-              ORDER BY id ASC`,
-        args: [],
-      });
-      return res.rows.map(mapEventRow);
+      return (await orm.select().from(events).orderBy(events.id)).map(toEventRow);
     },
 
     async isReminderSent(eventId: number, occurrenceDate: string): Promise<boolean> {
-      const res = await db.execute({
-        sql: "SELECT 1 FROM reminders_sent WHERE event_id = ? AND occurrence_date = ? LIMIT 1",
-        args: [eventId, occurrenceDate],
-      });
-      return res.rows.length > 0;
+      const rows = await orm
+        .select({ id: remindersSent.id })
+        .from(remindersSent)
+        .where(and(eq(remindersSent.eventId, eventId), eq(remindersSent.occurrenceDate, occurrenceDate)))
+        .limit(1);
+      return rows.length > 0;
     },
 
     async recordReminderSent(eventId: number, occurrenceDate: string, sentAt = Date.now()): Promise<void> {
-      await db.execute({
-        sql: "INSERT OR IGNORE INTO reminders_sent (event_id, occurrence_date, sent_at) VALUES (?, ?, ?)",
-        args: [eventId, occurrenceDate, sentAt],
-      });
+      await orm.insert(remindersSent).values({ eventId, occurrenceDate, sentAt }).onConflictDoNothing();
     },
 
     async findEventsDueForReminder(referenceDate = new Date(), chatId?: string): Promise<DueReminder[]> {

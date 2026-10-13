@@ -7,7 +7,10 @@ import * as schema from "./schema/index.js";
 export type SqliteDatabase = Client;
 export type DrizzleDatabase = LibSQLDatabase<typeof schema>;
 
-export function openDatabase(dbPathOrUrl: string, authToken?: string): SqliteDatabase {
+/** A connected LibSQL client with its schema-aware Drizzle facade. */
+export type DatabaseConnection = SqliteDatabase & { drizzle: DrizzleDatabase };
+
+export function openDatabase(dbPathOrUrl: string, authToken?: string): DatabaseConnection {
   const url = dbPathOrUrl;
 
   // Remote Turso or libSQL endpoints (libsql://, https://, http://, wss://, ws://)
@@ -18,12 +21,12 @@ export function openDatabase(dbPathOrUrl: string, authToken?: string): SqliteDat
     url.startsWith("wss://") ||
     url.startsWith("ws://")
   ) {
-    return createClient({ url, authToken });
+    return attachDrizzle(createClient({ url, authToken }));
   }
 
   // In-memory sqlite
   if (url === ":memory:" || url === "file::memory:") {
-    return createClient({ url: ":memory:" });
+    return attachDrizzle(createClient({ url: ":memory:" }));
   }
 
   // If already a file: URL
@@ -37,7 +40,7 @@ export function openDatabase(dbPathOrUrl: string, authToken?: string): SqliteDat
         // Ignore
       }
     }
-    return createClient({ url });
+    return attachDrizzle(createClient({ url }));
   }
 
   // Local filesystem path (e.g. /data/family.db or ./data/family.db)
@@ -56,7 +59,7 @@ export function openDatabase(dbPathOrUrl: string, authToken?: string): SqliteDat
     }
   }
 
-  return createClient({ url: `file:${resolvedPath}` });
+  return attachDrizzle(createClient({ url: `file:${resolvedPath}` }));
 }
 
 export function closeDatabase(db: SqliteDatabase): void {
@@ -68,5 +71,9 @@ export function closeDatabase(db: SqliteDatabase): void {
 }
 
 export function createDrizzleDb(client: SqliteDatabase): DrizzleDatabase {
-  return drizzle(client, { schema });
+  return "drizzle" in client ? (client as DatabaseConnection).drizzle : drizzle(client, { schema });
+}
+
+function attachDrizzle(client: SqliteDatabase): DatabaseConnection {
+  return Object.assign(client, { drizzle: drizzle(client, { schema }) });
 }

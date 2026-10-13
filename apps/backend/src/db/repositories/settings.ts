@@ -1,4 +1,6 @@
-import type { SqliteDatabase } from "../connection.js";
+import { eq } from "drizzle-orm";
+import { createDrizzleDb, type SqliteDatabase } from "../connection.js";
+import { systemSettings } from "../schema/index.js";
 
 export type SystemSettingRow = {
   key: string;
@@ -15,41 +17,26 @@ export interface SettingsRepository {
 }
 
 export function createSettingsRepository(db: SqliteDatabase): SettingsRepository {
+  const orm = createDrizzleDb(db);
   return {
     async get(key: string): Promise<string | null> {
-      const res = await db.execute({
-        sql: "SELECT value FROM system_settings WHERE key = ?",
-        args: [key],
-      });
-      if (res.rows.length === 0) return null;
-      return String(res.rows[0].value);
+      const [setting] = await orm.select({ value: systemSettings.value }).from(systemSettings).where(eq(systemSettings.key, key)).limit(1);
+      return setting?.value ?? null;
     },
 
     async set(key: string, value: string): Promise<void> {
       const now = Date.now();
-      await db.execute({
-        sql: `INSERT INTO system_settings (key, value, updated_at)
-              VALUES (?, ?, ?)
-              ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-        args: [key, value, now],
-      });
+      await orm.insert(systemSettings).values({ key, value, updatedAt: now }).onConflictDoUpdate({ target: systemSettings.key, set: { value, updatedAt: now } });
     },
 
     async delete(key: string): Promise<void> {
-      await db.execute({
-        sql: "DELETE FROM system_settings WHERE key = ?",
-        args: [key],
-      });
+      await orm.delete(systemSettings).where(eq(systemSettings.key, key));
     },
 
     async getAll(): Promise<Record<string, string>> {
-      const res = await db.execute({
-        sql: "SELECT key, value FROM system_settings",
-        args: [],
-      });
       const result: Record<string, string> = {};
-      for (const row of res.rows) {
-        result[String(row.key)] = String(row.value);
+      for (const row of await orm.select({ key: systemSettings.key, value: systemSettings.value }).from(systemSettings)) {
+        result[row.key] = row.value;
       }
       return result;
     },
@@ -58,17 +45,9 @@ export function createSettingsRepository(db: SqliteDatabase): SettingsRepository
       const now = Date.now();
       for (const [key, val] of Object.entries(entries)) {
         if (val === null || val === undefined) {
-          await db.execute({
-            sql: "DELETE FROM system_settings WHERE key = ?",
-            args: [key],
-          });
+          await orm.delete(systemSettings).where(eq(systemSettings.key, key));
         } else {
-          await db.execute({
-            sql: `INSERT INTO system_settings (key, value, updated_at)
-                  VALUES (?, ?, ?)
-                  ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-            args: [key, val, now],
-          });
+          await orm.insert(systemSettings).values({ key, value: val, updatedAt: now }).onConflictDoUpdate({ target: systemSettings.key, set: { value: val, updatedAt: now } });
         }
       }
     },

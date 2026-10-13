@@ -13,19 +13,19 @@
 
 ## 3. Database Connection & Migrations
 
-- [ ] 3.1 Update `apps/backend/src/db/connection.ts` to initialize and expose the typed Drizzle database instance
+- [x] 3.1 Update `apps/backend/src/db/connection.ts` to initialize and expose the typed Drizzle database instance
 - [x] 3.2 Generate baseline migration files using `drizzle-kit` into `apps/backend/drizzle/`
-- [ ] 3.3 Implement Drizzle migration execution runner in `apps/backend/src/db/migrations.ts` supporting both fresh/in-memory and existing databases
+- [x] 3.3 Implement Drizzle migration execution runner in `apps/backend/src/db/migrations.ts` supporting both fresh/in-memory and existing databases
 
 ## 4. Repository Migration
 
-- [ ] 4.1 Migrate `seen-repo.ts` and `message-repo.ts` to Drizzle queries and verify existing tests
-- [ ] 4.2 Migrate `settings.ts` and `channels.ts` to Drizzle queries and verify existing tests
-- [ ] 4.3 Migrate `group-members.ts` and `memory.ts` to Drizzle queries and verify existing tests
-- [ ] 4.4 Migrate `list-repo.ts` and `events.ts` to Drizzle queries and verify existing tests
-- [ ] 4.5 Migrate `lookups.ts` and `word-chain.ts` to Drizzle queries and verify existing tests
+- [x] 4.1 Migrate `seen-repo.ts` and `message-repo.ts` to Drizzle queries and verify existing tests
+- [x] 4.2 Migrate `settings.ts` and `channels.ts` to Drizzle queries and verify existing tests
+- [x] 4.3 Migrate `group-members.ts` and `memory.ts` to Drizzle queries and verify existing tests
+- [x] 4.4 Migrate `list-repo.ts` and `events.ts` to Drizzle queries and verify existing tests
+- [x] 4.5 Migrate `lookups.ts` and `word-chain.ts` to Drizzle queries and verify existing tests
 
 ## 5. Verification & Validation
 
-- [ ] 5.1 Run all database test suites (`npm test` in `apps/backend`) to ensure all tests pass
-- [ ] 5.2 Run typecheck (`npm run typecheck`) across the workspace to ensure zero type errors
+- [x] 5.1 Run all database test suites (`npm test` in `apps/backend`) to ensure all tests pass
+- [x] 5.2 Run typecheck (`npm run typecheck`) across the workspace to ensure zero type errors

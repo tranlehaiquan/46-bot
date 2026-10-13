@@ -1,4 +1,6 @@
-import type { SqliteDatabase } from "../connection.js";
+import { desc, eq } from "drizzle-orm";
+import { createDrizzleDb, type SqliteDatabase } from "../connection.js";
+import { channels } from "../schema/index.js";
 
 export type ChannelStatus = "pending" | "active" | "disabled";
 
@@ -28,94 +30,45 @@ export interface ChannelRepository {
   seedChannels(chatIds: string[]): Promise<void>;
 }
 
-function mapChannelRow(row: any): ChannelRow {
-  return {
-    chatId: String(row.chatId),
-    name: String(row.name),
-    chatType: row.chatType as "GROUP" | "PRIVATE",
-    status: row.status as ChannelStatus,
-    createdAt: Number(row.createdAt),
-    lastActiveAt: Number(row.lastActiveAt),
-  };
-}
-
 export function createChannelRepository(db: SqliteDatabase): ChannelRepository {
+  const orm = createDrizzleDb(db);
   return {
     async getChannel(chatId: string): Promise<ChannelRow | undefined> {
-      const res = await db.execute({
-        sql: `SELECT chat_id as chatId, name, chat_type as chatType, status, created_at as createdAt, last_active_at as lastActiveAt
-              FROM channels
-              WHERE chat_id = ?`,
-        args: [chatId],
-      });
-      return res.rows[0] ? mapChannelRow(res.rows[0]) : undefined;
+      const [channel] = await orm.select().from(channels).where(eq(channels.chatId, chatId)).limit(1);
+      return channel as ChannelRow | undefined;
     },
 
     async listChannels(status?: ChannelStatus): Promise<ChannelRow[]> {
-      const sql = status
-        ? `SELECT chat_id as chatId, name, chat_type as chatType, status, created_at as createdAt, last_active_at as lastActiveAt
-           FROM channels
-           WHERE status = ?
-           ORDER BY last_active_at DESC`
-        : `SELECT chat_id as chatId, name, chat_type as chatType, status, created_at as createdAt, last_active_at as lastActiveAt
-           FROM channels
-           ORDER BY last_active_at DESC`;
-      const args = status ? [status] : [];
-      const res = await db.execute({ sql, args });
-      return res.rows.map(mapChannelRow);
+      const query = orm.select().from(channels).orderBy(desc(channels.lastActiveAt));
+      return (status ? await query.where(eq(channels.status, status)) : await query) as ChannelRow[];
     },
 
     async upsertDiscovery(input: UpsertChannelInput): Promise<ChannelRow> {
       const now = Date.now();
       const existing = await this.getChannel(input.chatId);
       if (existing) {
-        await db.execute({
-          sql: `UPDATE channels
-                SET last_active_at = ?,
-                    name = CASE WHEN name = chat_id AND ? != '' THEN ? ELSE name END
-                WHERE chat_id = ?`,
-          args: [now, input.name, input.name, input.chatId],
-        });
+        await orm.update(channels).set({ lastActiveAt: now, name: existing.name === existing.chatId && input.name !== "" ? input.name : existing.name }).where(eq(channels.chatId, input.chatId));
         const updated = await this.getChannel(input.chatId);
         return updated!;
       }
 
       const initialStatus = input.status ?? "pending";
       const channelName = input.name.trim() || input.chatId;
-      await db.execute({
-        sql: `INSERT INTO channels (chat_id, name, chat_type, status, created_at, last_active_at)
-              VALUES (?, ?, ?, ?, ?, ?)
-              ON CONFLICT(chat_id) DO UPDATE SET
-                last_active_at = excluded.last_active_at,
-                name = CASE WHEN channels.name = channels.chat_id AND excluded.name != '' THEN excluded.name ELSE channels.name END`,
-        args: [input.chatId, channelName, input.chatType, initialStatus, now, now],
-      });
+      await orm.insert(channels).values({ chatId: input.chatId, name: channelName, chatType: input.chatType, status: initialStatus, createdAt: now, lastActiveAt: now });
       const created = await this.getChannel(input.chatId);
       return created!;
     },
 
     async updateStatus(chatId: string, status: ChannelStatus): Promise<boolean> {
-      const res = await db.execute({
-        sql: `UPDATE channels SET status = ? WHERE chat_id = ?`,
-        args: [status, chatId],
-      });
-      return res.rowsAffected > 0;
+      return (await orm.update(channels).set({ status }).where(eq(channels.chatId, chatId)).returning()).length > 0;
     },
 
     async updateName(chatId: string, name: string): Promise<boolean> {
-      const res = await db.execute({
-        sql: `UPDATE channels SET name = ? WHERE chat_id = ?`,
-        args: [name.trim(), chatId],
-      });
-      return res.rowsAffected > 0;
+      return (await orm.update(channels).set({ name: name.trim() }).where(eq(channels.chatId, chatId)).returning()).length > 0;
     },
 
     async touchActive(chatId: string): Promise<boolean> {
-      const res = await db.execute({
-        sql: `UPDATE channels SET last_active_at = ? WHERE chat_id = ?`,
-        args: [Date.now(), chatId],
-      });
-      return res.rowsAffected > 0;
+      return (await orm.update(channels).set({ lastActiveAt: Date.now() }).where(eq(channels.chatId, chatId)).returning()).length > 0;
     },
 
     async seedChannels(chatIds: string[]): Promise<void> {
@@ -125,11 +78,7 @@ export function createChannelRepository(db: SqliteDatabase): ChannelRepository {
         if (!chatId) continue;
         const existing = await this.getChannel(chatId);
         if (!existing) {
-          await db.execute({
-            sql: `INSERT INTO channels (chat_id, name, chat_type, status, created_at, last_active_at)
-                  VALUES (?, ?, 'GROUP', 'active', ?, ?)`,
-            args: [chatId, chatId, now, now],
-          });
+          await orm.insert(channels).values({ chatId, name: chatId, chatType: "GROUP", status: "active", createdAt: now, lastActiveAt: now });
         }
       }
     },

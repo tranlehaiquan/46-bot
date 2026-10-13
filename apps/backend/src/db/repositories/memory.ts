@@ -1,4 +1,6 @@
-import type { SqliteDatabase } from "../connection.js";
+import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { createDrizzleDb, type SqliteDatabase } from "../connection.js";
+import { memories, memoryBook } from "../schema/index.js";
 
 export type MemoryRow = {
   id: number;
@@ -43,31 +45,12 @@ export interface MemoryRepository {
   getStoryById(chatId: string, id: number): Promise<MemoryBookRow | undefined>;
 }
 
-function mapMemoryRow(row: any): MemoryRow {
-  return {
-    id: Number(row.id),
-    chatId: String(row.chatId),
-    subject: String(row.subject),
-    fact: String(row.fact),
-    createdBy: String(row.createdBy),
-    ts: Number(row.ts),
-  };
-}
-
-function mapStoryRow(row: any): MemoryBookRow {
-  return {
-    id: Number(row.id),
-    chatId: String(row.chatId),
-    title: String(row.title),
-    story: String(row.story),
-    people: String(row.people),
-    happenedOn: row.happenedOn ? String(row.happenedOn) : null,
-    createdBy: String(row.createdBy),
-    ts: Number(row.ts),
-  };
+function subjectMatches(subject: string) {
+  return sql`LOWER(TRIM(${memories.subject})) = LOWER(TRIM(${subject}))`;
 }
 
 export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
+  const orm = createDrizzleDb(db);
   return {
     async upsertMemory(chatId: string, subject: string, fact: string, createdBy: string): Promise<MemoryRow> {
       const trimmedSubject = subject.trim();
@@ -76,121 +59,79 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
 
       const existing = await this.getMemory(chatId, trimmedSubject);
       if (existing) {
-        await db.execute({
-          sql: `UPDATE memories SET subject = TRIM(?), fact = TRIM(?), created_by = ?, ts = ? WHERE id = ?`,
-          args: [trimmedSubject, trimmedFact, createdBy, now, existing.id],
-        });
-        return {
-          id: existing.id,
-          chatId,
-          subject: trimmedSubject,
-          fact: trimmedFact,
-          createdBy,
-          ts: now,
-        };
+        const [updated] = await orm
+          .update(memories)
+          .set({ subject: trimmedSubject, fact: trimmedFact, createdBy, ts: now })
+          .where(eq(memories.id, existing.id))
+          .returning();
+        return updated as MemoryRow;
       }
 
-      const result = await db.execute({
-        sql: `INSERT INTO memories (chat_id, subject, fact, created_by, ts) VALUES (?, TRIM(?), TRIM(?), ?, ?)`,
-        args: [chatId, trimmedSubject, trimmedFact, createdBy, now],
-      });
-      const insertedId = Number(result.lastInsertRowid);
-      return {
-        id: insertedId,
-        chatId,
-        subject: trimmedSubject,
-        fact: trimmedFact,
-        createdBy,
-        ts: now,
-      };
+      const [inserted] = await orm
+        .insert(memories)
+        .values({ chatId, subject: trimmedSubject, fact: trimmedFact, createdBy, ts: now })
+        .returning();
+      return inserted as MemoryRow;
     },
 
     async deleteMemory(chatId: string, subject: string): Promise<boolean> {
-      const res = await db.execute({
-        sql: `DELETE FROM memories WHERE chat_id = ? AND LOWER(TRIM(subject)) = LOWER(TRIM(?))`,
-        args: [chatId, subject.trim()],
-      });
-      return res.rowsAffected > 0;
+      const deleted = await orm
+        .delete(memories)
+        .where(and(eq(memories.chatId, chatId), subjectMatches(subject.trim())))
+        .returning();
+      return deleted.length > 0;
     },
 
     async deleteMemoryById(chatId: string, id: number): Promise<boolean> {
-      const res = await db.execute({
-        sql: `DELETE FROM memories WHERE chat_id = ? AND id = ?`,
-        args: [chatId, id],
-      });
-      return res.rowsAffected > 0;
+      const deleted = await orm
+        .delete(memories)
+        .where(and(eq(memories.chatId, chatId), eq(memories.id, id)))
+        .returning();
+      return deleted.length > 0;
     },
 
     async listMemories(chatId: string, subject?: string): Promise<MemoryRow[]> {
-      if (subject && subject.trim()) {
-        const res = await db.execute({
-          sql: `SELECT id, chat_id as chatId, subject, fact, created_by as createdBy, ts
-                FROM memories
-                WHERE chat_id = ? AND LOWER(TRIM(subject)) = LOWER(TRIM(?))
-                ORDER BY id ASC`,
-          args: [chatId, subject.trim()],
-        });
-        return res.rows.map(mapMemoryRow);
-      }
-      const res = await db.execute({
-        sql: `SELECT id, chat_id as chatId, subject, fact, created_by as createdBy, ts
-              FROM memories
-              WHERE chat_id = ?
-              ORDER BY id ASC`,
-        args: [chatId],
-      });
-      return res.rows.map(mapMemoryRow);
+      const whereClause =
+        subject && subject.trim()
+          ? and(eq(memories.chatId, chatId), subjectMatches(subject.trim()))
+          : eq(memories.chatId, chatId);
+      return (await orm.select().from(memories).where(whereClause).orderBy(memories.id)) as MemoryRow[];
     },
 
     async getMemory(chatId: string, subject: string): Promise<MemoryRow | undefined> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id as chatId, subject, fact, created_by as createdBy, ts
-              FROM memories
-              WHERE chat_id = ? AND LOWER(TRIM(subject)) = LOWER(TRIM(?))
-              LIMIT 1`,
-        args: [chatId, subject.trim()],
-      });
-      return res.rows[0] ? mapMemoryRow(res.rows[0]) : undefined;
+      const [memory] = await orm
+        .select()
+        .from(memories)
+        .where(and(eq(memories.chatId, chatId), subjectMatches(subject.trim())))
+        .limit(1);
+      return memory as MemoryRow | undefined;
     },
 
     async addStory(input: AddStoryInput): Promise<MemoryBookRow> {
       const now = Date.now();
       const people = input.people?.trim() || "";
       const happenedOn = input.happenedOn?.trim() || null;
-
-      const result = await db.execute({
-        sql: `INSERT INTO memory_book (chat_id, title, story, people, happened_on, created_by, ts)
-              VALUES (?, TRIM(?), TRIM(?), TRIM(?), ?, ?, ?)`,
-        args: [
-          input.chatId,
-          input.title.trim(),
-          input.story.trim(),
+      const [story] = await orm
+        .insert(memoryBook)
+        .values({
+          chatId: input.chatId,
+          title: input.title.trim(),
+          story: input.story.trim(),
           people,
           happenedOn,
-          input.createdBy,
-          now,
-        ],
-      });
-
-      const insertedId = Number(result.lastInsertRowid);
-      return {
-        id: insertedId,
-        chatId: input.chatId,
-        title: input.title.trim(),
-        story: input.story.trim(),
-        people,
-        happenedOn,
-        createdBy: input.createdBy,
-        ts: now,
-      };
+          createdBy: input.createdBy,
+          ts: now,
+        })
+        .returning();
+      return story as MemoryBookRow;
     },
 
     async deleteStory(chatId: string, id: number): Promise<boolean> {
-      const res = await db.execute({
-        sql: `DELETE FROM memory_book WHERE chat_id = ? AND id = ?`,
-        args: [chatId, id],
-      });
-      return res.rowsAffected > 0;
+      const deleted = await orm
+        .delete(memoryBook)
+        .where(and(eq(memoryBook.chatId, chatId), eq(memoryBook.id, id)))
+        .returning();
+      return deleted.length > 0;
     },
 
     async searchStories(chatId: string, query: string, limit = 10): Promise<MemoryBookRow[]> {
@@ -204,55 +145,35 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
 
-      const conditions: string[] = ["chat_id = ?"];
-      const params: any[] = [chatId];
+      const matchFields = (pattern: string) =>
+        or(like(memoryBook.title, pattern), like(memoryBook.story, pattern), like(memoryBook.people, pattern));
 
-      const tokenConditions: string[] = [];
-      tokenConditions.push("(title LIKE ? OR story LIKE ? OR people LIKE ?)");
-      const fullPattern = `%${trimmedQuery}%`;
-      params.push(fullPattern, fullPattern, fullPattern);
+      const tokenConditions = [matchFields(`%${trimmedQuery}%`), ...tokens.map((token) => matchFields(`%${token}%`))];
 
-      for (const token of tokens) {
-        tokenConditions.push("(title LIKE ? OR story LIKE ? OR people LIKE ?)");
-        const pattern = `%${token}%`;
-        params.push(pattern, pattern, pattern);
-      }
-
-      conditions.push(`(${tokenConditions.join(" OR ")})`);
-      params.push(limit);
-
-      const sql = `
-        SELECT id, chat_id as chatId, title, story, people, happened_on as happenedOn, created_by as createdBy, ts
-        FROM memory_book
-        WHERE ${conditions.join(" AND ")}
-        ORDER BY ts DESC, id DESC
-        LIMIT ?
-      `;
-
-      const res = await db.execute({ sql, args: params });
-      return res.rows.map(mapStoryRow);
+      return (await orm
+        .select()
+        .from(memoryBook)
+        .where(and(eq(memoryBook.chatId, chatId), or(...tokenConditions)))
+        .orderBy(desc(memoryBook.ts), desc(memoryBook.id))
+        .limit(limit)) as MemoryBookRow[];
     },
 
     async listStories(chatId: string, limit = 20): Promise<MemoryBookRow[]> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id as chatId, title, story, people, happened_on as happenedOn, created_by as createdBy, ts
-              FROM memory_book
-              WHERE chat_id = ?
-              ORDER BY ts DESC, id DESC
-              LIMIT ?`,
-        args: [chatId, limit],
-      });
-      return res.rows.map(mapStoryRow);
+      return (await orm
+        .select()
+        .from(memoryBook)
+        .where(eq(memoryBook.chatId, chatId))
+        .orderBy(desc(memoryBook.ts), desc(memoryBook.id))
+        .limit(limit)) as MemoryBookRow[];
     },
 
     async getStoryById(chatId: string, id: number): Promise<MemoryBookRow | undefined> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id as chatId, title, story, people, happened_on as happenedOn, created_by as createdBy, ts
-              FROM memory_book
-              WHERE chat_id = ? AND id = ?`,
-        args: [chatId, id],
-      });
-      return res.rows[0] ? mapStoryRow(res.rows[0]) : undefined;
+      const [story] = await orm
+        .select()
+        .from(memoryBook)
+        .where(and(eq(memoryBook.chatId, chatId), eq(memoryBook.id, id)))
+        .limit(1);
+      return story as MemoryBookRow | undefined;
     },
   };
 }

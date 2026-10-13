@@ -1,4 +1,6 @@
-import type { SqliteDatabase } from "../connection.js";
+import { and, desc, eq } from "drizzle-orm";
+import { createDrizzleDb, type SqliteDatabase } from "../connection.js";
+import { groupMembers } from "../schema/index.js";
 
 export type GroupMemberRow = {
   id: number;
@@ -27,51 +29,19 @@ export interface GroupMemberRepository {
   findByAliasOrName(chatId: string, query: string): Promise<GroupMemberRow[]>;
 }
 
-function mapRow(row: any): GroupMemberRow {
-  return {
-    id: Number(row.id),
-    chatId: String(row.chatId),
-    senderId: String(row.senderId),
-    senderName: String(row.senderName),
-    alias: row.alias != null ? String(row.alias) : null,
-    relationship: row.relationship != null ? String(row.relationship) : null,
-    notes: row.notes != null ? String(row.notes) : null,
-    createdAt: Number(row.createdAt),
-    lastSeenAt: Number(row.lastSeenAt),
-  };
-}
-
 export function createGroupMemberRepository(db: SqliteDatabase): GroupMemberRepository {
+  const orm = createDrizzleDb(db);
   return {
     async recordActivity(chatId: string, senderId: string, senderName: string): Promise<GroupMemberRow> {
       const now = Date.now();
       const existing = await this.getMember(chatId, senderId);
 
       if (!existing) {
-        const res = await db.execute({
-          sql: `INSERT INTO group_members (chat_id, sender_id, sender_name, created_at, last_seen_at)
-                VALUES (?, ?, ?, ?, ?)`,
-          args: [chatId, senderId, senderName, now, now],
-        });
-        return {
-          id: Number(res.lastInsertRowid),
-          chatId,
-          senderId,
-          senderName,
-          alias: null,
-          relationship: null,
-          notes: null,
-          createdAt: now,
-          lastSeenAt: now,
-        };
+        const [member] = await orm.insert(groupMembers).values({ chatId, senderId, senderName, createdAt: now, lastSeenAt: now }).returning();
+        return member as GroupMemberRow;
       }
 
-      await db.execute({
-        sql: `UPDATE group_members
-              SET sender_name = ?, last_seen_at = ?
-              WHERE chat_id = ? AND sender_id = ?`,
-        args: [senderName, now, chatId, senderId],
-      });
+      await orm.update(groupMembers).set({ senderName, lastSeenAt: now }).where(and(eq(groupMembers.chatId, chatId), eq(groupMembers.senderId, senderId)));
 
       return {
         ...existing,
@@ -81,26 +51,12 @@ export function createGroupMemberRepository(db: SqliteDatabase): GroupMemberRepo
     },
 
     async getMember(chatId: string, senderId: string): Promise<GroupMemberRow | undefined> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id as chatId, sender_id as senderId, sender_name as senderName,
-                     alias, relationship, notes, created_at as createdAt, last_seen_at as lastSeenAt
-              FROM group_members
-              WHERE chat_id = ? AND sender_id = ?`,
-        args: [chatId, senderId],
-      });
-      return res.rows[0] ? mapRow(res.rows[0]) : undefined;
+      const [member] = await orm.select().from(groupMembers).where(and(eq(groupMembers.chatId, chatId), eq(groupMembers.senderId, senderId))).limit(1);
+      return member as GroupMemberRow | undefined;
     },
 
     async listMembers(chatId: string): Promise<GroupMemberRow[]> {
-      const res = await db.execute({
-        sql: `SELECT id, chat_id as chatId, sender_id as senderId, sender_name as senderName,
-                     alias, relationship, notes, created_at as createdAt, last_seen_at as lastSeenAt
-              FROM group_members
-              WHERE chat_id = ?
-              ORDER BY last_seen_at DESC, id DESC`,
-        args: [chatId],
-      });
-      return res.rows.map(mapRow);
+      return await orm.select().from(groupMembers).where(eq(groupMembers.chatId, chatId)).orderBy(desc(groupMembers.lastSeenAt), desc(groupMembers.id)) as GroupMemberRow[];
     },
 
     async updateMember(
@@ -118,12 +74,7 @@ export function createGroupMemberRepository(db: SqliteDatabase): GroupMemberRepo
       const notes = updates.notes !== undefined ? updates.notes : existing.notes;
       const senderName = updates.senderName !== undefined ? updates.senderName : existing.senderName;
 
-      await db.execute({
-        sql: `UPDATE group_members
-              SET alias = ?, relationship = ?, notes = ?, sender_name = ?
-              WHERE chat_id = ? AND sender_id = ?`,
-        args: [alias, relationship, notes, senderName, chatId, senderId],
-      });
+      await orm.update(groupMembers).set({ alias, relationship, notes, senderName }).where(and(eq(groupMembers.chatId, chatId), eq(groupMembers.senderId, senderId)));
 
       return {
         ...existing,
