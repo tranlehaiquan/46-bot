@@ -3,9 +3,7 @@
 ## Purpose
 
 Run a saved internet-lookup instruction for one chat on a daily, weekly, or monthly solar schedule, and deliver the result once per occurrence.
-
 ## Requirements
-
 ### Requirement: A lookup belongs to the chat that created it
 The system SHALL persist each lookup with the originating chat, a natural-language instruction, an active flag, a recurrence of `daily`, `weekly`, or `monthly`, and a clock time in `Asia/Ho_Chi_Minh`. A weekly lookup SHALL also store one weekday. A monthly lookup SHALL also store one solar day-of-month from 1 to 31. Delivery SHALL go only to the originating chat.
 
@@ -66,11 +64,11 @@ The system SHALL NOT deliver a lookup while the originating channel status is `p
 - **THEN** the chat receives the occurrence once
 
 ### Requirement: A run answers only the saved instruction with read tools
-The scheduled run SHALL call the model with the saved instruction as untrusted user data and with no chat history. The run SHALL be limited to `weather_check`, `web_search`, and `holiday_list_upcoming`. The run SHALL NOT create or modify events, lists, memories, or lookups. The delivered text SHALL be plain text without Markdown. Text longer than 2000 characters SHALL be split using the same outbound splitting as conversational replies.
+The scheduled run SHALL call the model with the saved instruction as untrusted user data and with no chat history. The run SHALL be limited to `weather_check`, `web_search`, and `holiday_list_upcoming`. The run SHALL NOT create or modify events, lists, memories, or lookups. The delivered text SHALL use Zalo-compatible Markdown formatting (such as bold, bulleted lists, and headers) without tables or bracketed links. Text longer than 2000 characters SHALL be split using the same outbound splitting as conversational replies.
 
 #### Scenario: Weather instruction uses the weather tool
 - **WHEN** a due lookup instruction asks for today's weather in Ho Chi Minh City
-- **THEN** the run retrieves live weather for that place and the chat receives one plain-text briefing
+- **THEN** the run retrieves live weather for that place and the chat receives a briefing formatted with Zalo-compatible Markdown
 
 #### Scenario: Another topic uses web search
 - **WHEN** a due lookup instruction asks for the SJC gold price
@@ -97,3 +95,4 @@ Executing a lookup SHALL NOT suppress, merge with, or change the daily morning b
 #### Scenario: A 07:00 lookup is a separate message
 - **WHEN** a chat has a daily lookup at 07:00 and also has a morning briefing due
 - **THEN** the lookup message and the morning briefing are delivered as separate messages
+
