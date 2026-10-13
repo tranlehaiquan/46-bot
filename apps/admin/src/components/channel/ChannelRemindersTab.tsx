@@ -11,21 +11,11 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
+import { Button, Badge, TextField, Dialog } from "@radix-ui/themes";
+import { toast } from "sonner";
 import { CalendarMonthGrid } from "../CalendarMonthGrid";
 import type { EventItem, HolidayOccurrence, CalendarEventOccurrence } from "../../api";
-import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "../ui/dialog";
-import { ConfirmDialog } from "../ui/confirm-dialog";
+import { ConfirmDialog } from "../ConfirmDialog";
 import {
   useCreateEvent,
   useUpdateEvent,
@@ -146,8 +136,9 @@ export function ChannelRemindersTab({
         await createEventMutation.mutateAsync(payload);
       }
       setDialogOpen(false);
+      toast.success(editingEvent ? "Đã cập nhật sự kiện" : "Đã tạo sự kiện mới");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to save event");
+      toast.error(err instanceof Error ? err.message : "Failed to save event");
     }
   };
 
@@ -155,8 +146,9 @@ export function ChannelRemindersTab({
     if (!eventToDelete) return;
     try {
       await deleteEventMutation.mutateAsync(eventToDelete);
+      toast.success("Đã xoá sự kiện");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete event");
+      toast.error(err instanceof Error ? err.message : "Failed to delete event");
     } finally {
       setEventToDelete(null);
     }
@@ -208,9 +200,9 @@ export function ChannelRemindersTab({
         <div className="flex items-center gap-2.5">
           <Calendar size={20} className="text-indigo-400" />
           <h3 className="text-lg font-bold text-white">Events & Reminders</h3>
-          <Badge variant="indigo">{events.length}</Badge>
+          <Badge color="indigo" variant="surface" size="2">{events.length}</Badge>
         </div>
-        <Button size="sm" onClick={handleStartCreate}>
+        <Button size="2" onClick={handleStartCreate} className="cursor-pointer">
           <Plus size={14} />
           <span>Create New Event</span>
         </Button>
@@ -248,17 +240,20 @@ export function ChannelRemindersTab({
                     <div className="flex items-center gap-1 shrink-0">
                       <Button
                         variant="ghost"
-                        size="icon-sm"
+                        color="gray"
+                        size="1"
                         onClick={() => handleStartEdit(ev)}
                         title="Edit event"
+                        className="cursor-pointer"
                       >
                         <Pencil size={13} />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon-sm"
+                        color="gray"
+                        size="1"
                         onClick={() => setEventToDelete(ev.id)}
-                        className="text-slate-400 hover:text-rose-400"
+                        className="text-slate-400 hover:text-rose-400 cursor-pointer"
                         title="Delete event"
                       >
                         <Trash2 size={13} />
@@ -267,18 +262,18 @@ export function ChannelRemindersTab({
                   </div>
 
                   <div className="flex gap-1.5 flex-wrap text-xs mb-2">
-                    <Badge variant={ev.calendar === "lunar" ? "purple" : "indigo"}>
+                    <Badge color={ev.calendar === "lunar" ? "purple" : "indigo"} variant="surface">
                       {ev.calendar === "lunar" ? "🌙 Âm lịch" : "☀️ Dương lịch"} ({ev.day}/{ev.month}
                       {ev.year ? `/${ev.year}` : ""})
                     </Badge>
-                    <Badge variant="default" className="text-slate-300">
+                    <Badge color="gray" variant="surface">
                       {kindMeta?.label || ev.kind}
                     </Badge>
-                    <Badge variant="default" className="text-slate-400">
+                    <Badge color="gray" variant="surface">
                       {ev.recurrence}
                     </Badge>
                     {ev.remindDaysBefore > 0 && (
-                      <Badge variant="pending">
+                      <Badge color="amber" variant="surface">
                         <Clock size={10} className="mr-0.5 inline" /> Nhắc trước {ev.remindDaysBefore}d
                       </Badge>
                     )}
@@ -297,42 +292,42 @@ export function ChannelRemindersTab({
       )}
 
       {/* Modern Redesigned Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-xl p-6 sm:p-7 gap-5 border border-white/10 shadow-2xl">
-          <DialogHeader className="pb-3 border-b border-white/[0.08]">
-            <div className="flex items-center gap-3">
-              <div className={`p-2.5 rounded-xl border ${currentKindConfig.color}`}>
-                <KindIcon size={20} />
-              </div>
-              <div>
-                <DialogTitle className="text-lg">
-                  {editingEvent ? `Chỉnh sửa: ${editingEvent.title}` : "Tạo sự kiện mới"}
-                </DialogTitle>
-                <DialogDescription className="text-xs text-slate-400 mt-0.5">
-                  Thiết lập ngày kỷ niệm, lịch âm/dương và chu kỳ nhắc nhở tự động
-                </DialogDescription>
-              </div>
+      <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog.Content maxWidth="600px">
+          <div className="flex items-center gap-3 pb-3 border-b border-white/[0.08] mb-4">
+            <div className={`p-2.5 rounded-xl border ${currentKindConfig.color}`}>
+              <KindIcon size={20} />
             </div>
-          </DialogHeader>
+            <div>
+              <Dialog.Title className="text-lg font-bold text-white mb-0">
+                {editingEvent ? `Chỉnh sửa: ${editingEvent.title}` : "Tạo sự kiện mới"}
+              </Dialog.Title>
+              <Dialog.Description className="text-xs text-slate-400 mt-0.5">
+                Thiết lập ngày kỷ niệm, lịch âm/dương và chu kỳ nhắc nhở tự động
+              </Dialog.Description>
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {/* Event Title */}
             <div>
-              <Label htmlFor="event-title" required>Tên sự kiện</Label>
-              <Input
+              <label htmlFor="event-title" className="text-xs font-semibold text-slate-300 block mb-1">
+                Tên sự kiện *
+              </label>
+              <input
                 id="event-title"
                 required
                 placeholder="VD: Sinh nhật Mẹ, Đám cưới Alex, Giỗ ông nội..."
                 value={eventForm.title}
                 onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-                className="text-base font-medium py-2.5"
+                className="form-input text-base font-medium py-2.5"
                 autoFocus
               />
             </div>
 
             {/* Event Kind (Type) Chips */}
             <div>
-              <Label>Loại sự kiện</Label>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">Loại sự kiện</label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {EVENT_KINDS.map((kind) => {
                   const Icon = kind.icon;
@@ -360,7 +355,7 @@ export function ChannelRemindersTab({
             <div className="p-4 rounded-xl bg-black/25 border border-white/[0.08] flex flex-col gap-3.5">
               {/* Solar vs Lunar Segmented Control */}
               <div>
-                <Label>Hệ lịch</Label>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Hệ lịch</label>
                 <div className="grid grid-cols-2 gap-2 bg-black/40 p-1 rounded-xl border border-white/[0.06]">
                   <button
                     type="button"
@@ -393,8 +388,10 @@ export function ChannelRemindersTab({
               {/* Day, Month, Year Grid */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <Label htmlFor="event-day" required>Ngày (Day)</Label>
-                  <Input
+                  <label htmlFor="event-day" className="text-xs font-semibold text-slate-300 block mb-1">
+                    Ngày (Day) *
+                  </label>
+                  <input
                     id="event-day"
                     type="number"
                     min={1}
@@ -402,13 +399,15 @@ export function ChannelRemindersTab({
                     required
                     value={eventForm.day}
                     onChange={(e) => setEventForm({ ...eventForm, day: Number(e.target.value) })}
-                    className="text-center font-mono text-base font-bold"
+                    className="form-input text-center font-mono text-base font-bold"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="event-month" required>Tháng (Month)</Label>
-                  <Input
+                  <label htmlFor="event-month" className="text-xs font-semibold text-slate-300 block mb-1">
+                    Tháng (Month) *
+                  </label>
+                  <input
                     id="event-month"
                     type="number"
                     min={1}
@@ -416,13 +415,15 @@ export function ChannelRemindersTab({
                     required
                     value={eventForm.month}
                     onChange={(e) => setEventForm({ ...eventForm, month: Number(e.target.value) })}
-                    className="text-center font-mono text-base font-bold"
+                    className="form-input text-center font-mono text-base font-bold"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="event-year">{yearMeta.label}</Label>
-                  <Input
+                  <label htmlFor="event-year" className="text-xs font-semibold text-slate-300 block mb-1">
+                    {yearMeta.label}
+                  </label>
+                  <input
                     id="event-year"
                     type="number"
                     min={1900}
@@ -430,7 +431,7 @@ export function ChannelRemindersTab({
                     placeholder={yearMeta.placeholder}
                     value={eventForm.year}
                     onChange={(e) => setEventForm({ ...eventForm, year: e.target.value })}
-                    className="text-center font-mono"
+                    className="form-input text-center font-mono"
                   />
                 </div>
               </div>
@@ -440,7 +441,7 @@ export function ChannelRemindersTab({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Recurrence Segmented Control */}
               <div>
-                <Label>Chu kỳ lặp lại</Label>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Chu kỳ lặp lại</label>
                 <div className="grid grid-cols-3 gap-1 bg-black/30 p-1 rounded-xl border border-white/[0.08]">
                   {RECURRENCE_OPTIONS.map((opt) => {
                     const isSelected = eventForm.recurrence === opt.id;
@@ -464,7 +465,9 @@ export function ChannelRemindersTab({
 
               {/* Remind in Advance with Wrapping Presets & Input */}
               <div>
-                <Label htmlFor="event-remind">Nhắc trước</Label>
+                <label htmlFor="event-remind" className="text-xs font-semibold text-slate-300 block mb-1">
+                  Nhắc trước
+                </label>
                 <div className="flex items-center gap-2">
                   <div className="flex flex-wrap gap-1.5 flex-1">
                     {ADVANCE_DAYS_OPTIONS.map((opt) => {
@@ -487,14 +490,14 @@ export function ChannelRemindersTab({
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
-                    <Input
+                    <input
                       id="event-remind"
                       type="number"
                       min={0}
                       max={30}
                       value={eventForm.remindDaysBefore}
                       onChange={(e) => setEventForm({ ...eventForm, remindDaysBefore: Number(e.target.value) })}
-                      className="font-mono text-center w-14 py-1 text-sm h-8"
+                      className="form-input font-mono text-center w-14 py-1 text-sm h-8"
                     />
                     <span className="text-xs text-slate-400">ngày</span>
                   </div>
@@ -504,34 +507,41 @@ export function ChannelRemindersTab({
 
             {/* Notes */}
             <div>
-              <Label htmlFor="event-notes">Ghi chú (Tùy chọn)</Label>
-              <Input
+              <label htmlFor="event-notes" className="text-xs font-semibold text-slate-300 block mb-1">
+                Ghi chú (Tùy chọn)
+              </label>
+              <input
                 id="event-notes"
                 placeholder="Gợi ý quà tặng, địa điểm liên hoan hoặc lưu ý đặc biệt..."
                 value={eventForm.notes}
                 onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
+                className="form-input"
               />
             </div>
 
-            <DialogFooter className="pt-3 mt-1 border-t border-white/[0.08] flex justify-end gap-2.5">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setDialogOpen(false)}
-              >
-                Hủy
-              </Button>
+            <div className="pt-3 mt-1 border-t border-white/[0.08] flex justify-end gap-2.5">
+              <Dialog.Close>
+                <Button
+                  type="button"
+                  variant="soft"
+                  color="gray"
+                  className="cursor-pointer"
+                  onClick={() => setDialogOpen(false)}
+                >
+                  Hủy
+                </Button>
+              </Dialog.Close>
               <Button
                 type="submit"
                 loading={createEventMutation.isPending || updateEventMutation.isPending}
-                className="px-5 shadow-lg shadow-indigo-600/25"
+                className="px-5 cursor-pointer"
               >
                 {editingEvent ? "Cập nhật sự kiện" : "Lưu sự kiện"}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
-        </DialogContent>
-      </Dialog>
+        </Dialog.Content>
+      </Dialog.Root>
 
       {/* Delete Confirmation */}
       <ConfirmDialog

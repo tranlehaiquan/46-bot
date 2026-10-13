@@ -14,16 +14,15 @@ import {
   RotateCcw,
   Zap,
 } from "lucide-react";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Badge } from "./ui/badge";
+import { Button, Badge, TextField, Select, Callout } from "@radix-ui/themes";
+import { toast } from "sonner";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   useSettings,
   useUpdateSettings,
   useTestSettings,
   useTestCrawl4Ai,
 } from "../hooks/useAdminQueries";
-import type { AdminSettings } from "../api";
 
 const GEMINI_MODELS = [
   { value: "gemini-3.8-flash", label: "gemini-3.8-flash (Khuyên dùng)" },
@@ -62,6 +61,10 @@ export function SettingsPage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const [resetKeyTarget, setResetKeyTarget] = useState<
+    "geminiApiKey" | "deepseekApiKey" | "tavilyApiKey" | "crawl4aiApiKey" | null
+  >(null);
 
   const [testingTarget, setTestingTarget] = useState<"gemini" | "deepseek" | "tavily" | "crawl4ai" | null>(null);
   const [testResult, setTestResult] = useState<{
@@ -107,35 +110,39 @@ export function SettingsPage() {
       setDeepseekApiKey("");
       setTavilyApiKey("");
       setCrawl4aiApiToken("");
+      const successText = "Đã lưu cài đặt thành công! Cấu hình mới được áp dụng ngay lập tức.";
       setStatusMessage({
         type: "success",
-        text: "Đã lưu cài đặt thành công! Cấu hình mới được áp dụng ngay lập tức.",
+        text: successText,
       });
+      toast.success(successText);
       setTimeout(() => setStatusMessage(null), 5000);
     } catch (err) {
       const text = err instanceof Error ? err.message : "Lỗi khi lưu cài đặt";
       setStatusMessage({ type: "error", text });
+      toast.error(text);
     }
   };
 
-  const handleResetKey = async (
-    keyName: "geminiApiKey" | "deepseekApiKey" | "tavilyApiKey" | "crawl4aiApiKey"
-  ) => {
-    if (!confirm("Bạn có chắc muốn xóa ghi đè database cho API Key này để quay về giá trị mặc định trong file .env?")) {
-      return;
-    }
+  const executeResetKey = async () => {
+    if (!resetKeyTarget) return;
     setStatusMessage(null);
     try {
       await updateSettingsMutation.mutateAsync({
-        [keyName]: "",
+        [resetKeyTarget]: "",
       });
+      const successText = "Đã khôi phục cài đặt API Key về mặc định từ file .env.";
       setStatusMessage({
         type: "success",
-        text: "Đã khôi phục cài đặt API Key về mặc định từ file .env.",
+        text: successText,
       });
+      toast.success(successText);
     } catch (err) {
       const text = err instanceof Error ? err.message : "Lỗi khi khôi phục";
       setStatusMessage({ type: "error", text });
+      toast.error(text);
+    } finally {
+      setResetKeyTarget(null);
     }
   };
 
@@ -211,7 +218,7 @@ export function SettingsPage() {
         <p className="text-sm text-slate-400 max-w-md mx-auto">
           Đã xảy ra lỗi khi nạp thông tin cấu hình từ hệ thống.
         </p>
-        <Button variant="secondary" onClick={() => refetch()}>
+        <Button variant="soft" color="gray" onClick={() => refetch()} className="cursor-pointer">
           Thử lại
         </Button>
       </div>
@@ -222,19 +229,19 @@ export function SettingsPage() {
     switch (source) {
       case "db":
         return (
-          <Badge variant="indigo" title="Được ghi đè và lưu trong cơ sở dữ liệu">
+          <Badge color="indigo" variant="soft" title="Được ghi đè và lưu trong cơ sở dữ liệu">
             Database Override
           </Badge>
         );
       case "env":
         return (
-          <Badge variant="default" title="Đang dùng giá trị mặc định từ file .env">
+          <Badge color="gray" variant="soft" title="Đang dùng giá trị mặc định từ file .env">
             Mặc định từ .env
           </Badge>
         );
       case "none":
         return (
-          <Badge variant="disabled" title="Chưa có API Key">
+          <Badge color="red" variant="soft" title="Chưa có API Key">
             Chưa thiết lập
           </Badge>
         );
@@ -262,7 +269,8 @@ export function SettingsPage() {
             id="btn-save-settings"
             onClick={handleSave}
             loading={updateSettingsMutation.isPending}
-            className="shadow-lg shadow-indigo-600/30"
+            size="2"
+            className="cursor-pointer shadow-lg shadow-indigo-600/30"
           >
             <Save size={16} />
             <span>Lưu thay đổi</span>
@@ -272,20 +280,12 @@ export function SettingsPage() {
 
       {/* Status banner */}
       {statusMessage && (
-        <div
-          className={`p-4 rounded-xl flex items-center gap-3 text-sm transition-all ${
-            statusMessage.type === "success"
-              ? "bg-emerald-500/10 border border-emerald-500/25 text-emerald-300"
-              : "bg-rose-500/10 border border-rose-500/25 text-rose-300"
-          }`}
-        >
-          {statusMessage.type === "success" ? (
-            <CheckCircle2 size={18} className="shrink-0 text-emerald-400" />
-          ) : (
-            <AlertCircle size={18} className="shrink-0 text-rose-400" />
-          )}
-          <span>{statusMessage.text}</span>
-        </div>
+        <Callout.Root color={statusMessage.type === "success" ? "green" : "red"} size="1">
+          <Callout.Icon>
+            {statusMessage.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          </Callout.Icon>
+          <Callout.Text>{statusMessage.text}</Callout.Text>
+        </Callout.Root>
       )}
 
       {/* Active Provider Selector */}
@@ -300,7 +300,7 @@ export function SettingsPage() {
               Provider này sẽ trực tiếp xử lý tất cả tin nhắn và câu hỏi từ người dùng trong nhóm chat.
             </p>
           </div>
-          <Badge variant="active">Đang áp dụng: {provider.toUpperCase()}</Badge>
+          <Badge color="indigo" variant="solid">Đang áp dụng: {provider.toUpperCase()}</Badge>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -321,7 +321,7 @@ export function SettingsPage() {
                   Google Gemini
                 </span>
                 {provider === "gemini" ? (
-                  <Badge variant="indigo">Đang chọn</Badge>
+                  <Badge color="indigo" variant="solid">Đang chọn</Badge>
                 ) : (
                   <span className="text-xs text-slate-400">Nhấn để chọn</span>
                 )}
@@ -353,7 +353,7 @@ export function SettingsPage() {
                   DeepSeek
                 </span>
                 {provider === "deepseek" ? (
-                  <Badge variant="indigo">Đang chọn</Badge>
+                  <Badge color="indigo" variant="solid">Đang chọn</Badge>
                 ) : (
                   <span className="text-xs text-slate-400">Nhấn để chọn</span>
                 )}
@@ -385,10 +385,12 @@ export function SettingsPage() {
 
           <div className="flex items-center gap-2">
             <Button
-              variant="secondary"
-              size="sm"
+              variant="soft"
+              color="gray"
+              size="1"
               loading={testingTarget === "gemini"}
               onClick={() => handleTestConnection("gemini")}
+              className="cursor-pointer"
             >
               <Zap size={14} className="text-amber-400" />
               <span>Kiểm tra kết nối</span>
@@ -397,23 +399,17 @@ export function SettingsPage() {
         </div>
 
         {testResult && testResult.target === "gemini" && (
-          <div
-            className={`p-3.5 rounded-lg text-xs flex items-start gap-2.5 ${
-              testResult.ok
-                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
-                : "bg-rose-500/10 border border-rose-500/20 text-rose-300"
-            }`}
-          >
-            {testResult.ok ? (
-              <CheckCircle2 size={16} className="shrink-0 text-emerald-400 mt-0.5" />
-            ) : (
-              <AlertCircle size={16} className="shrink-0 text-rose-400 mt-0.5" />
-            )}
-            <div className="space-y-1">
-              <div className="font-medium">{testResult.message}</div>
-              {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
-            </div>
-          </div>
+          <Callout.Root color={testResult.ok ? "green" : "red"} size="1">
+            <Callout.Icon>
+              {testResult.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+            </Callout.Icon>
+            <Callout.Text>
+              <div className="space-y-1">
+                <div className="font-medium">{testResult.message}</div>
+                {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
+              </div>
+            </Callout.Text>
+          </Callout.Root>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -424,27 +420,27 @@ export function SettingsPage() {
               <span className="text-[11px] text-slate-500">Mặc định: gemini-3.8-flash</span>
             </label>
             <div className="space-y-2">
-              <select
-                id="select-gemini-model"
+              <Select.Root
                 value={GEMINI_MODELS.some((m) => m.value === geminiModel) ? geminiModel : "custom"}
-                onChange={(e) => {
-                  if (e.target.value !== "custom") {
-                    setGeminiModel(e.target.value);
+                onValueChange={(val) => {
+                  if (val !== "custom") {
+                    setGeminiModel(val);
                   }
                 }}
-                className="w-full rounded-lg border border-white/10 bg-[#0a0d14] px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
               >
-                {GEMINI_MODELS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-                <option value="custom">Tùy chỉnh model ID khác...</option>
-              </select>
+                <Select.Trigger className="w-full" id="select-gemini-model" />
+                <Select.Content position="popper">
+                  {GEMINI_MODELS.map((m) => (
+                    <Select.Item key={m.value} value={m.value}>
+                      {m.label}
+                    </Select.Item>
+                  ))}
+                  <Select.Item value="custom">Tùy chỉnh model ID khác...</Select.Item>
+                </Select.Content>
+              </Select.Root>
 
-              <Input
+              <TextField.Root
                 id="input-gemini-model"
-                type="text"
                 placeholder="Nhập tên model (ví dụ: gemini-3.8-flash)"
                 value={geminiModel}
                 onChange={(e) => setGeminiModel(e.target.value)}
@@ -463,8 +459,8 @@ export function SettingsPage() {
                 {renderKeySourceBadge(settings.geminiApiKeySource)}
                 {settings.geminiApiKeySource === "db" && (
                   <button
-                    onClick={() => handleResetKey("geminiApiKey")}
-                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1"
+                    onClick={() => setResetKeyTarget("geminiApiKey")}
+                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
                     title="Khôi phục về key từ .env"
                   >
                     <RotateCcw size={11} />
@@ -474,27 +470,28 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className="relative">
-              <Input
-                id="input-gemini-key"
-                type={showGeminiKey ? "text" : "password"}
-                placeholder={
-                  settings.geminiApiKeyMasked
-                    ? `Hiện tại: ${settings.geminiApiKeyMasked} (để trống nếu không đổi)`
-                    : "Nhập Gemini API Key (AQ....)"
-                }
-                value={geminiApiKey}
-                onChange={(e) => setGeminiApiKey(e.target.value)}
-                className="pr-10 font-mono"
-              />
-              <button
-                type="button"
-                onClick={() => setShowGeminiKey(!showGeminiKey)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-              >
-                {showGeminiKey ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
+            <TextField.Root
+              id="input-gemini-key"
+              type={showGeminiKey ? "text" : "password"}
+              placeholder={
+                settings.geminiApiKeyMasked
+                  ? `Hiện tại: ${settings.geminiApiKeyMasked} (để trống nếu không đổi)`
+                  : "Nhập Gemini API Key (AQ....)"
+              }
+              value={geminiApiKey}
+              onChange={(e) => setGeminiApiKey(e.target.value)}
+              className="font-mono"
+            >
+              <TextField.Slot side="right">
+                <button
+                  type="button"
+                  onClick={() => setShowGeminiKey(!showGeminiKey)}
+                  className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  {showGeminiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </TextField.Slot>
+            </TextField.Root>
             <p className="text-[11px] text-slate-400">
               Khóa API bắt đầu bằng <code className="text-indigo-300 font-mono">AQ...</code> từ Google AI Studio.
             </p>
@@ -517,10 +514,12 @@ export function SettingsPage() {
 
           <div className="flex items-center gap-2">
             <Button
-              variant="secondary"
-              size="sm"
+              variant="soft"
+              color="gray"
+              size="1"
               loading={testingTarget === "deepseek"}
               onClick={() => handleTestConnection("deepseek")}
+              className="cursor-pointer"
             >
               <Zap size={14} className="text-amber-400" />
               <span>Kiểm tra kết nối</span>
@@ -529,23 +528,17 @@ export function SettingsPage() {
         </div>
 
         {testResult && testResult.target === "deepseek" && (
-          <div
-            className={`p-3.5 rounded-lg text-xs flex items-start gap-2.5 ${
-              testResult.ok
-                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
-                : "bg-rose-500/10 border border-rose-500/20 text-rose-300"
-            }`}
-          >
-            {testResult.ok ? (
-              <CheckCircle2 size={16} className="shrink-0 text-emerald-400 mt-0.5" />
-            ) : (
-              <AlertCircle size={16} className="shrink-0 text-rose-400 mt-0.5" />
-            )}
-            <div className="space-y-1">
-              <div className="font-medium">{testResult.message}</div>
-              {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
-            </div>
-          </div>
+          <Callout.Root color={testResult.ok ? "green" : "red"} size="1">
+            <Callout.Icon>
+              {testResult.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+            </Callout.Icon>
+            <Callout.Text>
+              <div className="space-y-1">
+                <div className="font-medium">{testResult.message}</div>
+                {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
+              </div>
+            </Callout.Text>
+          </Callout.Root>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -556,27 +549,27 @@ export function SettingsPage() {
               <span className="text-[11px] text-slate-500">Mặc định: deepseek-chat</span>
             </label>
             <div className="space-y-2">
-              <select
-                id="select-deepseek-model"
+              <Select.Root
                 value={DEEPSEEK_MODELS.some((m) => m.value === deepseekModel) ? deepseekModel : "custom"}
-                onChange={(e) => {
-                  if (e.target.value !== "custom") {
-                    setDeepseekModel(e.target.value);
+                onValueChange={(val) => {
+                  if (val !== "custom") {
+                    setDeepseekModel(val);
                   }
                 }}
-                className="w-full rounded-lg border border-white/10 bg-[#0a0d14] px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
               >
-                {DEEPSEEK_MODELS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-                <option value="custom">Tùy chỉnh model ID khác...</option>
-              </select>
+                <Select.Trigger className="w-full" id="select-deepseek-model" />
+                <Select.Content position="popper">
+                  {DEEPSEEK_MODELS.map((m) => (
+                    <Select.Item key={m.value} value={m.value}>
+                      {m.label}
+                    </Select.Item>
+                  ))}
+                  <Select.Item value="custom">Tùy chỉnh model ID khác...</Select.Item>
+                </Select.Content>
+              </Select.Root>
 
-              <Input
+              <TextField.Root
                 id="input-deepseek-model"
-                type="text"
                 placeholder="Nhập tên model (ví dụ: deepseek-chat)"
                 value={deepseekModel}
                 onChange={(e) => setDeepseekModel(e.target.value)}
@@ -595,8 +588,8 @@ export function SettingsPage() {
                 {renderKeySourceBadge(settings.deepseekApiKeySource)}
                 {settings.deepseekApiKeySource === "db" && (
                   <button
-                    onClick={() => handleResetKey("deepseekApiKey")}
-                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1"
+                    onClick={() => setResetKeyTarget("deepseekApiKey")}
+                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
                     title="Khôi phục về key từ .env"
                   >
                     <RotateCcw size={11} />
@@ -606,27 +599,28 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className="relative">
-              <Input
-                id="input-deepseek-key"
-                type={showDeepseekKey ? "text" : "password"}
-                placeholder={
-                  settings.deepseekApiKeyMasked
-                    ? `Hiện tại: ${settings.deepseekApiKeyMasked} (để trống nếu không đổi)`
-                    : "Nhập DeepSeek API Key (sk-...)"
-                }
-                value={deepseekApiKey}
-                onChange={(e) => setDeepseekApiKey(e.target.value)}
-                className="pr-10 font-mono"
-              />
-              <button
-                type="button"
-                onClick={() => setShowDeepseekKey(!showDeepseekKey)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-              >
-                {showDeepseekKey ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
+            <TextField.Root
+              id="input-deepseek-key"
+              type={showDeepseekKey ? "text" : "password"}
+              placeholder={
+                settings.deepseekApiKeyMasked
+                  ? `Hiện tại: ${settings.deepseekApiKeyMasked} (để trống nếu không đổi)`
+                  : "Nhập DeepSeek API Key (sk-...)"
+              }
+              value={deepseekApiKey}
+              onChange={(e) => setDeepseekApiKey(e.target.value)}
+              className="font-mono"
+            >
+              <TextField.Slot side="right">
+                <button
+                  type="button"
+                  onClick={() => setShowDeepseekKey(!showDeepseekKey)}
+                  className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  {showDeepseekKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </TextField.Slot>
+            </TextField.Root>
             <p className="text-[11px] text-slate-400">
               Khóa API bắt đầu bằng <code className="text-indigo-300 font-mono">sk-...</code> từ nền tảng DeepSeek Open Platform.
             </p>
@@ -649,10 +643,12 @@ export function SettingsPage() {
 
           <div className="flex items-center gap-2">
             <Button
-              variant="secondary"
-              size="sm"
+              variant="soft"
+              color="gray"
+              size="1"
               loading={testingTarget === "tavily"}
               onClick={() => handleTestConnection("tavily")}
+              className="cursor-pointer"
             >
               <Zap size={14} className="text-amber-400" />
               <span>Kiểm tra tìm kiếm</span>
@@ -661,23 +657,17 @@ export function SettingsPage() {
         </div>
 
         {testResult && testResult.target === "tavily" && (
-          <div
-            className={`p-3.5 rounded-lg text-xs flex items-start gap-2.5 ${
-              testResult.ok
-                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
-                : "bg-rose-500/10 border border-rose-500/20 text-rose-300"
-            }`}
-          >
-            {testResult.ok ? (
-              <CheckCircle2 size={16} className="shrink-0 text-emerald-400 mt-0.5" />
-            ) : (
-              <AlertCircle size={16} className="shrink-0 text-rose-400 mt-0.5" />
-            )}
-            <div className="space-y-1">
-              <div className="font-medium">{testResult.message}</div>
-              {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
-            </div>
-          </div>
+          <Callout.Root color={testResult.ok ? "green" : "red"} size="1">
+            <Callout.Icon>
+              {testResult.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+            </Callout.Icon>
+            <Callout.Text>
+              <div className="space-y-1">
+                <div className="font-medium">{testResult.message}</div>
+                {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
+              </div>
+            </Callout.Text>
+          </Callout.Root>
         )}
 
         <div className="space-y-2 max-w-xl">
@@ -690,8 +680,8 @@ export function SettingsPage() {
               {renderKeySourceBadge(settings.tavilyApiKeySource)}
               {settings.tavilyApiKeySource === "db" && (
                 <button
-                  onClick={() => handleResetKey("tavilyApiKey")}
-                  className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1"
+                  onClick={() => setResetKeyTarget("tavilyApiKey")}
+                  className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
                   title="Khôi phục về key từ .env"
                 >
                   <RotateCcw size={11} />
@@ -701,27 +691,28 @@ export function SettingsPage() {
             </div>
           </div>
 
-          <div className="relative">
-            <Input
-              id="input-tavily-key"
-              type={showTavilyKey ? "text" : "password"}
-              placeholder={
-                settings.tavilyApiKeyMasked
-                  ? `Hiện tại: ${settings.tavilyApiKeyMasked} (để trống nếu không đổi)`
-                  : "Nhập Tavily API Key (tvly-...)"
-              }
-              value={tavilyApiKey}
-              onChange={(e) => setTavilyApiKey(e.target.value)}
-              className="pr-10 font-mono"
-            />
-            <button
-              type="button"
-              onClick={() => setShowTavilyKey(!showTavilyKey)}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-            >
-              {showTavilyKey ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
-          </div>
+          <TextField.Root
+            id="input-tavily-key"
+            type={showTavilyKey ? "text" : "password"}
+            placeholder={
+              settings.tavilyApiKeyMasked
+                ? `Hiện tại: ${settings.tavilyApiKeyMasked} (để trống nếu không đổi)`
+                : "Nhập Tavily API Key (tvly-...)"
+            }
+            value={tavilyApiKey}
+            onChange={(e) => setTavilyApiKey(e.target.value)}
+            className="font-mono"
+          >
+            <TextField.Slot side="right">
+              <button
+                type="button"
+                onClick={() => setShowTavilyKey(!showTavilyKey)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                {showTavilyKey ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </TextField.Slot>
+          </TextField.Root>
           <p className="text-[11px] text-slate-400">
             Khóa API bắt đầu bằng <code className="text-indigo-300 font-mono">tvly-...</code> từ Tavily AI Search API.
           </p>
@@ -743,10 +734,12 @@ export function SettingsPage() {
 
           <div className="flex items-center gap-2">
             <Button
-              variant="secondary"
-              size="sm"
+              variant="soft"
+              color="gray"
+              size="1"
               loading={testingTarget === "crawl4ai"}
               onClick={() => handleTestConnection("crawl4ai")}
+              className="cursor-pointer"
             >
               <Zap size={14} className="text-amber-400" />
               <span>Kiểm tra kết nối</span>
@@ -755,23 +748,17 @@ export function SettingsPage() {
         </div>
 
         {testResult && testResult.target === "crawl4ai" && (
-          <div
-            className={`p-3.5 rounded-lg text-xs flex items-start gap-2.5 ${
-              testResult.ok
-                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
-                : "bg-rose-500/10 border border-rose-500/20 text-rose-300"
-            }`}
-          >
-            {testResult.ok ? (
-              <CheckCircle2 size={16} className="shrink-0 text-emerald-400 mt-0.5" />
-            ) : (
-              <AlertCircle size={16} className="shrink-0 text-rose-400 mt-0.5" />
-            )}
-            <div className="space-y-1">
-              <div className="font-medium">{testResult.message}</div>
-              {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
-            </div>
-          </div>
+          <Callout.Root color={testResult.ok ? "green" : "red"} size="1">
+            <Callout.Icon>
+              {testResult.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+            </Callout.Icon>
+            <Callout.Text>
+              <div className="space-y-1">
+                <div className="font-medium">{testResult.message}</div>
+                {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
+              </div>
+            </Callout.Text>
+          </Callout.Root>
         )}
 
         <div className="space-y-2 max-w-xl">
@@ -784,8 +771,8 @@ export function SettingsPage() {
               {renderKeySourceBadge(settings.crawl4aiApiTokenSource)}
               {settings.crawl4aiApiTokenSource === "db" && (
                 <button
-                  onClick={() => handleResetKey("crawl4aiApiKey")}
-                  className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1"
+                  onClick={() => setResetKeyTarget("crawl4aiApiKey")}
+                  className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
                   title="Khôi phục về token từ .env"
                 >
                   <RotateCcw size={11} />
@@ -795,27 +782,28 @@ export function SettingsPage() {
             </div>
           </div>
 
-          <div className="relative">
-            <Input
-              id="input-crawl4ai-token"
-              type={showCrawl4aiToken ? "text" : "password"}
-              placeholder={
-                settings.crawl4aiApiTokenMasked
-                  ? `Hiện tại: ${settings.crawl4aiApiTokenMasked} (để trống nếu không đổi)`
-                  : "Nhập Crawl4AI API Token"
-              }
-              value={crawl4aiApiToken}
-              onChange={(e) => setCrawl4aiApiToken(e.target.value)}
-              className="pr-10 font-mono"
-            />
-            <button
-              type="button"
-              onClick={() => setShowCrawl4aiToken(!showCrawl4aiToken)}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-            >
-              {showCrawl4aiToken ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
-          </div>
+          <TextField.Root
+            id="input-crawl4ai-token"
+            type={showCrawl4aiToken ? "text" : "password"}
+            placeholder={
+              settings.crawl4aiApiTokenMasked
+                ? `Hiện tại: ${settings.crawl4aiApiTokenMasked} (để trống nếu không đổi)`
+                : "Nhập Crawl4AI API Token"
+            }
+            value={crawl4aiApiToken}
+            onChange={(e) => setCrawl4aiApiToken(e.target.value)}
+            className="font-mono"
+          >
+            <TextField.Slot side="right">
+              <button
+                type="button"
+                onClick={() => setShowCrawl4aiToken(!showCrawl4aiToken)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                {showCrawl4aiToken ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </TextField.Slot>
+          </TextField.Root>
           <p className="text-[11px] text-slate-400">
             Lấy API Token tại bảng điều khiển{" "}
             <a
@@ -830,6 +818,19 @@ export function SettingsPage() {
           </p>
         </div>
       </div>
+
+      {/* Confirm Reset Key Dialog */}
+      <ConfirmDialog
+        open={resetKeyTarget !== null}
+        onOpenChange={(open) => !open && setResetKeyTarget(null)}
+        title="Khôi phục API Key về mặc định"
+        description="Bạn có chắc muốn xóa ghi đè database cho API Key này để quay về giá trị mặc định trong file .env?"
+        confirmText="Đặt lại"
+        cancelText="Hủy"
+        variant="destructive"
+        loading={updateSettingsMutation.isPending}
+        onConfirm={executeResetKey}
+      />
     </div>
   );
 }

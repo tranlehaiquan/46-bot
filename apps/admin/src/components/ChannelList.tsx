@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { Users, User, Search, CheckCircle2, XCircle, Copy, Check, Pencil, X, Loader2 } from "lucide-react";
 import type { Channel, ChannelStatus } from "../api";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
+import { Badge, Button } from "@radix-ui/themes";
 
 export function ChannelList({
   channels,
@@ -95,7 +94,7 @@ export function ChannelList({
       <div className="p-5 pb-3">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-bold text-white">Channels</h3>
-          <Badge variant="indigo">{channels.length}</Badge>
+          <Badge color="indigo" variant="surface" size="2">{channels.length}</Badge>
         </div>
 
         <div className="relative mb-3">
@@ -112,7 +111,7 @@ export function ChannelList({
         {/* Type Filters (All / Group / Private) */}
         <div className="flex gap-1 bg-black/25 p-1 rounded-xl mb-1.5">
           {([
-            { id: "all", label: "ALL", icon: null },
+            { id: "all", label: "ALL", icon: null, iconColor: "" },
             { id: "group", label: "GROUP", icon: Users, iconColor: "text-indigo-400" },
             { id: "private", label: "PRIVATE", icon: User, iconColor: "text-emerald-400" },
           ] as const).map(({ id, label, icon: TabIcon, iconColor }) => {
@@ -279,7 +278,13 @@ export function ChannelList({
                   </div>
 
                   {editingChatId !== c.chatId && (
-                    <Badge variant={c.status}>{c.status}</Badge>
+                    <Badge
+                      color={c.status === "active" ? "green" : c.status === "pending" ? "amber" : "red"}
+                      variant="surface"
+                      size="1"
+                    >
+                      {c.status}
+                    </Badge>
                   )}
                 </div>
 
@@ -302,25 +307,27 @@ export function ChannelList({
                 {c.status === "pending" && (
                   <div className="flex gap-1.5 mt-1 pt-2 border-t border-dashed border-white/[0.06]">
                     <Button
-                      variant="success"
-                      size="sm"
+                      color="green"
+                      variant="solid"
+                      size="1"
                       onClick={(e) => {
                         e.stopPropagation();
                         onUpdateStatus(c.chatId, "active");
                       }}
-                      className="flex-1 py-1 text-xs"
+                      className="flex-1 cursor-pointer"
                     >
                       <CheckCircle2 size={13} />
                       <span>Approve</span>
                     </Button>
                     <Button
-                      variant="destructive"
-                      size="sm"
+                      color="red"
+                      variant="soft"
+                      size="1"
                       onClick={(e) => {
                         e.stopPropagation();
                         onUpdateStatus(c.chatId, "disabled");
                       }}
-                      className="py-1 text-xs"
+                      className="cursor-pointer"
                     >
                       <XCircle size={13} />
                       <span>Block</span>

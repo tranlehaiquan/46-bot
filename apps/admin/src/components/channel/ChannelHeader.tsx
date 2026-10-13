@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Users, User, RefreshCw, Pencil, Check, X, Loader2 } from "lucide-react";
+import { Button, Select } from "@radix-ui/themes";
 import type { Channel, ChannelStatus } from "../../api";
-import { Button } from "../ui/button";
 
 interface ChannelHeaderProps {
   channel: Channel;
@@ -127,25 +127,32 @@ export function ChannelHeader({
       {/* Status & Refresh Controls */}
       <div className="flex items-center gap-3">
         <span className="text-sm text-slate-300 font-medium">Status:</span>
-        <select
+        <Select.Root
           value={channel.status}
-          onChange={(e) => onStatusChange(e.target.value as ChannelStatus)}
-          className={`form-input w-auto py-1.5 px-3 font-semibold text-sm ${
-            channel.status === "active"
-              ? "text-emerald-400"
-              : channel.status === "pending"
-              ? "text-amber-400"
-              : "text-rose-400"
-          }`}
+          onValueChange={(val) => onStatusChange(val as ChannelStatus)}
+          size="2"
         >
-          <option value="active">Active</option>
-          <option value="pending">Pending</option>
-          <option value="disabled">Disabled</option>
-        </select>
+          <Select.Trigger
+            color={
+              channel.status === "active"
+                ? "green"
+                : channel.status === "pending"
+                ? "amber"
+                : "red"
+            }
+          />
+          <Select.Content position="popper">
+            <Select.Item value="active">Active</Select.Item>
+            <Select.Item value="pending">Pending</Select.Item>
+            <Select.Item value="disabled">Disabled</Select.Item>
+          </Select.Content>
+        </Select.Root>
 
         <Button
-          variant="secondary"
-          size="sm"
+          variant="soft"
+          color="gray"
+          size="2"
+          className="cursor-pointer"
           onClick={onRefresh}
           title="Refresh data"
         >

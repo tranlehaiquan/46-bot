@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { Lock, ArrowRight, ShieldCheck, AlertCircle } from "lucide-react";
+import { Button, TextField, Callout } from "@radix-ui/themes";
 import { api } from "../api";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 
 export function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [password, setPassword] = useState("");
@@ -40,30 +39,34 @@ export function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
         </p>
 
         {error && (
-          <div className="flex items-center gap-2 p-3 px-4 bg-rose-500/15 border border-rose-500/30 rounded-lg text-rose-400 text-sm mb-6 text-left">
-            <AlertCircle size={16} className="shrink-0" />
-            <span>{error}</span>
-          </div>
+          <Callout.Root color="red" size="1" className="mb-6 text-left">
+            <Callout.Icon>
+              <AlertCircle size={16} />
+            </Callout.Icon>
+            <Callout.Text>{error}</Callout.Text>
+          </Callout.Root>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="relative mb-6">
-            <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-            <Input
-              type="password"
-              placeholder="Enter ADMIN_PASSWORD..."
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="pl-11"
-              autoFocus
-              required
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <TextField.Root
+            type="password"
+            placeholder="Enter ADMIN_PASSWORD..."
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            size="3"
+            autoFocus
+            required
+          >
+            <TextField.Slot>
+              <Lock size={16} className="text-slate-400" />
+            </TextField.Slot>
+          </TextField.Root>
 
           <Button
             type="submit"
-            className="w-full py-3"
+            size="3"
             loading={loading}
+            className="w-full cursor-pointer"
           >
             <span>Enter Dashboard</span>
             {!loading && <ArrowRight size={16} />}

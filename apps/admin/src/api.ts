@@ -124,9 +124,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new Error("Phiên làm việc hết hạn hoặc mật khẩu không đúng.");
   }
 
-  const data = await response.json();
+  const contentType = response.headers.get("content-type") || "";
+  let data: any;
+
+  if (contentType.includes("application/json")) {
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+  } else {
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(text || `Yêu cầu thất bại với mã lỗi HTTP ${response.status}`);
+    }
+    return text as unknown as T;
+  }
+
   if (!response.ok) {
-    throw new Error(data.error || "Yêu cầu thất bại");
+    throw new Error(data?.error || `Yêu cầu thất bại với mã lỗi HTTP ${response.status}`);
   }
   return data as T;
 }

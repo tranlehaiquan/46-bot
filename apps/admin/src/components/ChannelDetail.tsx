@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { MessageSquare, Calendar, Brain, Search } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Tabs } from "@radix-ui/themes";
+import { toast } from "sonner";
 import type { Channel, ChannelStatus } from "../api";
 import { ChannelHeader } from "./channel/ChannelHeader";
 import { ChannelMessagesTab } from "./channel/ChannelMessagesTab";
 import { ChannelRemindersTab } from "./channel/ChannelRemindersTab";
 import { ChannelMemoryTab } from "./channel/ChannelMemoryTab";
 import { ChannelLookupsTab } from "./channel/ChannelLookupsTab";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import {
   useChannelMessages,
   useChannelEvents,
@@ -25,7 +25,6 @@ export function ChannelDetail({
   channel: Channel;
   onChannelUpdated: (updated: Channel) => void;
 }) {
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"messages" | "reminders" | "memory" | "lookups">("messages");
 
   // Calendar year / month for the reminders & calendar tab
@@ -65,6 +64,7 @@ export function ChannelDetail({
       lookupsQuery.refetch(),
       calEventsQuery.refetch(),
     ]);
+    toast.success("Refreshed channel data");
   };
 
   const handleStatusChange = async (newStatus: ChannelStatus) => {
@@ -74,8 +74,9 @@ export function ChannelDetail({
         updates: { status: newStatus },
       });
       onChannelUpdated(updated);
+      toast.success(`Channel status updated to ${newStatus}`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update channel status");
+      toast.error(err instanceof Error ? err.message : "Failed to update channel status");
     }
   };
 
@@ -104,8 +105,9 @@ export function ChannelDetail({
         updates: { name: newName },
       });
       onChannelUpdated(updated);
+      toast.success("Channel renamed successfully");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to rename channel");
+      toast.error(err instanceof Error ? err.message : "Failed to rename channel");
       throw err;
     }
   };
@@ -120,38 +122,38 @@ export function ChannelDetail({
         onRename={handleRename}
       />
 
-      <Tabs
+      <Tabs.Root
         value={activeTab}
         onValueChange={(val) => setActiveTab(val as typeof activeTab)}
         className="flex-1 flex flex-col overflow-hidden"
       >
-        <TabsList>
-          <TabsTrigger value="messages">
+        <Tabs.List size="2" className="px-4 pt-2">
+          <Tabs.Trigger value="messages" className="flex items-center gap-1.5 cursor-pointer">
             <MessageSquare size={16} />
             <span>Messages ({messages.length})</span>
-          </TabsTrigger>
+          </Tabs.Trigger>
 
-          <TabsTrigger value="reminders">
+          <Tabs.Trigger value="reminders" className="flex items-center gap-1.5 cursor-pointer">
             <Calendar size={16} />
             <span>Reminders & Events ({events.length})</span>
-          </TabsTrigger>
+          </Tabs.Trigger>
 
-          <TabsTrigger value="memory">
+          <Tabs.Trigger value="memory" className="flex items-center gap-1.5 cursor-pointer">
             <Brain size={16} />
             <span>Memory & Stories ({facts.length + stories.length})</span>
-          </TabsTrigger>
+          </Tabs.Trigger>
 
-          <TabsTrigger value="lookups">
+          <Tabs.Trigger value="lookups" className="flex items-center gap-1.5 cursor-pointer">
             <Search size={16} />
             <span>Lookups ({lookups.length})</span>
-          </TabsTrigger>
-        </TabsList>
+          </Tabs.Trigger>
+        </Tabs.List>
 
-        <TabsContent value="messages" className="flex flex-col">
+        <Tabs.Content value="messages" className="flex-1 flex flex-col overflow-hidden">
           <ChannelMessagesTab messages={messages} />
-        </TabsContent>
+        </Tabs.Content>
 
-        <TabsContent value="reminders" className="flex flex-col">
+        <Tabs.Content value="reminders" className="flex-1 flex flex-col overflow-hidden">
           <ChannelRemindersTab
             chatId={channel.chatId}
             events={events}
@@ -162,24 +164,24 @@ export function ChannelDetail({
             onPrevMonth={handleCalPrevMonth}
             onNextMonth={handleCalNextMonth}
           />
-        </TabsContent>
+        </Tabs.Content>
 
-        <TabsContent value="memory" className="flex flex-col">
+        <Tabs.Content value="memory" className="flex-1 flex flex-col overflow-hidden">
           <ChannelMemoryTab
             chatId={channel.chatId}
             facts={facts}
             stories={stories}
           />
-        </TabsContent>
+        </Tabs.Content>
 
-        <TabsContent value="lookups" className="flex flex-col">
+        <Tabs.Content value="lookups" className="flex-1 flex flex-col overflow-hidden">
           <ChannelLookupsTab
             chatId={channel.chatId}
             lookups={lookups}
             isLoading={lookupsQuery.isLoading}
           />
-        </TabsContent>
-      </Tabs>
+        </Tabs.Content>
+      </Tabs.Root>
     </div>
   );
 }

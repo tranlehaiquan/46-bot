@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { Search, Pause, Play, Trash2, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { Button, Badge } from "@radix-ui/themes";
+import { toast } from "sonner";
 import type { ScheduledLookup } from "../../api";
-import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
-import { ConfirmDialog } from "../ui/confirm-dialog";
+import { ConfirmDialog } from "../ConfirmDialog";
 import { useUpdateLookup, useDeleteLookup } from "../../hooks/useAdminQueries";
 
 interface ChannelLookupsTabProps {
@@ -48,8 +48,9 @@ export function ChannelLookupsTab({
         id: lookup.id,
         updates: { active: !lookup.active },
       });
+      toast.success(lookup.active ? "Đã tạm dừng lịch tra cứu" : "Đã kích hoạt lịch tra cứu");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update lookup");
+      toast.error(err instanceof Error ? err.message : "Failed to update lookup");
     }
   };
 
@@ -57,8 +58,9 @@ export function ChannelLookupsTab({
     if (!lookupToDelete) return;
     try {
       await deleteLookupMutation.mutateAsync(lookupToDelete);
+      toast.success("Đã xoá lịch tra cứu");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete lookup");
+      toast.error(err instanceof Error ? err.message : "Failed to delete lookup");
     } finally {
       setLookupToDelete(null);
     }
@@ -70,7 +72,7 @@ export function ChannelLookupsTab({
         <div className="flex items-center gap-2">
           <Search size={18} className="text-indigo-400" />
           <h3 className="text-lg font-bold text-white">Scheduled Lookups</h3>
-          <Badge variant="indigo">{lookups.length}</Badge>
+          <Badge color="indigo" variant="surface" size="2">{lookups.length}</Badge>
         </div>
       </div>
 
@@ -99,7 +101,11 @@ export function ChannelLookupsTab({
                 <div>
                   {/* Top row: Status badge & Recurrence */}
                   <div className="flex justify-between items-center gap-2 mb-2.5">
-                    <Badge variant={item.active ? "active" : "pending"}>
+                    <Badge
+                      color={item.active ? "green" : "amber"}
+                      variant="surface"
+                      size="1"
+                    >
                       {item.active ? "Active" : "Paused"}
                     </Badge>
                     <span className="text-xs text-slate-400 flex items-center gap-1 font-mono">
@@ -119,15 +125,15 @@ export function ChannelLookupsTab({
                       <span>Lần chạy gần nhất:</span>
                       {item.lastRun ? (
                         item.lastRun.status === "sent" ? (
-                          <Badge variant="active" className="text-[11px] py-0.5">
+                          <Badge color="green" variant="surface" size="1">
                             <CheckCircle2 size={11} className="mr-1 inline" /> Sent ({item.lastRun.fireDate})
                           </Badge>
                         ) : item.lastRun.status === "running" ? (
-                          <Badge variant="pending" className="text-[11px] py-0.5">
+                          <Badge color="amber" variant="surface" size="1">
                             <Clock size={11} className="mr-1 inline" /> Running (lần {item.lastRun.attemptCount})
                           </Badge>
                         ) : (
-                          <Badge variant="disabled" className="text-[11px] py-0.5">
+                          <Badge color="red" variant="surface" size="1">
                             <AlertCircle size={11} className="mr-1 inline" /> Failed ({item.lastRun.fireDate})
                           </Badge>
                         )
@@ -147,11 +153,12 @@ export function ChannelLookupsTab({
                 {/* Bottom actions */}
                 <div className="flex justify-end items-center gap-2 pt-2 border-t border-white/[0.04]">
                   <Button
-                    variant="secondary"
-                    size="sm"
+                    variant="soft"
+                    color={item.active ? "amber" : "green"}
+                    size="1"
                     loading={isUpdating}
                     onClick={() => handleToggle(item)}
-                    className={item.active ? "text-amber-400 hover:text-amber-300" : "text-emerald-400 hover:text-emerald-300"}
+                    className="cursor-pointer"
                   >
                     {item.active ? (
                       <>
@@ -167,9 +174,11 @@ export function ChannelLookupsTab({
                   </Button>
 
                   <Button
-                    variant="destructive"
-                    size="sm"
+                    variant="soft"
+                    color="red"
+                    size="1"
                     onClick={() => setLookupToDelete(item.id)}
+                    className="cursor-pointer"
                   >
                     <Trash2 size={13} />
                     <span>Xoá</span>

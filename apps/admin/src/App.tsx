@@ -9,7 +9,8 @@ import { ChannelDetail } from "./components/ChannelDetail";
 import { CalendarPage } from "./components/CalendarPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { MessageSquareOff, AlertCircle } from "lucide-react";
-import { Button } from "./components/ui/button";
+import { Button } from "@radix-ui/themes";
+import { toast } from "sonner";
 import { useChannels, useUpdateChannel } from "./hooks/useAdminQueries";
 
 const queryClient = new QueryClient({
@@ -106,7 +107,7 @@ function AdminApp() {
         setSelectedChannel(updated);
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update channel status");
+      toast.error(err instanceof Error ? err.message : "Failed to update channel status");
     }
   };
 
@@ -120,7 +121,7 @@ function AdminApp() {
         setSelectedChannel(updated);
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to rename channel");
+      toast.error(err instanceof Error ? err.message : "Failed to rename channel");
       throw err;
     }
   };
@@ -177,7 +178,8 @@ function AdminApp() {
                 </p>
                 {channels.length > 0 && (
                   <Button
-                    variant="secondary"
+                    variant="soft"
+                    color="gray"
                     onClick={() => handleSelectChannel(channels[0])}
                     className="mt-2"
                   >

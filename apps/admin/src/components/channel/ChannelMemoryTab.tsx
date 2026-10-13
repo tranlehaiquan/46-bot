@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { Sparkles, BookOpen, Plus, Trash2, X } from "lucide-react";
+import { Button, TextField, TextArea } from "@radix-ui/themes";
+import { toast } from "sonner";
 import type { MemoryFact, MemoryStory } from "../../api";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Textarea } from "../ui/textarea";
-import { ConfirmDialog } from "../ui/confirm-dialog";
+import { ConfirmDialog } from "../ConfirmDialog";
 import {
   useCreateFact,
   useDeleteFact,
@@ -51,8 +50,9 @@ export function ChannelMemoryTab({
       await createFactMutation.mutateAsync(factForm);
       setShowFactForm(false);
       setFactForm({ subject: "", fact: "" });
+      toast.success("Đã lưu sự kiện ghi nhớ");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to save fact");
+      toast.error(err instanceof Error ? err.message : "Failed to save fact");
     }
   };
 
@@ -63,8 +63,9 @@ export function ChannelMemoryTab({
       await createStoryMutation.mutateAsync(storyForm);
       setShowStoryForm(false);
       setStoryForm({ title: "", story: "", people: "", happenedOn: "" });
+      toast.success("Đã lưu câu chuyện kỷ niệm");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to save story");
+      toast.error(err instanceof Error ? err.message : "Failed to save story");
     }
   };
 
@@ -72,8 +73,9 @@ export function ChannelMemoryTab({
     if (!factToDelete) return;
     try {
       await deleteFactMutation.mutateAsync(factToDelete);
+      toast.success("Đã xoá ghi nhớ");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete fact");
+      toast.error(err instanceof Error ? err.message : "Failed to delete fact");
     } finally {
       setFactToDelete(null);
     }
@@ -83,8 +85,9 @@ export function ChannelMemoryTab({
     if (!storyToDelete) return;
     try {
       await deleteStoryMutation.mutateAsync(storyToDelete);
+      toast.success("Đã xoá câu chuyện kỷ niệm");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete story");
+      toast.error(err instanceof Error ? err.message : "Failed to delete story");
     } finally {
       setStoryToDelete(null);
     }
@@ -101,8 +104,10 @@ export function ChannelMemoryTab({
             <span className="text-xs text-slate-400">({facts.length})</span>
           </div>
           <Button
-            size="sm"
-            variant={showFactForm ? "secondary" : "default"}
+            size="2"
+            variant={showFactForm ? "soft" : "solid"}
+            color={showFactForm ? "gray" : "indigo"}
+            className="cursor-pointer"
             onClick={() => setShowFactForm(!showFactForm)}
           >
             {showFactForm ? <X size={14} /> : <Plus size={14} />}
@@ -115,35 +120,40 @@ export function ChannelMemoryTab({
             <div className="grid grid-cols-[1fr_2fr] gap-3.5 mb-4">
               <div>
                 <label className="text-xs text-slate-400 block mb-1">Subject *</label>
-                <Input
+                <TextField.Root
                   required
                   placeholder="e.g. Mom, Dad, Alex..."
                   value={factForm.subject}
                   onChange={(e) => setFactForm({ ...factForm, subject: e.target.value })}
+                  size="2"
                 />
               </div>
               <div>
                 <label className="text-xs text-slate-400 block mb-1">Fact *</label>
-                <Input
+                <TextField.Root
                   required
                   placeholder="e.g. Likes vegetarian food on 15th, allergic to shrimp..."
                   value={factForm.fact}
                   onChange={(e) => setFactForm({ ...factForm, fact: e.target.value })}
+                  size="2"
                 />
               </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
-                variant="secondary"
-                size="sm"
+                variant="soft"
+                color="gray"
+                size="2"
+                className="cursor-pointer"
                 onClick={() => setShowFactForm(false)}
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                size="sm"
+                size="2"
+                className="cursor-pointer"
                 loading={createFactMutation.isPending}
               >
                 Save Fact
@@ -164,9 +174,10 @@ export function ChannelMemoryTab({
                 </div>
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  color="gray"
+                  size="1"
                   onClick={() => setFactToDelete(f.id)}
-                  className="text-slate-400 hover:text-rose-400"
+                  className="text-slate-400 hover:text-rose-400 cursor-pointer"
                   title="Delete"
                 >
                   <Trash2 size={14} />
@@ -186,8 +197,10 @@ export function ChannelMemoryTab({
             <span className="text-xs text-slate-400">({stories.length})</span>
           </div>
           <Button
-            size="sm"
-            variant={showStoryForm ? "secondary" : "default"}
+            size="2"
+            variant={showStoryForm ? "soft" : "solid"}
+            color={showStoryForm ? "gray" : "green"}
+            className="cursor-pointer"
             onClick={() => setShowStoryForm(!showStoryForm)}
           >
             {showStoryForm ? <X size={14} /> : <Plus size={14} />}
@@ -200,46 +213,53 @@ export function ChannelMemoryTab({
             <div className="grid grid-cols-[2fr_1fr] gap-3.5 mb-3.5">
               <div>
                 <label className="text-xs text-slate-400 block mb-1">Story Title *</label>
-                <Input
+                <TextField.Root
                   required
                   placeholder="e.g. Summer vacation trip to Da Nang 2024..."
                   value={storyForm.title}
                   onChange={(e) => setStoryForm({ ...storyForm, title: e.target.value })}
+                  size="2"
                 />
               </div>
               <div>
                 <label className="text-xs text-slate-400 block mb-1">People Involved</label>
-                <Input
+                <TextField.Root
                   placeholder="Dad, Mom, Alex..."
                   value={storyForm.people}
                   onChange={(e) => setStoryForm({ ...storyForm, people: e.target.value })}
+                  size="2"
                 />
               </div>
             </div>
 
             <div className="mb-4">
               <label className="text-xs text-slate-400 block mb-1">Story Content *</label>
-              <Textarea
+              <TextArea
                 required
                 rows={3}
                 placeholder="Recount the memorable event or story..."
                 value={storyForm.story}
                 onChange={(e) => setStoryForm({ ...storyForm, story: e.target.value })}
+                size="2"
               />
             </div>
 
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
-                variant="secondary"
-                size="sm"
+                variant="soft"
+                color="gray"
+                size="2"
+                className="cursor-pointer"
                 onClick={() => setShowStoryForm(false)}
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                size="sm"
+                size="2"
+                color="green"
+                className="cursor-pointer"
                 loading={createStoryMutation.isPending}
               >
                 Save Story
@@ -258,9 +278,10 @@ export function ChannelMemoryTab({
                   <h4 className="font-bold text-base text-emerald-400">{s.title}</h4>
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    color="gray"
+                    size="1"
                     onClick={() => setStoryToDelete(s.id)}
-                    className="text-slate-400 hover:text-rose-400"
+                    className="text-slate-400 hover:text-rose-400 cursor-pointer"
                     title="Delete"
                   >
                     <Trash2 size={14} />

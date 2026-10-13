@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { CalendarDays, Filter } from "lucide-react";
+import { Switch, Select } from "@radix-ui/themes";
 import { CalendarMonthGrid } from "./CalendarMonthGrid";
 import type { Channel } from "../api";
-import { Switch } from "./ui/switch";
 import { useHolidays, useCalendarEvents } from "../hooks/useAdminQueries";
 
 export function CalendarPage({ channels }: { channels: Channel[] }) {
@@ -70,6 +70,7 @@ export function CalendarPage({ channels }: { channels: Channel[] }) {
               id="vietnam-holidays-toggle"
               checked={showHolidays}
               onCheckedChange={setShowHolidays}
+              size="2"
             />
             <label
               htmlFor="vietnam-holidays-toggle"
@@ -82,18 +83,21 @@ export function CalendarPage({ channels }: { channels: Channel[] }) {
           {/* Channel filter */}
           <div className="flex items-center gap-1.5">
             <Filter size={14} className="text-slate-400" />
-            <select
+            <Select.Root
               value={channelFilter}
-              onChange={(e) => setChannelFilter(e.target.value)}
-              className="form-input w-auto text-xs py-1.5 px-3"
+              onValueChange={setChannelFilter}
+              size="1"
             >
-              <option value="all">All Channels</option>
-              {channels.map((c) => (
-                <option key={c.chatId} value={c.chatId}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              <Select.Trigger />
+              <Select.Content position="popper">
+                <Select.Item value="all">All Channels</Select.Item>
+                {channels.map((c) => (
+                  <Select.Item key={c.chatId} value={c.chatId}>
+                    {c.name}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Root>
           </div>
 
           {loading && (

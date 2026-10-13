@@ -1,15 +1,8 @@
 import React, { useState } from "react";
 import { Download, Database, FileJson, Loader2, CheckCircle2, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Dialog, Button, Callout } from "@radix-ui/themes";
+import { toast } from "sonner";
 import { api } from "../api";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "./ui/dialog";
-import { Button } from "./ui/button";
 
 export function BackupExportDialog() {
   const [open, setOpen] = useState(false);
@@ -24,51 +17,61 @@ export function BackupExportDialog() {
     try {
       await api.downloadExport(format);
       setSuccessFormat(format);
+      toast.success(
+        format === "db"
+          ? "Đã tải xuống SQLite Database snapshot thành công!"
+          : "Đã tải xuống Structured JSON export thành công!"
+      );
       setTimeout(() => setSuccessFormat(null), 4000);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Xuất dữ liệu thất bại");
+      const msg = err instanceof Error ? err.message : "Xuất dữ liệu thất bại";
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setDownloadingFormat(null);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Trigger>
         <Button
-          variant="secondary"
-          size="sm"
-          className="gap-2 border-indigo-500/30 hover:border-indigo-500/50 hover:bg-indigo-500/10 text-slate-200"
+          variant="soft"
+          color="gray"
+          size="2"
+          className="gap-2 cursor-pointer border border-indigo-500/30 hover:border-indigo-500/50 hover:bg-indigo-500/10 text-slate-200"
           title="Backup & Export Data"
         >
           <Download size={14} className="text-indigo-400" />
           <span>Backup</span>
         </Button>
-      </DialogTrigger>
+      </Dialog.Trigger>
 
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
-              <Download size={18} />
-            </div>
-            <div>
-              <DialogTitle>Backup & Export Data</DialogTitle>
-              <DialogDescription className="mt-0.5">
-                Download an exact database snapshot or structured JSON data for safekeeping.
-              </DialogDescription>
-            </div>
+      <Dialog.Content maxWidth="560px">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+            <Download size={18} />
           </div>
-        </DialogHeader>
+          <div>
+            <Dialog.Title size="4" className="font-semibold text-white">
+              Backup & Export Data
+            </Dialog.Title>
+            <Dialog.Description size="2" className="text-slate-400 mt-0.5">
+              Download an exact database snapshot or structured JSON data for safekeeping.
+            </Dialog.Description>
+          </div>
+        </div>
 
         {errorMessage && (
-          <div className="flex items-center gap-2 p-3 text-sm bg-rose-500/15 border border-rose-500/30 text-rose-300 rounded-xl">
-            <AlertTriangle size={16} className="shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
+          <Callout.Root color="red" size="1" className="my-3">
+            <Callout.Icon>
+              <AlertTriangle size={16} />
+            </Callout.Icon>
+            <Callout.Text>{errorMessage}</Callout.Text>
+          </Callout.Root>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 my-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 my-4">
           {/* SQLite Card */}
           <div className="flex flex-col justify-between p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-emerald-500/30 hover:bg-white/[0.05] transition-all">
             <div>
@@ -82,15 +85,16 @@ export function BackupExportDialog() {
               </div>
               <h4 className="font-semibold text-white text-sm">SQLite Database Snapshot</h4>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Complete binary snapshot (<code className="text-emerald-300">.sqlite</code>) captured with flushed WAL. Ideal for full server migration and total recovery.
+                Complete binary snapshot (<code className="text-emerald-300 font-mono">.sqlite</code>) captured with flushed WAL. Ideal for full server migration and total recovery.
               </p>
             </div>
 
             <div className="mt-4 pt-3 border-t border-white/[0.06]">
               <Button
                 variant="outline"
-                size="sm"
-                className="w-full gap-2 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-200"
+                color="green"
+                size="2"
+                className="w-full gap-2 cursor-pointer"
                 disabled={downloadingFormat !== null}
                 onClick={() => handleDownload("db")}
               >
@@ -127,15 +131,16 @@ export function BackupExportDialog() {
               </div>
               <h4 className="font-semibold text-white text-sm">Structured JSON Export</h4>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Structured export (<code className="text-indigo-300">.json</code>) containing channels, events, memories, memory book stories, lists, and lookups.
+                Structured export (<code className="text-indigo-300 font-mono">.json</code>) containing channels, events, memories, memory book stories, lists, and lookups.
               </p>
             </div>
 
             <div className="mt-4 pt-3 border-t border-white/[0.06]">
               <Button
                 variant="outline"
-                size="sm"
-                className="w-full gap-2 border-indigo-500/30 hover:bg-indigo-500/20 text-indigo-200"
+                color="indigo"
+                size="2"
+                className="w-full gap-2 cursor-pointer"
                 disabled={downloadingFormat !== null}
                 onClick={() => handleDownload("json")}
               >
@@ -164,7 +169,7 @@ export function BackupExportDialog() {
           <ShieldCheck size={14} className="text-indigo-400 shrink-0" />
           <span>Exports are generated live from the database without downtime or interruption to ongoing bot chats.</span>
         </div>
-      </DialogContent>
-    </Dialog>
+      </Dialog.Content>
+    </Dialog.Root>
   );
 }

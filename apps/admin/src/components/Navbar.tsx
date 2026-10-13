@@ -1,7 +1,6 @@
 import { Bot, LogOut, Radio, Clock, CalendarDays, MessageSquare, Sliders } from "lucide-react";
 import { api, type Channel } from "../api";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
+import { Badge, Button } from "@radix-ui/themes";
 import { BackupExportDialog } from "./BackupExportDialog";
 
 export function Navbar({
@@ -69,12 +68,12 @@ export function Navbar({
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 mr-1">
           {pendingCount > 0 && (
-            <Badge variant="pending" title="Channels awaiting approval">
+            <Badge color="amber" variant="surface" size="2" title="Channels awaiting approval">
               <Clock size={12} />
               <span>{pendingCount} Pending</span>
             </Badge>
           )}
-          <Badge variant="active" title="Active channels">
+          <Badge color="green" variant="surface" size="2" title="Active channels">
             <Radio size={12} />
             <span>{activeCount} Active</span>
           </Badge>
@@ -83,8 +82,10 @@ export function Navbar({
         <BackupExportDialog />
 
         <Button
-          variant="secondary"
-          size="sm"
+          variant="soft"
+          color="gray"
+          size="2"
+          className="cursor-pointer"
           onClick={() => {
             api.logout();
             onLogout();
