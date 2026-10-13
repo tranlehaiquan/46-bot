@@ -6,4 +6,5 @@ export * from "./memory.js";
 export * from "./weather.js";
 export * from "./lookups.js";
 export * from "./lottery.js";
+export * from "./crawl4ai.js";
 

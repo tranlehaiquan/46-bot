@@ -264,3 +264,9 @@ export function useTestSettings() {
   });
 }
 
+export function useTestCrawl4Ai() {
+  return useMutation({
+    mutationFn: (token?: string) => api.testCrawl4AiSettings(token),
+  });
+}
+

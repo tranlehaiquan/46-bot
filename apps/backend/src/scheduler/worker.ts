@@ -7,6 +7,7 @@ import { detectPromptInjection } from "../llm/prompt-security.js";
 import { createHolidayTools } from "../tools/holidays.js";
 import { createWeatherTool } from "../tools/weather.js";
 import { createWebSearchTool } from "../tools/web-search.js";
+import { createCrawl4AiTool } from "../tools/crawl4ai.js";
 import { splitText } from "../utils/split-text.js";
 import {
   formatEventReminder,
@@ -193,6 +194,11 @@ export async function processSingleLookup(
   if (config.tavilyApiKey) {
     const webSearchTool = createWebSearchTool(config.tavilyApiKey);
     tools.web_search = webSearchTool.web_search;
+  }
+
+  if (config.crawl4aiApiToken) {
+    const crawl4AiTool = createCrawl4AiTool(config.crawl4aiApiToken);
+    tools.scrape_url = crawl4AiTool.scrape_url;
   }
 
   try {

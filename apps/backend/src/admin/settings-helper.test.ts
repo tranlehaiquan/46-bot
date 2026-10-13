@@ -8,6 +8,7 @@ import {
   resolveEffectiveSettings,
   toMaskedSettings,
   DynamicLlmClient,
+  testCrawl4AiConnection,
 } from "./settings-helper.js";
 import type { AppConfig } from "../config.js";
 
@@ -60,6 +61,7 @@ describe("Settings Helper", () => {
       assert.equal(masked1.geminiApiKeySource, "env");
       assert.equal(masked1.deepseekApiKeySource, "none");
       assert.equal(masked1.tavilyApiKeySource, "env");
+      assert.equal(masked1.crawl4aiApiTokenSource, "none");
 
       // 2. Override with DB settings
       await repo.setMany({
@@ -67,6 +69,7 @@ describe("Settings Helper", () => {
         deepseek_api_key: "sk-my-deepseek-key-9999",
         deepseek_model: "deepseek-reasoner",
         tavily_api_key: "tvly-custom-key-8888",
+        crawl4ai_api_token: "c4ai-db-token-7777",
       });
 
       const res2 = await resolveEffectiveSettings(repo, config);
@@ -74,15 +77,45 @@ describe("Settings Helper", () => {
       assert.equal(res2.effective.deepseekApiKey, "sk-my-deepseek-key-9999");
       assert.equal(res2.effective.deepseekModel, "deepseek-reasoner");
       assert.equal(res2.effective.tavilyApiKey, "tvly-custom-key-8888");
+      assert.equal(res2.effective.crawl4aiApiToken, "c4ai-db-token-7777");
 
       const masked2 = toMaskedSettings(res2.effective, res2.dbEntries, config);
       assert.equal(masked2.llmProvider, "deepseek");
       assert.equal(masked2.deepseekApiKeySource, "db");
       assert.equal(masked2.deepseekModel, "deepseek-reasoner");
       assert.equal(masked2.tavilyApiKeySource, "db");
+      assert.equal(masked2.crawl4aiApiTokenSource, "db");
+      assert.equal(masked2.hasCrawl4aiApiToken, true);
+      assert.match(masked2.crawl4aiApiTokenMasked!, /c4ai\.\.\.7777/);
     } finally {
       closeDatabase(db);
     }
+  });
+
+  it("testCrawl4AiConnection validates token and handles success and errors", async () => {
+    // 1. Missing token
+    const emptyRes = await testCrawl4AiConnection("");
+    assert.equal(emptyRes.success, false);
+
+    // 2. Successful remote response
+    const fakeSuccessFetch: typeof fetch = async (input, init) => {
+      assert.equal(String(input), "https://api.crawl4ai.com/scrape");
+      assert.equal(init?.method, "POST");
+      const headers = init?.headers as Record<string, string>;
+      assert.equal(headers["Authorization"], "Bearer test-key-123");
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    };
+    const successRes = await testCrawl4AiConnection("test-key-123", fakeSuccessFetch);
+    assert.equal(successRes.success, true);
+    assert.match(successRes.message!, /thành công/);
+
+    // 3. Failed remote response
+    const fakeFailFetch: typeof fetch = async () => {
+      return new Response("Unauthorized", { status: 401 });
+    };
+    const failRes = await testCrawl4AiConnection("bad-token", fakeFailFetch);
+    assert.equal(failRes.success, false);
+    assert.match(failRes.error!, /401/);
   });
 
   it("DynamicLlmClient delegates calls and allows updating client", async () => {

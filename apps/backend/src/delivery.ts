@@ -22,6 +22,7 @@ import { createMemoryTools } from "./tools/memory.js";
 import { createWeatherTool } from "./tools/weather.js";
 import { createLotteryTool } from "./tools/lottery.js";
 import { createWebSearchTool } from "./tools/web-search.js";
+import { createCrawl4AiTool } from "./tools/crawl4ai.js";
 import { createWordChainTools } from "./tools/word-chain.js";
 import { createGroupMemberTools } from "./tools/group-members.js";
 import type { WordChainRepository } from "./db/repositories/word-chain.js";
@@ -433,6 +434,13 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       ? createWebSearchTool(effectiveTavilyKey)
       : undefined;
 
+    const effectiveCrawl4AiToken =
+      (settingsRepo ? await settingsRepo.get("crawl4ai_api_token") : null) || config.crawl4aiApiToken;
+
+    const crawlTools = effectiveCrawl4AiToken
+      ? createCrawl4AiTool(effectiveCrawl4AiToken)
+      : undefined;
+
     const memoryTools = memoryRepo
       ? createMemoryTools(memoryRepo, {
         chatId: message.chatId,
@@ -474,6 +482,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       eventTools ||
       holidayTools ||
       searchTools ||
+      crawlTools ||
       memoryTools ||
       weatherTools ||
       lookupTools ||
@@ -485,6 +494,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
             ...eventTools,
             ...holidayTools,
             ...searchTools,
+            ...crawlTools,
             ...memoryTools,
             ...weatherTools,
             ...lookupTools,
