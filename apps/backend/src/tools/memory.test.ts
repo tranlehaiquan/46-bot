@@ -224,4 +224,53 @@ describe("Memory tools", () => {
       closeDatabase(db);
     }
   });
+
+  it("executes memory_search tool returning ranked multi-source results", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      await migrate(db);
+      const repo = createMemoryRepository(db);
+      const tools = createMemoryTools(repo, { chatId: "chat-1", senderName: "Bố" });
+
+      await tools.remember.execute!(
+        { subject: "Bố", fact: "Thích uống cà phê đen", category: "core" },
+        {} as any,
+      );
+      await tools.memory_book_add.execute!(
+        {
+          title: "Kỷ niệm đi Đà Lạt",
+          story: "Cả nhà cùng ghé quán cà phê bên sườn đồi ngắm hoàng hôn",
+          people: "Bố, Mẹ, Bé Na",
+        },
+        {} as any,
+      );
+
+      // Search all
+      const searchRes = (await tools.memory_search.execute!(
+        { query: "cà phê" },
+        {} as any,
+      )) as any;
+      assert.equal(searchRes.success, true);
+      assert.equal(searchRes.count, 2);
+      assert.ok(searchRes.results.some((r: any) => r.type === "fact"));
+      assert.ok(searchRes.results.some((r: any) => r.type === "story"));
+
+      // Search stories only
+      const storiesOnly = (await tools.memory_search.execute!(
+        { query: "cà phê", type: "stories" },
+        {} as any,
+      )) as any;
+      assert.equal(storiesOnly.count, 1);
+      assert.equal(storiesOnly.results[0].type, "story");
+
+      // Search with empty results
+      const emptyRes = (await tools.memory_search.execute!(
+        { query: "bơi lội bóng đá" },
+        {} as any,
+      )) as any;
+      assert.equal(emptyRes.count, 0);
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });

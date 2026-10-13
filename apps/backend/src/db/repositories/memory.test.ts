@@ -186,4 +186,47 @@ describe("MemoryRepository", () => {
       closeDatabase(db);
     }
   });
+
+  it("searches across both facts and stories using searchAll with ranking and filters", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      await migrate(db);
+      const repo = createMemoryRepository(db);
+
+      await repo.upsertMemory("chat-1", "Bố", "Thích uống cà phê đen", "user-1", "core");
+      await repo.upsertMemory("chat-1", "Mẹ", "Thích trà hoa cúc", "user-1", "general");
+
+      await repo.addStory({
+        chatId: "chat-1",
+        title: "Chuyến đi Đà Lạt đầu tiên",
+        story: "Cả nhà đi Đà Lạt, ghé quán cà phê ven đồi rất chill",
+        people: "Bố, Mẹ",
+        createdBy: "user-1",
+      });
+
+      // 1. Search with 'all': matches both fact and story
+      const resultsAll = await repo.searchAll("chat-1", "cà phê");
+      assert.equal(resultsAll.length, 2);
+      assert.ok(resultsAll.some((r) => r.type === "fact" && r.subject === "Bố"));
+      assert.ok(resultsAll.some((r) => r.type === "story" && r.subject === "Chuyến đi Đà Lạt đầu tiên"));
+
+      // 2. Search with type: 'facts'
+      const factsOnly = await repo.searchAll("chat-1", "cà phê", { type: "facts" });
+      assert.equal(factsOnly.length, 1);
+      assert.equal(factsOnly[0].type, "fact");
+      assert.equal(factsOnly[0].subject, "Bố");
+
+      // 3. Search with type: 'stories'
+      const storiesOnly = await repo.searchAll("chat-1", "cà phê", { type: "stories" });
+      assert.equal(storiesOnly.length, 1);
+      assert.equal(storiesOnly[0].type, "story");
+
+      // 4. Diacritic-insensitive matching
+      const unaccented = await repo.searchAll("chat-1", "da lat");
+      assert.equal(unaccented.length, 1);
+      assert.equal(unaccented[0].type, "story");
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });

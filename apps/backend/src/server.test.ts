@@ -935,6 +935,7 @@ describe("LLM conversation and database integration", () => {
         assert.ok(tools.list_memories, "list_memories tool should exist");
         assert.ok(tools.memory_book_add, "memory_book_add tool should exist");
         assert.ok(tools.memory_book_search, "memory_book_search tool should exist");
+        assert.ok(tools.memory_search, "memory_search tool should exist");
 
         // Simulate tool calls: remember a new fact and add a story
         await tools.remember.execute?.({
@@ -948,6 +949,13 @@ describe("LLM conversation and database integration", () => {
           people: "Bố, Mẹ, Bé Na",
           happenedOn: "2024-06-15",
         });
+
+        // Test memory_search execution
+        const hybridSearch = await tools.memory_search.execute?.({
+          query: "da lat",
+        });
+        assert.equal(hybridSearch.count, 1);
+        assert.equal(hybridSearch.results[0].type, "story");
 
         return "Đã ghi nhớ thông tin về Mẹ và lưu kỷ niệm Đà Lạt vào sổ gia đình!";
       },

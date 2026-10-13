@@ -1,6 +1,11 @@
 import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { createDrizzleDb, type SqliteDatabase } from "../connection.js";
 import { memories, memoryBook } from "../schema/index.js";
+import {
+  rankMemoryCandidates,
+  type MemorySearchCandidate,
+  type ScoredMemorySearchResult,
+} from "../../tools/memory-search.js";
 
 export type MemoryCategory = "core" | "general";
 export type MemoryStatus = "active" | "superseded";
@@ -43,6 +48,13 @@ export type AddStoryInput = {
   createdBy: string;
 };
 
+export type SearchAllOptions = {
+  type?: "all" | "facts" | "stories";
+  subject?: string;
+  category?: MemoryCategory;
+  limit?: number;
+};
+
 export interface MemoryRepository {
   upsertMemory(
     chatId: string,
@@ -63,6 +75,12 @@ export interface MemoryRepository {
   searchStories(chatId: string, query: string, limit?: number): Promise<MemoryBookRow[]>;
   listStories(chatId: string, limit?: number): Promise<MemoryBookRow[]>;
   getStoryById(chatId: string, id: number): Promise<MemoryBookRow | undefined>;
+
+  searchAll(
+    chatId: string,
+    query: string,
+    options?: SearchAllOptions,
+  ): Promise<ScoredMemorySearchResult[]>;
 }
 
 function subjectMatches(subject: string) {
@@ -252,6 +270,51 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
         .where(and(eq(memoryBook.chatId, chatId), eq(memoryBook.id, id)))
         .limit(1);
       return story as MemoryBookRow | undefined;
+    },
+
+    async searchAll(
+      chatId: string,
+      query: string,
+      options?: SearchAllOptions,
+    ): Promise<ScoredMemorySearchResult[]> {
+      const type = options?.type ?? "all";
+      const limit = options?.limit ?? 10;
+      const candidates: MemorySearchCandidate[] = [];
+
+      if (type === "all" || type === "facts") {
+        const memoryRows = await this.listMemories(chatId, {
+          subject: options?.subject,
+          category: options?.category,
+          status: "active",
+        });
+        for (const m of memoryRows) {
+          candidates.push({
+            type: "fact",
+            id: m.id,
+            subject: m.subject,
+            content: m.fact,
+            category: m.category,
+            ts: m.ts,
+          });
+        }
+      }
+
+      if (type === "all" || type === "stories") {
+        const storyRows = await this.listStories(chatId, 200);
+        for (const s of storyRows) {
+          candidates.push({
+            type: "story",
+            id: s.id,
+            subject: s.title,
+            content: s.story,
+            people: s.people,
+            happenedOn: s.happenedOn,
+            ts: s.ts,
+          });
+        }
+      }
+
+      return rankMemoryCandidates(candidates, query, limit);
     },
   };
 }

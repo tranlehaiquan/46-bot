@@ -214,11 +214,66 @@ export function createMemoryTools(
     },
   });
 
+  const memory_search = tool({
+    description:
+      "Tìm kiếm tổng hợp và xếp hạng mức độ liên quan trên toàn bộ ký ức gia đình (bao gồm cả thông tin/thói quen ngắn và câu chuyện trong Sổ Kỷ niệm). Hỗ trợ tìm kiếm không dấu tiếng Việt và lọc nguồn.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe("Từ khóa hoặc nội dung cần tìm kiếm (ví dụ: 'cà phê', 'Đà Lạt', 'dị ứng', 'sở thích của Bố')"),
+      type: z
+        .enum(["all", "facts", "stories"])
+        .optional()
+        .describe("Phạm vi nguồn: 'all' (mặc định), 'facts' (chỉ sự kiện/thói quen ngắn), hoặc 'stories' (chỉ câu chuyện kỷ niệm)"),
+      subject: z
+        .string()
+        .optional()
+        .describe("Chủ thể cụ thể cần tìm (ví dụ: 'Bố', 'Mẹ')"),
+      limit: z
+        .number()
+        .optional()
+        .describe("Số lượng kết quả tối đa (mặc định 10)"),
+    }),
+    execute: async ({ query, type, subject, limit }) => {
+      const results = await repo.searchAll(chatId, query, {
+        type: type ?? "all",
+        subject,
+        limit: limit ?? 10,
+      });
+
+      if (results.length === 0) {
+        return {
+          success: true,
+          count: 0,
+          results: [],
+          message: `Không tìm thấy ký ức nào phù hợp với từ khóa "${query}".`,
+        };
+      }
+
+      return {
+        success: true,
+        count: results.length,
+        results: results.map((r) => ({
+          type: r.type,
+          id: r.id,
+          subject: r.subject,
+          content: r.content,
+          score: r.score,
+          category: r.category,
+          people: r.people,
+          happenedOn: r.happenedOn,
+        })),
+        message: `Đã tìm thấy ${results.length} ký ức phù hợp (được xếp hạng theo mức độ liên quan).`,
+      };
+    },
+  });
+
   return {
     remember,
     forget,
     list_memories,
     memory_book_add,
     memory_book_search,
+    memory_search,
   };
 }
