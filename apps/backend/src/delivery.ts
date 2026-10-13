@@ -514,7 +514,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     const effectiveReply = replyText.trim() || FALLBACK_ERROR_MESSAGE;
     const chunks = splitText(effectiveReply, 2000).filter((c) => c.trim().length > 0);
     for (const chunk of chunks) {
-      await zalo.sendMessage(message.chatId, chunk);
+      await zalo.sendMessage(message.chatId, chunk, { parse_mode: "markdown" });
     }
     log.info({
       event: "zalo_reply_sent",

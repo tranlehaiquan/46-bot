@@ -54,7 +54,7 @@ export async function processMorningBriefing(
 
     if (messageText) {
       try {
-        await zalo.sendMessage(chatId, messageText);
+        await zalo.sendMessage(chatId, messageText, { parse_mode: "markdown" });
         log?.info({ event: "scheduler_morning_briefing_sent", chatId, date: dateStr });
       } catch (error) {
         const err = error instanceof Error ? error.message : String(error);
@@ -93,7 +93,7 @@ export async function processWeeklySummary(
 
     if (messageText) {
       try {
-        await zalo.sendMessage(chatId, messageText);
+        await zalo.sendMessage(chatId, messageText, { parse_mode: "markdown" });
         log?.info({ event: "scheduler_weekly_summary_sent", chatId, date: dateStr });
       } catch (error) {
         const err = error instanceof Error ? error.message : String(error);
@@ -119,7 +119,7 @@ export async function processEventReminders(
 
     const messageText = formatEventReminder(due);
     try {
-      await zalo.sendMessage(event.chatId, messageText);
+      await zalo.sendMessage(event.chatId, messageText, { parse_mode: "markdown" });
       await eventsRepo.recordReminderSent(event.id, occurrenceDateStr, clock.now().getTime());
       log?.info({
         event: "scheduler_reminder_sent",
@@ -219,7 +219,7 @@ export async function processSingleLookup(
 
     const chunks = splitText(reply, 2000);
     for (const chunk of chunks) {
-      await zalo.sendMessage(lookup.chatId, chunk);
+      await zalo.sendMessage(lookup.chatId, chunk, { parse_mode: "markdown" });
     }
 
     await lookupsRepo.recordRunSuccess(run.id, clock.now().getTime());
@@ -284,7 +284,7 @@ export async function processJob(
       const event = await deps.eventsRepo.getEventById(data.eventId);
       if (event && !(await deps.eventsRepo.isReminderSent(event.id, data.occurrenceDateStr))) {
         const messageText = `🔔 Nhắc nhở: "${event.title}"!`;
-        await deps.zalo.sendMessage(event.chatId, messageText);
+        await deps.zalo.sendMessage(event.chatId, messageText, { parse_mode: "markdown" });
         await deps.eventsRepo.recordReminderSent(event.id, data.occurrenceDateStr, now.getTime());
       }
       break;

@@ -118,9 +118,11 @@ function fakeZalo(): ZaloClient & {
   actions: Array<{ chatId: string; action: string }>;
 } {
   const sends: Array<{ chatId: string; text: string }> = [];
+  const sendCalls: Array<{ chatId: string; text: string; options?: any }> = [];
   const actions: Array<{ chatId: string; action: string }> = [];
   return {
     sends,
+    sendCalls,
     actions,
     async getWebhookInfo() {
       return { url: "" };
@@ -131,8 +133,9 @@ function fakeZalo(): ZaloClient & {
     async testWebhook() {
       return { outcome: "webhook.ok" };
     },
-    async sendMessage(chatId, text) {
+    async sendMessage(chatId, text, options) {
       sends.push({ chatId, text });
+      sendCalls.push({ chatId, text, options });
     },
     async sendChatAction(chatId, action) {
       actions.push({ chatId, action });
@@ -465,6 +468,7 @@ describe("LLM conversation and database integration", () => {
     assert.deepEqual(zalo.sends, [
       { chatId: "group-1", text: "Chao ban! Chuc mot ngay tot lanh." },
     ]);
+    assert.deepEqual(zalo.sendCalls[0]?.options, { parse_mode: "markdown" });
 
     // Verify messages table has user turn and assistant turn
     const history = await messageRepo.getRecent("group-1");

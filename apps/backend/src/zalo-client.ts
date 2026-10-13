@@ -3,11 +3,16 @@ import { redactText } from "./redact.js";
 
 const require = createRequire(import.meta.url);
 
+export type SendMessageOptions = {
+  parse_mode?: "markdown" | "html";
+  reply_to_message_id?: string;
+};
+
 export type ZaloClient = {
   getWebhookInfo(): Promise<{ url: string }>;
   setWebhook(url: string, secret: string): Promise<{ outcome: string }>;
   testWebhook(): Promise<{ outcome: string }>;
-  sendMessage(chatId: string, text: string): Promise<void>;
+  sendMessage(chatId: string, text: string, options?: SendMessageOptions): Promise<void>;
   sendChatAction?(chatId: string, action: string): Promise<void>;
   sendPhoto?(chatId: string, photo: string, caption?: string): Promise<void>;
 };
@@ -16,7 +21,7 @@ type SdkBot = {
   getWebhookInfo(): Promise<{ url?: string } | undefined>;
   setWebhook(url: string, secretToken: string): Promise<{ verification?: { outcome?: string } } | undefined>;
   testWebhook(): Promise<{ outcome?: string } | undefined>;
-  sendMessage(chatId: string, text: string): Promise<unknown>;
+  sendMessage(chatId: string, text: string, options?: SendMessageOptions): Promise<unknown>;
   sendChatAction?(chatId: string, action: string): Promise<unknown>;
   sendPhoto?(chatId: string, caption: string, photo: string, options?: unknown): Promise<unknown>;
 };
@@ -51,8 +56,26 @@ export function createZaloClient(token: string): ZaloClient {
       const result = await bot.testWebhook();
       return { outcome: result?.outcome ?? "" };
     },
-    async sendMessage(chatId, text) {
-      await bot.sendMessage(chatId, text);
+    async sendMessage(chatId, text, options) {
+      if (options?.parse_mode) {
+        try {
+          await bot.sendMessage(chatId, text, options);
+          return;
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          console.warn(
+            redactText(
+              `Failed to send message with parse_mode ${options.parse_mode}, falling back to plain text: ${detail}`,
+              [token]
+            )
+          );
+          const fallbackOptions = { ...options };
+          delete fallbackOptions.parse_mode;
+          await bot.sendMessage(chatId, text, Object.keys(fallbackOptions).length > 0 ? fallbackOptions : undefined);
+          return;
+        }
+      }
+      await bot.sendMessage(chatId, text, options);
     },
     async sendChatAction(chatId, action) {
       if (typeof bot.sendChatAction === "function") {

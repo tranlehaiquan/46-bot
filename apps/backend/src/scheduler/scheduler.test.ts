@@ -12,10 +12,13 @@ import { createScheduler, startScheduler, type Clock } from "./index.js";
 
 function fakeZalo() {
   const sends: Array<{ chatId: string; text: string }> = [];
-  const client: ZaloClient & { sends: typeof sends } = {
+  const sendCalls: Array<{ chatId: string; text: string; options?: any }> = [];
+  const client: ZaloClient & { sends: typeof sends; sendCalls: typeof sendCalls } = {
     sends,
-    async sendMessage(chatId: string, text: string) {
+    sendCalls,
+    async sendMessage(chatId: string, text: string, options?: any) {
       sends.push({ chatId, text });
+      sendCalls.push({ chatId, text, options });
     },
     async getWebhookInfo() {
       return { url: "" };
@@ -463,6 +466,8 @@ describe("Background Scheduler Engine", () => {
     // chat-lookup-2 receives its missed occurrence on later same-day tick after restart!
     const send2 = zalo.sends.find((s) => s.chatId === "chat-lookup-2");
     assert.ok(send2);
+    const sendCall2 = zalo.sendCalls.find((s) => s.chatId === "chat-lookup-2");
+    assert.deepEqual(sendCall2?.options, { parse_mode: "markdown" });
     // and chat-lookup was NOT duplicated!
     const sendsForChat1 = zalo.sends.filter((s) => s.chatId === "chat-lookup");
     assert.equal(sendsForChat1.length, 1);

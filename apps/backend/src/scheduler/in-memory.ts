@@ -72,7 +72,7 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
 
       if (messageText) {
         try {
-          await zalo.sendMessage(chatId, messageText);
+          await zalo.sendMessage(chatId, messageText, { parse_mode: "markdown" });
           sentMorningBriefings.add(dedupeKey);
           log?.info({ event: "scheduler_morning_briefing_sent", chatId, date: dateStr });
         } catch (error) {
@@ -116,7 +116,7 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
 
       if (messageText) {
         try {
-          await zalo.sendMessage(chatId, messageText);
+          await zalo.sendMessage(chatId, messageText, { parse_mode: "markdown" });
           sentWeeklySummaries.add(dedupeKey);
           log?.info({ event: "scheduler_weekly_summary_sent", chatId, date: dateStr });
         } catch (error) {
@@ -141,7 +141,7 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
 
       const messageText = formatEventReminder(due);
       try {
-        await zalo.sendMessage(event.chatId, messageText);
+        await zalo.sendMessage(event.chatId, messageText, { parse_mode: "markdown" });
         await eventsRepo.recordReminderSent(event.id, occurrenceDateStr, clock.now().getTime());
         log?.info({
           event: "scheduler_reminder_sent",
@@ -235,7 +235,7 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
 
         const chunks = splitText(reply, 2000);
         for (const chunk of chunks) {
-          await zalo.sendMessage(lookup.chatId, chunk);
+          await zalo.sendMessage(lookup.chatId, chunk, { parse_mode: "markdown" });
         }
 
         await lookupsRepo.recordRunSuccess(run.id, clock.now().getTime());
