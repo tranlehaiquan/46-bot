@@ -210,7 +210,27 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     message.eventName === "message.text.received" ||
     message.eventName === "message.image.received";
 
-  if (!isSupportedEvent || message.isBot) {
+  const isUnsupportedEvent = message.eventName === "message.unsupported.received";
+
+  if (message.isBot) {
+    return;
+  }
+
+  if (!isSupportedEvent && !isUnsupportedEvent) {
+    return;
+  }
+
+  // For unsupported message types: if there's no readable content at all, reply with a notice and stop
+  if (isUnsupportedEvent && !message.photo && (!message.text || message.text.trim().length === 0)) {
+    const isDirect = message.chatType === "PRIVATE";
+    const isGroup = message.chatType === "GROUP";
+    if (!isDirect && !isGroup) return;
+    const isAddressedUnsupported = isDirect || isMentionedOrReplied(message, config.botId);
+    if (isGroup && !isAddressedUnsupported) return;
+    await zalo.sendMessage(
+      message.chatId,
+      "Xin lỗi, bot chưa hỗ trợ loại tin nhắn này. 😅"
+    );
     return;
   }
 

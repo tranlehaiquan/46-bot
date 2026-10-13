@@ -1,6 +1,12 @@
 FROM node:22-slim AS build
+ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
-RUN npm install -g pnpm@12.9.1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm install -g pnpm@12.9.1
 
 # Copy workspace config and package manifests
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
@@ -18,11 +24,15 @@ COPY apps/admin ./apps/admin
 RUN pnpm run build
 
 FROM node:22-slim AS runtime
+ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fontconfig \
     fonts-dejavu-core \
     fonts-liberation \
+    python3 \
+    make \
+    g++ \
   && fc-cache -f \
   && rm -rf /var/lib/apt/lists/* \
   && npm install -g pnpm@12.9.1 \
