@@ -68,6 +68,24 @@ describe("buildSystemPrompt", () => {
     assert.equal(promptWithUndefined.includes("### Things you know about this family:"), false);
   });
 
+  it("prioritizes core memories and caps memory budget", () => {
+    const fixedDate = new Date("2026-10-04T12:00:00.000Z");
+    const memories = [
+      { subject: "Món phụ", fact: "Thích dưa hấu", category: "general" as const },
+      { subject: "Bố", fact: "Thích cà phê", category: "core" as const },
+      { subject: "Mẹ", fact: "Dị ứng hành", category: "core" as const },
+    ];
+    // With maxBudget 2, only Bố and Mẹ should be included
+    const prompt = buildSystemPrompt(DEFAULT_SYSTEM_PROMPT, fixedDate, memories, undefined, undefined, 2);
+    assert.match(prompt, /<memory_item subject="Bố">Thích cà phê<\/memory_item>/);
+    assert.match(prompt, /<memory_item subject="Mẹ">Dị ứng hành<\/memory_item>/);
+    assert.ok(!prompt.includes("Món phụ"));
+  });
+
+  it("instructs assistant to use list_memories in DEFAULT_SYSTEM_PROMPT", () => {
+    assert.match(DEFAULT_SYSTEM_PROMPT, /list_memories/);
+  });
+
   it("injects group members section with active speaker label when members are provided", () => {
     const fixedDate = new Date("2026-10-04T12:00:00.000Z");
     const members = [
@@ -167,6 +185,7 @@ describe("buildSystemPrompt", () => {
           llmModel: "gemini",
           geminiModel: "gemini",
           deepseekModel: "deepseek",
+          passiveMemoryEnabled: true,
         },
         log: createLogger(),
         zalo: fakeZaloClient,

@@ -163,6 +163,15 @@ export class DynamicLlmClient implements LlmClient {
   async generateReply(params: Parameters<LlmClient["generateReply"]>[0]): Promise<string> {
     return this.client.generateReply(params);
   }
+
+  async extractMemories(
+    params: Parameters<NonNullable<LlmClient["extractMemories"]>>[0],
+  ): Promise<Array<{ subject: string; fact: string; category: "core" | "general" }>> {
+    if (typeof this.client.extractMemories === "function") {
+      return this.client.extractMemories(params);
+    }
+    return [];
+  }
 }
 
 export function createLlmClientFromSettings(settings: EffectiveSettings): LlmClient | null {

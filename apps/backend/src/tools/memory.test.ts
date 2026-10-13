@@ -187,4 +187,41 @@ describe("Memory tools", () => {
       closeDatabase(db);
     }
   });
+
+  it("supports category assignment in remember and filtering/searching in list_memories", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      await migrate(db);
+      const repo = createMemoryRepository(db);
+      const tools = createMemoryTools(repo, { chatId: "chat-1", senderName: "Bố" });
+
+      await tools.remember.execute!(
+        { subject: "Dị ứng", fact: "Mẹ dị ứng hải sản", category: "core" },
+        {} as any,
+      );
+      await tools.remember.execute!(
+        { subject: "Sở thích", fact: "Con thích chơi xếp hình Lego", category: "general" },
+        {} as any,
+      );
+
+      // Filter by category core
+      const coreList = (await tools.list_memories.execute!(
+        { category: "core" },
+        {} as any,
+      )) as any;
+      assert.equal(coreList.count, 1);
+      assert.equal(coreList.memories[0].subject, "Dị ứng");
+      assert.equal(coreList.memories[0].category, "core");
+
+      // Filter by query
+      const legoSearch = (await tools.list_memories.execute!(
+        { query: "Lego" },
+        {} as any,
+      )) as any;
+      assert.equal(legoSearch.count, 1);
+      assert.equal(legoSearch.memories[0].subject, "Sở thích");
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });

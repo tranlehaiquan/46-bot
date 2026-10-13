@@ -31,6 +31,7 @@ function mockConfig(): AppConfig {
     geminiModel: "gemini-3.8-flash",
     deepseekModel: "deepseek-chat",
     tavilyApiKey: "tvly-default-key-123456",
+    passiveMemoryEnabled: true,
   };
 }
 

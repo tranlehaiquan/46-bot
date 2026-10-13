@@ -26,7 +26,8 @@ export const DEFAULT_SYSTEM_PROMPT = `Bạn là Family Bot, trợ lý thân thi�
   • Tần suất lặp lại (recurrence): Sinh nhật và ngày giỗ thường lặp lại hàng năm ('yearly'). Lịch hẹn hoặc công việc diễn ra một lần dùng 'none'.
 - Ghi nhớ và Cuốn sổ Kỷ niệm (Memory & Memory Book):
   • Phân biệt rõ công cụ để chọn đúng:
-    - remember: Dùng cho thông tin, thói quen, sở thích, đặc điểm ổn định của thành viên (dị ứng thức ăn, thói quen uống cà phê, sở thích, cỡ giày, lớp học...).
+    - remember: Dùng cho thông tin, thói quen, sở thích, đặc điểm ổn định của thành viên (dị ứng thức ăn, thói quen uống cà phê, sở thích, cỡ giày, lớp học...). Có thể chọn category là 'core' (thông tin cốt lõi quan trọng) hoặc 'general' (thông tin phụ, thứ yếu).
+    - list_memories: Dùng để tra cứu danh sách các thông tin, thói quen, đặc điểm đã ghi nhớ về gia đình hoặc thành viên khi chưa có trong ngữ cảnh Things you know about this family.
     - event_add: Dùng cho sự kiện có ngày tháng cụ thể, lịch hẹn, sinh nhật, ngày giỗ, lịch nhắc việc trong tương lai.
     - list_add_item: Dùng cho danh sách đi chợ, mua sắm, việc cần làm ngắn hạn.
     - memory_book_add: Dùng để lưu lại các câu chuyện, cột mốc kỷ niệm gia đình ý nghĩa trong quá khứ (chuyến du lịch, lần đầu biết bơi, kỷ niệm đáng nhớ...).
@@ -49,9 +50,15 @@ export const DEFAULT_SYSTEM_PROMPT = `Bạn là Family Bot, trợ lý thân thi�
 export type MemoryItem = {
   subject: string;
   fact: string;
+  category?: "core" | "general";
 };
 
-export function formatMemoriesSection(memories?: MemoryItem[]): string {
+export const MAX_ACTIVE_PROMPT_MEMORIES = 20;
+
+export function formatMemoriesSection(
+  memories?: MemoryItem[],
+  maxBudget = MAX_ACTIVE_PROMPT_MEMORIES,
+): string {
   if (!memories || memories.length === 0) {
     return "";
   }
@@ -59,7 +66,15 @@ export function formatMemoriesSection(memories?: MemoryItem[]): string {
   if (safeMemories.length === 0) {
     return "";
   }
-  const lines = safeMemories.map((m) => formatMemoryItemTag(m.subject, m.fact));
+  const prioritized = [...safeMemories]
+    .sort((a, b) => {
+      const aCore = a.category !== "general" ? 0 : 1;
+      const bCore = b.category !== "general" ? 0 : 1;
+      return aCore - bCore;
+    })
+    .slice(0, maxBudget);
+
+  const lines = prioritized.map((m) => formatMemoryItemTag(m.subject, m.fact));
   return `\n\n### Things you know about this family:\n<memory_context>\n${lines.join("\n")}\n</memory_context>`;
 }
 
@@ -96,6 +111,7 @@ export function buildSystemPrompt(
   memories?: MemoryItem[],
   groupMembers?: GroupMemberContextItem[],
   currentSpeakerId?: string,
+  maxMemoryBudget = MAX_ACTIVE_PROMPT_MEMORIES,
 ): string {
   const formattedTime = new Intl.DateTimeFormat("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
@@ -103,7 +119,7 @@ export function buildSystemPrompt(
     timeStyle: "medium",
   }).format(now);
 
-  const memorySection = formatMemoriesSection(memories);
+  const memorySection = formatMemoriesSection(memories, maxMemoryBudget);
   const groupMembersSection = formatGroupMembersSection(groupMembers, currentSpeakerId);
   return `${basePrompt}${memorySection}${groupMembersSection}\n\n- Thời gian hiện tại (Việt Nam, GMT+7): ${formattedTime}.`;
 }
@@ -124,6 +140,11 @@ export interface LlmClient {
     };
     tools?: ToolSet;
   }): Promise<string>;
+
+  extractMemories?(params: {
+    history: MessageRow[];
+    existingMemories?: MemoryItem[];
+  }): Promise<Array<{ subject: string; fact: string; category: "core" | "general" }>>;
 }
 
 export type LlmClientOptions = {
@@ -244,6 +265,36 @@ export function createLlmClient(options: LlmClientOptions): LlmClient {
       }
 
       return FALLBACK_ERROR_MESSAGE;
+    },
+
+    async extractMemories(params) {
+      const { PASSIVE_MEMORY_SYSTEM_PROMPT, parseExtractedMemoriesJson } = await import(
+        "./passive-memory.js"
+      );
+
+      const conversationLines = params.history
+        .map((m) => {
+          const sender = m.senderName || m.senderId;
+          return `${m.role === "assistant" ? "Bot" : sender}: ${m.content}`;
+        })
+        .join("\n");
+
+      const existingLines = (params.existingMemories || [])
+        .map((m) => `- ${m.subject}: ${m.fact} (${m.category || "core"})`)
+        .join("\n");
+
+      const prompt = `### Thông tin đã biết về gia đình:\n${existingLines || "(Chưa có thông tin nào)"}\n\n### Hội thoại gần đây:\n${conversationLines}\n\nHãy trích xuất các thông tin bền vững mới (nếu có) dưới dạng JSON array:`;
+
+      try {
+        const result = await generateText({
+          model,
+          system: PASSIVE_MEMORY_SYSTEM_PROMPT,
+          messages: [{ role: "user", content: prompt }],
+        });
+        return parseExtractedMemoriesJson(result.text);
+      } catch {
+        return [];
+      }
     },
   };
 }

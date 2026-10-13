@@ -2,13 +2,25 @@ import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { createDrizzleDb, type SqliteDatabase } from "../connection.js";
 import { memories, memoryBook } from "../schema/index.js";
 
+export type MemoryCategory = "core" | "general";
+export type MemoryStatus = "active" | "superseded";
+
 export type MemoryRow = {
   id: number;
   chatId: string;
   subject: string;
   fact: string;
+  category: MemoryCategory;
+  status: MemoryStatus;
   createdBy: string;
   ts: number;
+};
+
+export type ListMemoriesOptions = {
+  subject?: string;
+  category?: MemoryCategory;
+  status?: MemoryStatus;
+  query?: string;
 };
 
 export type MemoryBookRow = {
@@ -32,11 +44,19 @@ export type AddStoryInput = {
 };
 
 export interface MemoryRepository {
-  upsertMemory(chatId: string, subject: string, fact: string, createdBy: string): Promise<MemoryRow>;
+  upsertMemory(
+    chatId: string,
+    subject: string,
+    fact: string,
+    createdBy: string,
+    category?: MemoryCategory,
+  ): Promise<MemoryRow>;
+  supersedeMemory(chatId: string, subject: string): Promise<boolean>;
   deleteMemory(chatId: string, subject: string): Promise<boolean>;
   deleteMemoryById(chatId: string, id: number): Promise<boolean>;
-  listMemories(chatId: string, subject?: string): Promise<MemoryRow[]>;
-  getMemory(chatId: string, subject: string): Promise<MemoryRow | undefined>;
+  listMemories(chatId: string, options?: string | ListMemoriesOptions): Promise<MemoryRow[]>;
+  listActiveMemories(chatId: string, limit?: number): Promise<MemoryRow[]>;
+  getMemory(chatId: string, subject: string, activeOnly?: boolean): Promise<MemoryRow | undefined>;
 
   addStory(input: AddStoryInput): Promise<MemoryBookRow>;
   deleteStory(chatId: string, id: number): Promise<boolean>;
@@ -52,16 +72,22 @@ function subjectMatches(subject: string) {
 export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
   const orm = createDrizzleDb(db);
   return {
-    async upsertMemory(chatId: string, subject: string, fact: string, createdBy: string): Promise<MemoryRow> {
+    async upsertMemory(
+      chatId: string,
+      subject: string,
+      fact: string,
+      createdBy: string,
+      category: MemoryCategory = "core",
+    ): Promise<MemoryRow> {
       const trimmedSubject = subject.trim();
       const trimmedFact = fact.trim();
       const now = Date.now();
 
-      const existing = await this.getMemory(chatId, trimmedSubject);
+      const existing = await this.getMemory(chatId, trimmedSubject, true);
       if (existing) {
         const [updated] = await orm
           .update(memories)
-          .set({ subject: trimmedSubject, fact: trimmedFact, createdBy, ts: now })
+          .set({ subject: trimmedSubject, fact: trimmedFact, category, status: "active", createdBy, ts: now })
           .where(eq(memories.id, existing.id))
           .returning();
         return updated as MemoryRow;
@@ -69,9 +95,26 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
 
       const [inserted] = await orm
         .insert(memories)
-        .values({ chatId, subject: trimmedSubject, fact: trimmedFact, createdBy, ts: now })
+        .values({
+          chatId,
+          subject: trimmedSubject,
+          fact: trimmedFact,
+          category,
+          status: "active",
+          createdBy,
+          ts: now,
+        })
         .returning();
       return inserted as MemoryRow;
+    },
+
+    async supersedeMemory(chatId: string, subject: string): Promise<boolean> {
+      const updated = await orm
+        .update(memories)
+        .set({ status: "superseded", ts: Date.now() })
+        .where(and(eq(memories.chatId, chatId), subjectMatches(subject.trim()), eq(memories.status, "active")))
+        .returning();
+      return updated.length > 0;
     },
 
     async deleteMemory(chatId: string, subject: string): Promise<boolean> {
@@ -90,19 +133,54 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
       return deleted.length > 0;
     },
 
-    async listMemories(chatId: string, subject?: string): Promise<MemoryRow[]> {
-      const whereClause =
-        subject && subject.trim()
-          ? and(eq(memories.chatId, chatId), subjectMatches(subject.trim()))
-          : eq(memories.chatId, chatId);
-      return (await orm.select().from(memories).where(whereClause).orderBy(memories.id)) as MemoryRow[];
+    async listMemories(chatId: string, options?: string | ListMemoriesOptions): Promise<MemoryRow[]> {
+      const filters = [eq(memories.chatId, chatId)];
+      if (typeof options === "string") {
+        if (options.trim()) {
+          filters.push(subjectMatches(options.trim()));
+        }
+      } else if (options) {
+        if (options.subject && options.subject.trim()) {
+          filters.push(subjectMatches(options.subject.trim()));
+        }
+        if (options.category) {
+          filters.push(eq(memories.category, options.category));
+        }
+        if (options.status) {
+          filters.push(eq(memories.status, options.status));
+        }
+        if (options.query && options.query.trim()) {
+          const q = `%${options.query.trim()}%`;
+          filters.push(or(like(memories.subject, q), like(memories.fact, q))!);
+        }
+      }
+
+      return (await orm
+        .select()
+        .from(memories)
+        .where(and(...filters))
+        .orderBy(memories.id)) as MemoryRow[];
     },
 
-    async getMemory(chatId: string, subject: string): Promise<MemoryRow | undefined> {
+    async listActiveMemories(chatId: string, limit = 20): Promise<MemoryRow[]> {
+      const priorityOrder = sql`CASE WHEN ${memories.category} = 'core' THEN 0 ELSE 1 END`;
+      return (await orm
+        .select()
+        .from(memories)
+        .where(and(eq(memories.chatId, chatId), eq(memories.status, "active")))
+        .orderBy(priorityOrder, desc(memories.ts))
+        .limit(limit)) as MemoryRow[];
+    },
+
+    async getMemory(chatId: string, subject: string, activeOnly = false): Promise<MemoryRow | undefined> {
+      const filters = [eq(memories.chatId, chatId), subjectMatches(subject.trim())];
+      if (activeOnly) {
+        filters.push(eq(memories.status, "active"));
+      }
       const [memory] = await orm
         .select()
         .from(memories)
-        .where(and(eq(memories.chatId, chatId), subjectMatches(subject.trim())))
+        .where(and(...filters))
         .limit(1);
       return memory as MemoryRow | undefined;
     },

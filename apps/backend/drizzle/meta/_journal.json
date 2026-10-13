@@ -15,6 +15,13 @@
       "when": 1791909615241,
       "tag": "0001_premium_drax",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791910497445,
+      "tag": "0002_funny_robin_chapel",
+      "breakpoints": true
     }
   ]
 }

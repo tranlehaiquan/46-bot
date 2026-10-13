@@ -20,6 +20,9 @@ export const messages = sqliteTable(
 export type Message = typeof messages.$inferSelect;
 export type NewMessage = typeof messages.$inferInsert;
 
+export type MemoryCategory = "core" | "general";
+export type MemoryStatus = "active" | "superseded";
+
 export const memories = sqliteTable(
   "memories",
   {
@@ -27,11 +30,14 @@ export const memories = sqliteTable(
     chatId: text("chat_id").notNull(),
     subject: text("subject").notNull(),
     fact: text("fact").notNull(),
+    category: text("category", { enum: ["core", "general"] }).notNull().default("core"),
+    status: text("status", { enum: ["active", "superseded"] }).notNull().default("active"),
     createdBy: text("created_by").notNull(),
     ts: integer("ts", { mode: "number" }).notNull(),
   },
   (table) => [
     index("idx_memories_chat_subject").on(table.chatId, table.subject),
+    index("idx_memories_chat_status").on(table.chatId, table.status),
   ]
 );
 

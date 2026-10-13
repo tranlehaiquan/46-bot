@@ -30,6 +30,7 @@ function mockConfig(familyChatIds: string[] = []): AppConfig {
     llmModel: "deepseek-chat",
     geminiModel: "gemini-3.8-flash",
     deepseekModel: "deepseek-chat",
+    passiveMemoryEnabled: true,
   };
 }
 

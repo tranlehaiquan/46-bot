@@ -3,27 +3,25 @@
 ## Purpose
 
 Enable the family assistant to persist personal facts, traits, and preferences across conversation turns in SQLite, maintain a searchable Family Memory Book for family milestones and stories, and enforce privacy protections against storing sensitive credentials.
-
 ## Requirements
-
 ### Requirement: Storing and updating short family facts
-The system SHALL provide tools for storing, updating, and removing persistent family facts in a `memories` SQLite table with columns `id`, `chat_id`, `subject`, `fact`, `created_by`, and `ts`. When saving a fact for a subject (e.g. "Bố"), if an existing fact about that subject is conflicting or nearly identical, the system SHALL update the existing fact rather than creating duplicate entries.
+The system SHALL provide tools for storing, updating, and removing persistent family facts in a `memories` SQLite table with columns `id`, `chat_id`, `subject`, `fact`, `category` ('core' | 'general'), `status` ('active' | 'superseded'), `created_by`, and `ts`. When saving a fact for a subject (e.g. "Bố"), if an existing fact about that subject is conflicting or superseded, the system SHALL update the existing fact or mark the previous fact as superseded rather than creating duplicate active entries.
 
 #### Scenario: Storing a new fact
 - **WHEN** a family member says "Bố thích uống cà phê đen không đường"
-- **THEN** the bot executes `remember` with subject "Bố" and fact "Thích uống cà phê đen không đường", persisting it to SQLite
+- **THEN** the bot executes `remember` with subject "Bố", fact "Thích uống cà phê đen không đường", and category "core", persisting it to SQLite with status "active"
 
-#### Scenario: Updating a conflicting fact
+#### Scenario: Updating or superseding a fact
 - **WHEN** a previously saved fact for "Bé Na" says "Học lớp 3", and a user states "Bé Na năm nay lên lớp 4 rồi"
-- **THEN** the existing memory entry for "Bé Na" is updated with the new fact instead of keeping both
+- **THEN** the existing memory entry for "Bé Na" is updated or superseded with the new fact instead of keeping conflicting active entries
 
 #### Scenario: Forgetting a fact
 - **WHEN** a user asks the bot to forget a fact or subject
-- **THEN** the bot executes `forget` and removes matching records from the `memories` table
+- **THEN** the bot executes `forget` and removes or deactivates matching records from the `memories` table
 
 #### Scenario: Listing memories
 - **WHEN** a user asks what the bot remembers about a person or the family
-- **THEN** the bot executes `list_memories` and returns stored facts for that `chat_id`
+- **THEN** the bot executes `list_memories` and returns stored facts for that `chat_id`, optionally filtered by category or subject
 
 ### Requirement: Searchable Family Memory Book
 The system SHALL provide a `memory_book` SQLite table with columns `id`, `chat_id`, `title`, `story`, `people`, `happened_on`, `created_by`, and `ts`. The system SHALL provide tools `memory_book_add` to record memorable events or family stories, and `memory_book_search` to find stories by keyword, people involved, or approximate date.
@@ -57,3 +55,11 @@ The bot SHALL NOT store passwords, bank account details, credit card numbers, or
 #### Scenario: Sensitive credential rejection
 - **WHEN** a user says "Nhớ số thẻ visa của bố là 4111 2222..."
 - **THEN** the bot declines to save the sensitive information in memory
+
+### Requirement: On-demand memory retrieval and search
+The system SHALL provide tools for searching and retrieving stored facts on demand when they are not loaded in the system prompt budget.
+
+#### Scenario: Looking up non-core fact on demand
+- **WHEN** a user asks about a secondary detail not loaded in the prompt budget
+- **THEN** the bot invokes memory lookup tools to find the relevant fact from the database and answers the user accurately
+

@@ -144,4 +144,37 @@ describe("SQLite database layer", () => {
       closeDatabase(db);
     }
   });
+
+  it("migrates legacy memories table missing category and status columns cleanly", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      // Simulate an old database with memories table lacking category and status columns
+      await db.executeMultiple(`
+        CREATE TABLE seen_messages (message_id TEXT PRIMARY KEY, ts INTEGER NOT NULL);
+        CREATE TABLE memories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          chat_id TEXT NOT NULL,
+          subject TEXT NOT NULL,
+          fact TEXT NOT NULL,
+          created_by TEXT NOT NULL,
+          ts INTEGER NOT NULL
+        );
+        INSERT INTO memories (chat_id, subject, fact, created_by, ts)
+        VALUES ('chat-old', 'Bố', 'Thích uống cà phê', 'user-1', 123456);
+      `);
+
+      // Run migrate on the legacy database
+      await migrate(db);
+
+      // Verify columns exist and legacy row has defaults
+      const res = await db.execute("SELECT * FROM memories WHERE chat_id = 'chat-old'");
+      assert.equal(res.rows.length, 1);
+      const row = res.rows[0];
+      assert.equal(row.subject, "Bố");
+      assert.equal(row.category, "core");
+      assert.equal(row.status, "active");
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });

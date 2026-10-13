@@ -88,6 +88,8 @@ export async function migrate(db: SqliteDatabase): Promise<void> {
       chat_id TEXT NOT NULL,
       subject TEXT NOT NULL,
       fact TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'core',
+      status TEXT NOT NULL DEFAULT 'active',
       created_by TEXT NOT NULL,
       ts INTEGER NOT NULL
     );
@@ -169,6 +171,16 @@ export async function migrate(db: SqliteDatabase): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_group_members_chat_sender ON group_members(chat_id, sender_id);
     CREATE INDEX IF NOT EXISTS idx_group_members_chat ON group_members(chat_id);
   `);
+
+  const pragma = await db.execute("PRAGMA table_info(memories)");
+  const columnNames = new Set(pragma.rows.map((r) => String(r.name)));
+  if (!columnNames.has("category")) {
+    await db.execute("ALTER TABLE memories ADD COLUMN category TEXT NOT NULL DEFAULT 'core'");
+  }
+  if (!columnNames.has("status")) {
+    await db.execute("ALTER TABLE memories ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  }
+  await db.execute("CREATE INDEX IF NOT EXISTS idx_memories_chat_status ON memories(chat_id, status)");
 }
 
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), "../../drizzle");

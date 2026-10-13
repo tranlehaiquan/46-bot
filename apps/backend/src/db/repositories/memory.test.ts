@@ -128,4 +128,62 @@ describe("MemoryRepository", () => {
       closeDatabase(db);
     }
   });
+
+  it("prioritizes core memories and limits prompt budget in listActiveMemories", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      await migrate(db);
+      const repo = createMemoryRepository(db);
+
+      // Add 3 general memories and 2 core memories
+      await repo.upsertMemory("chat-1", "Sở thích 1", "Thích nghe nhạc", "user-1", "general");
+      await repo.upsertMemory("chat-1", "Sở thích 2", "Thích xem phim", "user-1", "general");
+      await repo.upsertMemory("chat-1", "Dị ứng", "Dị ứng hải sản", "user-1", "core");
+      await repo.upsertMemory("chat-1", "Bệnh lý", "Đau dạ dày", "user-1", "core");
+      await repo.upsertMemory("chat-1", "Sở thích 3", "Thích chạy bộ", "user-1", "general");
+
+      // listActiveMemories with limit 3 should return 2 core first, then 1 general
+      const active = await repo.listActiveMemories("chat-1", 3);
+      assert.equal(active.length, 3);
+      assert.equal(active[0].category, "core");
+      assert.equal(active[1].category, "core");
+      assert.equal(active[2].category, "general");
+
+      // Superseded memories are excluded from listActiveMemories
+      await repo.supersedeMemory("chat-1", "Dị ứng");
+      const activeAfterSupersede = await repo.listActiveMemories("chat-1", 10);
+      assert.equal(activeAfterSupersede.length, 4);
+      assert.ok(!activeAfterSupersede.some((m) => m.subject === "Dị ứng"));
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
+  it("filters memories by category, status, and query term in listMemories", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      await migrate(db);
+      const repo = createMemoryRepository(db);
+
+      await repo.upsertMemory("chat-1", "Bố", "Thích cà phê đen", "user-1", "core");
+      await repo.upsertMemory("chat-1", "Mẹ", "Thích hoa hồng", "user-1", "general");
+      await repo.upsertMemory("chat-1", "Bé Na", "Học lớp 3", "user-1", "general");
+
+      await repo.supersedeMemory("chat-1", "Bé Na");
+
+      const coreOnly = await repo.listMemories("chat-1", { category: "core" });
+      assert.equal(coreOnly.length, 1);
+      assert.equal(coreOnly[0].subject, "Bố");
+
+      const superseded = await repo.listMemories("chat-1", { status: "superseded" });
+      assert.equal(superseded.length, 1);
+      assert.equal(superseded[0].subject, "Bé Na");
+
+      const searched = await repo.listMemories("chat-1", { query: "cà phê" });
+      assert.equal(searched.length, 1);
+      assert.equal(searched[0].subject, "Bố");
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });

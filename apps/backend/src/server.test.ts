@@ -994,6 +994,60 @@ describe("LLM conversation and database integration", () => {
     closeDatabase(db);
   });
 
+  it("passively extracts durable facts from natural conversation without explicit tool calls", async () => {
+    const db = openDatabase(":memory:");
+    await migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+    const memoryRepo = createMemoryRepository(db);
+
+    let extractCalled = false;
+    const mockLlm: LlmClient = {
+      async generateReply() {
+        return "Chào bố nhé, chúc bố nhiều sức khỏe!";
+      },
+      async extractMemories() {
+        extractCalled = true;
+        return [
+          { subject: "Bố", fact: "Dạo này bị đau lưng", category: "core" },
+        ];
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      memoryRepo,
+      llmClient: mockLlm,
+    });
+
+    const msg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot Dạo này bố hay bị đau lưng quá con ơi",
+      senderId: "user-1",
+      senderName: "Bố",
+      messageId: "msg-passive-1",
+    });
+
+    await post(app, JSON.stringify(msg));
+    await queue.drain();
+
+    // Small delay for fire-and-forget background extraction promise to settle
+    await new Promise((r) => setTimeout(r, 100));
+
+
+    assert.ok(extractCalled, "extractMemories should be called in background");
+    const memories = await memoryRepo.listMemories("group-1");
+    assert.equal(memories.length, 1);
+    assert.equal(memories[0].subject, "Bố");
+    assert.equal(memories[0].fact, "Dạo này bị đau lưng");
+    assert.equal(memories[0].createdBy, "auto-extracted");
+
+    await app.close();
+    closeDatabase(db);
+  });
+
   it("supports weather checking tool execution through conversational flow", async () => {
     let weatherToolCalled = false;
     let weatherLocation = "";

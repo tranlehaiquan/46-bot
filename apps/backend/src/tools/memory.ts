@@ -34,8 +34,12 @@ export function createMemoryTools(
     inputSchema: z.object({
       subject: z.string().describe("Chủ thể của thông tin (ví dụ: 'Bố', 'Mẹ', 'Bé Na', 'Cả nhà')"),
       fact: z.string().describe("Thông tin, sở thích, thói quen hoặc đặc điểm cần nhớ"),
+      category: z
+        .enum(["core", "general"])
+        .optional()
+        .describe("Phân loại: 'core' (thông tin cốt lõi, quan trọng như dị ứng, sức khỏe, thói quen lớn) hoặc 'general' (thông tin chi tiết, thứ yếu). Mặc định là 'core'."),
     }),
-    execute: async ({ subject, fact }) => {
+    execute: async ({ subject, fact, category }) => {
       if (containsSensitiveData(subject, fact)) {
         return {
           success: false,
@@ -50,11 +54,12 @@ export function createMemoryTools(
         };
       }
 
-      const memory = await repo.upsertMemory(chatId, subject, fact, senderName);
+      const memory = await repo.upsertMemory(chatId, subject, fact, senderName, category ?? "core");
       return {
         success: true,
         subject: memory.subject,
         fact: memory.fact,
+        category: memory.category,
         message: `Đã ghi nhớ thông tin về ${memory.subject}: "${memory.fact}".`,
       };
     },
@@ -82,15 +87,28 @@ export function createMemoryTools(
 
   const list_memories = tool({
     description:
-      "Xem danh sách các thông tin, đặc điểm, thói quen đã ghi nhớ về gia đình hoặc một thành viên cụ thể.",
+      "Xem danh sách hoặc tìm kiếm các thông tin, đặc điểm, thói quen đã ghi nhớ về gia đình hoặc một thành viên cụ thể.",
     inputSchema: z.object({
       subject: z
         .string()
         .optional()
         .describe("Chủ thể cụ thể cần xem thông tin (nếu để trống sẽ hiển thị tất cả)"),
+      category: z
+        .enum(["core", "general"])
+        .optional()
+        .describe("Lọc theo phân loại: 'core' (thông tin cốt lõi) hoặc 'general' (thông tin chi tiết/thứ yếu)"),
+      query: z
+        .string()
+        .optional()
+        .describe("Từ khóa tìm kiếm nội dung thông tin hoặc chủ thể"),
     }),
-    execute: async ({ subject }) => {
-      const memories = await repo.listMemories(chatId, subject);
+    execute: async ({ subject, category, query }) => {
+      const memories = await repo.listMemories(chatId, {
+        subject,
+        category,
+        status: "active",
+        query,
+      });
       if (memories.length === 0) {
         return {
           success: true,
@@ -98,7 +116,7 @@ export function createMemoryTools(
           memories: [],
           message: subject
             ? `Chưa có thông tin ghi nhớ nào về "${subject}".`
-            : "Chưa có thông tin ghi nhớ nào về gia đình.",
+            : "Chưa có thông tin ghi nhớ nào phù hợp.",
         };
       }
       return {
@@ -107,6 +125,7 @@ export function createMemoryTools(
         memories: memories.map((m) => ({
           subject: m.subject,
           fact: m.fact,
+          category: m.category,
         })),
         message: `Đã tìm thấy ${memories.length} thông tin ghi nhớ.`,
       };

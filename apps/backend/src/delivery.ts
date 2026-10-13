@@ -8,6 +8,7 @@ import type { LookupRepository } from "./db/repositories/lookups.js";
 import type { SettingsRepository } from "./db/repositories/settings.js";
 import type { SeenRepository } from "./db/seen-repo.js";
 import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
+import { extractPassiveMemories } from "./llm/passive-memory.js";
 import {
   detectPromptInjection,
   PROMPT_INJECTION_REFUSAL_MESSAGE,
@@ -426,7 +427,13 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
           }
         : undefined;
 
-    const memories = memoryRepo ? await memoryRepo.listMemories(message.chatId) : undefined;
+    const memories = memoryRepo
+      ? (await memoryRepo.listActiveMemories(message.chatId)).map((m) => ({
+          subject: m.subject,
+          fact: m.fact,
+          category: m.category,
+        }))
+      : undefined;
 
     const rawGroupMembers =
       isGroup && groupMemberRepo ? await groupMemberRepo.listMembers(message.chatId) : undefined;
@@ -519,6 +526,22 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
         senderName: "Family Bot",
         role: "assistant",
         content: replyText,
+      });
+    }
+
+    if (config.passiveMemoryEnabled !== false && memoryRepo && llmClient) {
+      const recentHistory = messageRepo ? await messageRepo.getRecent(message.chatId, 10) : history;
+      extractPassiveMemories({
+        chatId: message.chatId,
+        history: recentHistory,
+        memoryRepo,
+        llmClient,
+      }).catch((err) => {
+        log.warn({
+          event: "passive_memory_error",
+          chat_id: message.chatId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
     }
   } else {
