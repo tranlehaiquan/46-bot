@@ -17,8 +17,17 @@ export type MemoryRow = {
   fact: string;
   category: MemoryCategory;
   status: MemoryStatus;
+  condition?: string | null;
+  avoidAction?: string | null;
+  expiresAt?: number | null;
   createdBy: string;
   ts: number;
+};
+
+export type ActionBoundaryInput = {
+  condition?: string | null;
+  avoidAction?: string | null;
+  expiresAt?: number | null;
 };
 
 export type ListMemoriesOptions = {
@@ -62,12 +71,13 @@ export interface MemoryRepository {
     fact: string,
     createdBy: string,
     category?: MemoryCategory,
+    actionBoundary?: ActionBoundaryInput,
   ): Promise<MemoryRow>;
   supersedeMemory(chatId: string, subject: string): Promise<boolean>;
   deleteMemory(chatId: string, subject: string): Promise<boolean>;
   deleteMemoryById(chatId: string, id: number): Promise<boolean>;
   listMemories(chatId: string, options?: string | ListMemoriesOptions): Promise<MemoryRow[]>;
-  listActiveMemories(chatId: string, limit?: number): Promise<MemoryRow[]>;
+  listActiveMemories(chatId: string, limit?: number, now?: number): Promise<MemoryRow[]>;
   getMemory(chatId: string, subject: string, activeOnly?: boolean): Promise<MemoryRow | undefined>;
 
   addStory(input: AddStoryInput): Promise<MemoryBookRow>;
@@ -96,16 +106,30 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
       fact: string,
       createdBy: string,
       category: MemoryCategory = "core",
+      actionBoundary?: ActionBoundaryInput,
     ): Promise<MemoryRow> {
       const trimmedSubject = subject.trim();
       const trimmedFact = fact.trim();
       const now = Date.now();
+      const condition = actionBoundary?.condition?.trim() || null;
+      const avoidAction = actionBoundary?.avoidAction?.trim() || null;
+      const expiresAt = actionBoundary?.expiresAt ?? null;
 
       const existing = await this.getMemory(chatId, trimmedSubject, true);
       if (existing) {
         const [updated] = await orm
           .update(memories)
-          .set({ subject: trimmedSubject, fact: trimmedFact, category, status: "active", createdBy, ts: now })
+          .set({
+            subject: trimmedSubject,
+            fact: trimmedFact,
+            category,
+            status: "active",
+            condition,
+            avoidAction,
+            expiresAt,
+            createdBy,
+            ts: now,
+          })
           .where(eq(memories.id, existing.id))
           .returning();
         return updated as MemoryRow;
@@ -119,6 +143,9 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
           fact: trimmedFact,
           category,
           status: "active",
+          condition,
+          avoidAction,
+          expiresAt,
           createdBy,
           ts: now,
         })
@@ -180,12 +207,13 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
         .orderBy(memories.id)) as MemoryRow[];
     },
 
-    async listActiveMemories(chatId: string, limit = 20): Promise<MemoryRow[]> {
+    async listActiveMemories(chatId: string, limit = 20, now = Date.now()): Promise<MemoryRow[]> {
       const priorityOrder = sql`CASE WHEN ${memories.category} = 'core' THEN 0 ELSE 1 END`;
+      const notExpired = or(sql`${memories.expiresAt} IS NULL`, sql`${memories.expiresAt} > ${now}`);
       return (await orm
         .select()
         .from(memories)
-        .where(and(eq(memories.chatId, chatId), eq(memories.status, "active")))
+        .where(and(eq(memories.chatId, chatId), eq(memories.status, "active"), notExpired))
         .orderBy(priorityOrder, desc(memories.ts))
         .limit(limit)) as MemoryRow[];
     },
@@ -294,6 +322,9 @@ export function createMemoryRepository(db: SqliteDatabase): MemoryRepository {
             subject: m.subject,
             content: m.fact,
             category: m.category,
+            condition: m.condition,
+            avoidAction: m.avoidAction,
+            expiresAt: m.expiresAt,
             ts: m.ts,
           });
         }

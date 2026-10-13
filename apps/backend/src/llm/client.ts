@@ -52,6 +52,9 @@ export type MemoryItem = {
   subject: string;
   fact: string;
   category?: "core" | "general";
+  condition?: string | null;
+  avoidAction?: string | null;
+  expiresAt?: number | null;
 };
 
 export const MAX_ACTIVE_PROMPT_MEMORIES = 20;
@@ -75,7 +78,17 @@ export function formatMemoriesSection(
     })
     .slice(0, maxBudget);
 
-  const lines = prioritized.map((m) => formatMemoryItemTag(m.subject, m.fact));
+  const lines = prioritized.map((m) => {
+    let extra = "";
+    if (m.avoidAction && m.condition) {
+      extra = ` [Tránh: ${m.avoidAction} | Điều kiện: ${m.condition}]`;
+    } else if (m.avoidAction) {
+      extra = ` [Tránh: ${m.avoidAction}]`;
+    } else if (m.condition) {
+      extra = ` [Điều kiện: ${m.condition}]`;
+    }
+    return formatMemoryItemTag(m.subject, `${m.fact}${extra}`);
+  });
   return `\n\n### Things you know about this family:\n<memory_context>\n${lines.join("\n")}\n</memory_context>`;
 }
 

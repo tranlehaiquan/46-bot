@@ -30,7 +30,7 @@ export function createMemoryTools(
 
   const remember = tool({
     description:
-      "Ghi nhớ thông tin, sở thích, thói quen hoặc đặc điểm của thành viên gia đình (ví dụ: 'Bố thích uống cà phê đen', 'Mẹ dị ứng hành tây', 'Bé Na học lớp 4'). KHÔNG dùng để lưu trữ mật khẩu hay thông tin ngân hàng.",
+      "Ghi nhớ thông tin, sở thích, thói quen hoặc đặc điểm của thành viên gia đình (ví dụ: 'Bố thích uống cà phê đen', 'Mẹ dị ứng hành tây', 'Bé Na học lớp 4'). Có thể gắn thêm điều kiện áp dụng, hành động cần tránh hoặc thời điểm hết hạn. KHÔNG dùng để lưu trữ mật khẩu hay thông tin ngân hàng.",
     inputSchema: z.object({
       subject: z.string().describe("Chủ thể của thông tin (ví dụ: 'Bố', 'Mẹ', 'Bé Na', 'Cả nhà')"),
       fact: z.string().describe("Thông tin, sở thích, thói quen hoặc đặc điểm cần nhớ"),
@@ -38,29 +38,61 @@ export function createMemoryTools(
         .enum(["core", "general"])
         .optional()
         .describe("Phân loại: 'core' (thông tin cốt lõi, quan trọng như dị ứng, sức khỏe, thói quen lớn) hoặc 'general' (thông tin chi tiết, thứ yếu). Mặc định là 'core'."),
+      condition: z
+        .string()
+        .optional()
+        .describe("Điều kiện, hoàn cảnh hoặc người cho phép trước khi thực hiện hành động (ví dụ: 'Khi mẹ cho phép', 'Đến khi hết đau lưng')"),
+      avoidAction: z
+        .string()
+        .optional()
+        .describe("Hành động hoặc lời nhắc bot cần TRÁNH thực hiện (ví dụ: 'Không nhắc chuyện điểm số', 'Không nhắc tập gym nặng')"),
+      expiresAt: z
+        .string()
+        .optional()
+        .describe("Thời điểm hết hiệu lực theo chuẩn ngày ISO hoặc YYYY-MM-DD (dành cho ràng buộc tạm thời)"),
     }),
-    execute: async ({ subject, fact, category }) => {
-      if (containsSensitiveData(subject, fact)) {
+    execute: async ({ subject, fact, category, condition, avoidAction, expiresAt }) => {
+      if (containsSensitiveData(subject, fact, condition, avoidAction)) {
         return {
           success: false,
           message: SENSITIVE_DATA_REJECTION_MESSAGE,
         };
       }
 
-      if (!isMemorySafe(subject, fact)) {
+      if (!isMemorySafe(subject, fact, condition, avoidAction)) {
         return {
           success: false,
           message: PROMPT_INJECTION_REFUSAL_MESSAGE,
         };
       }
 
-      const memory = await repo.upsertMemory(chatId, subject, fact, senderName, category ?? "core");
+      let parsedExpiry: number | null = null;
+      if (expiresAt && expiresAt.trim()) {
+        const ms = Date.parse(expiresAt.trim());
+        if (!Number.isNaN(ms)) {
+          parsedExpiry = ms;
+        }
+      }
+
+      const memory = await repo.upsertMemory(chatId, subject, fact, senderName, category ?? "core", {
+        condition,
+        avoidAction,
+        expiresAt: parsedExpiry,
+      });
+
+      let extraMessage = "";
+      if (memory.avoidAction) extraMessage += ` Lưu ý tránh: "${memory.avoidAction}".`;
+      if (memory.condition) extraMessage += ` Điều kiện: "${memory.condition}".`;
+
       return {
         success: true,
         subject: memory.subject,
         fact: memory.fact,
         category: memory.category,
-        message: `Đã ghi nhớ thông tin về ${memory.subject}: "${memory.fact}".`,
+        condition: memory.condition,
+        avoidAction: memory.avoidAction,
+        expiresAt: memory.expiresAt,
+        message: `Đã ghi nhớ thông tin về ${memory.subject}: "${memory.fact}".${extraMessage}`,
       };
     },
   });
@@ -126,6 +158,9 @@ export function createMemoryTools(
           subject: m.subject,
           fact: m.fact,
           category: m.category,
+          condition: m.condition,
+          avoidAction: m.avoidAction,
+          expiresAt: m.expiresAt,
         })),
         message: `Đã tìm thấy ${memories.length} thông tin ghi nhớ.`,
       };
@@ -260,6 +295,9 @@ export function createMemoryTools(
           content: r.content,
           score: r.score,
           category: r.category,
+          condition: r.condition,
+          avoidAction: r.avoidAction,
+          expiresAt: r.expiresAt,
           people: r.people,
           happenedOn: r.happenedOn,
         })),

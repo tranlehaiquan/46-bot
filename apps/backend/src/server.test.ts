@@ -920,10 +920,21 @@ describe("LLM conversation and database integration", () => {
     const messageRepo = createMessageRepository(db);
     const memoryRepo = createMemoryRepository(db);
 
-    // Seed existing memory to verify prompt injection
-    await memoryRepo.upsertMemory("group-1", "Bố", "Thích uống cà phê đen không đường", "user-1");
+    // Seed existing memory to verify prompt injection with avoidAction
+    await memoryRepo.upsertMemory(
+      "group-1",
+      "Bố",
+      "Thích uống cà phê đen không đường",
+      "user-1",
+      "core",
+      { avoidAction: "Không mua cà phê sữa" },
+    );
+    // Seed expired memory to verify it is filtered out of prompt
+    await memoryRepo.upsertMemory("group-1", "Tạm thời", "Đi vắng", "user-1", "general", {
+      expiresAt: Date.now() - 5000,
+    });
 
-    let receivedMemories: Array<{ subject: string; fact: string }> | undefined;
+    let receivedMemories: Array<{ subject: string; fact: string; avoidAction?: string | null }> | undefined;
 
     const mockLlm: LlmClient = {
       async generateReply(params) {
@@ -937,10 +948,11 @@ describe("LLM conversation and database integration", () => {
         assert.ok(tools.memory_book_search, "memory_book_search tool should exist");
         assert.ok(tools.memory_search, "memory_search tool should exist");
 
-        // Simulate tool calls: remember a new fact and add a story
+        // Simulate tool calls: remember a new fact with action boundaries and add a story
         await tools.remember.execute?.({
           subject: "Mẹ",
           fact: "Dị ứng hành tây",
+          avoidAction: "Không nấu món có hành tây",
         });
 
         await tools.memory_book_add.execute?.({
@@ -980,11 +992,12 @@ describe("LLM conversation and database integration", () => {
     await post(app, JSON.stringify(msg));
     await queue.drain();
 
-    // Verify LLM received injected memories
+    // Verify LLM received injected memories (unexpired only, with avoidAction)
     assert.ok(receivedMemories);
     assert.equal(receivedMemories.length, 1);
     assert.equal(receivedMemories[0].subject, "Bố");
     assert.equal(receivedMemories[0].fact, "Thích uống cà phê đen không đường");
+    assert.equal(receivedMemories[0].avoidAction, "Không mua cà phê sữa");
 
     // Verify response sent
     assert.deepEqual(zalo.sends, [
@@ -993,7 +1006,11 @@ describe("LLM conversation and database integration", () => {
 
     // Verify persistence in SQLite
     const memories = await memoryRepo.listMemories("group-1");
-    assert.equal(memories.length, 2);
+    assert.equal(memories.length, 3);
+    const momMemory = memories.find((m) => m.subject === "Mẹ");
+    assert.ok(momMemory);
+    assert.equal(momMemory.avoidAction, "Không nấu món có hành tây");
+
     const stories = await memoryRepo.searchStories("group-1", "Đà Lạt");
     assert.equal(stories.length, 1);
     assert.equal(stories[0].title, "Chuyến đi Đà Lạt đầu tiên");

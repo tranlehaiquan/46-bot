@@ -4,6 +4,9 @@ export type MemorySearchCandidate = {
   subject: string;
   content: string;
   category?: "core" | "general";
+  condition?: string | null;
+  avoidAction?: string | null;
+  expiresAt?: number | null;
   people?: string;
   happenedOn?: string | null;
   ts: number;

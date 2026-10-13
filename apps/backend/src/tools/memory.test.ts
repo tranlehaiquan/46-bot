@@ -273,4 +273,49 @@ describe("Memory tools", () => {
       closeDatabase(db);
     }
   });
+
+  it("supports action-sensitive memory boundaries (condition, avoidAction, expiresAt) in remember and retrieval", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      await migrate(db);
+      const repo = createMemoryRepository(db);
+      const tools = createMemoryTools(repo, { chatId: "chat-1", senderName: "Bố" });
+
+      const res = (await tools.remember.execute!(
+        {
+          subject: "Sức khỏe bố",
+          fact: "Dạo này bị đau lưng",
+          avoidAction: "Không nhắc bố chạy bộ hay tập gym",
+          condition: "Đến khi đỡ đau lưng",
+          expiresAt: "2026-12-31",
+        },
+        {} as any,
+      )) as any;
+
+      assert.equal(res.success, true);
+      assert.equal(res.avoidAction, "Không nhắc bố chạy bộ hay tập gym");
+      assert.equal(res.condition, "Đến khi đỡ đau lưng");
+      assert.ok(res.expiresAt);
+      assert.ok(res.message.includes("Lưu ý tránh: \"Không nhắc bố chạy bộ hay tập gym\""));
+
+      // Verify list_memories exposes action boundaries
+      const listRes = (await tools.list_memories.execute!(
+        { subject: "Sức khỏe bố" },
+        {} as any,
+      )) as any;
+      assert.equal(listRes.count, 1);
+      assert.equal(listRes.memories[0].avoidAction, "Không nhắc bố chạy bộ hay tập gym");
+      assert.equal(listRes.memories[0].condition, "Đến khi đỡ đau lưng");
+
+      // Verify memory_search exposes action boundaries
+      const searchRes = (await tools.memory_search.execute!(
+        { query: "đau lưng" },
+        {} as any,
+      )) as any;
+      assert.equal(searchRes.count, 1);
+      assert.equal(searchRes.results[0].avoidAction, "Không nhắc bố chạy bộ hay tập gym");
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });

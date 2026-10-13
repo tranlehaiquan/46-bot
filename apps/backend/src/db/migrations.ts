@@ -90,6 +90,9 @@ export async function migrate(db: SqliteDatabase): Promise<void> {
       fact TEXT NOT NULL,
       category TEXT NOT NULL DEFAULT 'core',
       status TEXT NOT NULL DEFAULT 'active',
+      condition TEXT,
+      avoid_action TEXT,
+      expires_at INTEGER,
       created_by TEXT NOT NULL,
       ts INTEGER NOT NULL
     );
@@ -179,6 +182,15 @@ export async function migrate(db: SqliteDatabase): Promise<void> {
   }
   if (!columnNames.has("status")) {
     await db.execute("ALTER TABLE memories ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  }
+  if (!columnNames.has("condition")) {
+    await db.execute("ALTER TABLE memories ADD COLUMN condition TEXT");
+  }
+  if (!columnNames.has("avoid_action")) {
+    await db.execute("ALTER TABLE memories ADD COLUMN avoid_action TEXT");
+  }
+  if (!columnNames.has("expires_at")) {
+    await db.execute("ALTER TABLE memories ADD COLUMN expires_at INTEGER");
   }
   await db.execute("CREATE INDEX IF NOT EXISTS idx_memories_chat_status ON memories(chat_id, status)");
 }

@@ -432,6 +432,9 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
           subject: m.subject,
           fact: m.fact,
           category: m.category,
+          condition: m.condition,
+          avoidAction: m.avoidAction,
+          expiresAt: m.expiresAt,
         }))
       : undefined;
 

@@ -229,4 +229,58 @@ describe("MemoryRepository", () => {
       closeDatabase(db);
     }
   });
+
+  it("stores action boundaries and filters expired memories in listActiveMemories", async () => {
+    const db = openDatabase(":memory:");
+    try {
+      await migrate(db);
+      const repo = createMemoryRepository(db);
+      const now = 100000;
+
+      // 1. Permanent core memory
+      await repo.upsertMemory("chat-1", "Bố", "Thích cà phê đen", "user-1", "core");
+
+      // 2. Action-sensitive memory with condition and avoidAction
+      await repo.upsertMemory(
+        "chat-1",
+        "Sức khỏe bố",
+        "Bố đang bị đau lưng",
+        "user-1",
+        "core",
+        {
+          avoidAction: "Không nhắc bố tập thể dục nặng",
+          condition: "Đến khi hết đau lưng",
+          expiresAt: now + 50000,
+        },
+      );
+
+      // 3. Expired memory
+      await repo.upsertMemory(
+        "chat-1",
+        "Lịch công tác mẹ",
+        "Mẹ đi công tác Đà Nẵng",
+        "user-1",
+        "general",
+        {
+          expiresAt: now - 1000, // already expired
+        },
+      );
+
+      // Verify listActiveMemories filters out the expired memory
+      const active = await repo.listActiveMemories("chat-1", 10, now);
+      assert.equal(active.length, 2);
+      assert.ok(active.some((m) => m.subject === "Bố"));
+      const backPain = active.find((m) => m.subject === "Sức khỏe bố");
+      assert.ok(backPain);
+      assert.equal(backPain.avoidAction, "Không nhắc bố tập thể dục nặng");
+      assert.equal(backPain.condition, "Đến khi hết đau lưng");
+      assert.ok(!active.some((m) => m.subject === "Lịch công tác mẹ"));
+
+      // Verify listMemories still contains all records including expired
+      const allMemories = await repo.listMemories("chat-1");
+      assert.equal(allMemories.length, 3);
+    } finally {
+      closeDatabase(db);
+    }
+  });
 });

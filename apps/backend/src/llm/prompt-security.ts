@@ -90,8 +90,8 @@ export function sanitizePromptText(text: string | undefined | null): string {
 /**
  * Validates whether a memory item (subject + fact) contains prompt injection or override phrases.
  */
-export function isMemorySafe(subject: string, fact: string): boolean {
-  const combined = `${subject} ${fact}`;
+export function isMemorySafe(...texts: (string | undefined | null)[]): boolean {
+  const combined = texts.filter(Boolean).join(" ");
   const check = detectPromptInjection(combined);
   return !check.isInjection;
 }

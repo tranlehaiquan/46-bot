@@ -173,6 +173,9 @@ describe("SQLite database layer", () => {
       assert.equal(row.subject, "Bố");
       assert.equal(row.category, "core");
       assert.equal(row.status, "active");
+      assert.equal(row.condition, null);
+      assert.equal(row.avoid_action, null);
+      assert.equal(row.expires_at, null);
     } finally {
       closeDatabase(db);
     }
