@@ -1,8 +1,11 @@
 import { createClient, type Client } from "@libsql/client";
+import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import { dirname, basename, resolve } from "node:path";
 import { mkdirSync } from "node:fs";
+import * as schema from "./schema/index.js";
 
 export type SqliteDatabase = Client;
+export type DrizzleDatabase = LibSQLDatabase<typeof schema>;
 
 export function openDatabase(dbPathOrUrl: string, authToken?: string): SqliteDatabase {
   const url = dbPathOrUrl;
@@ -62,4 +65,8 @@ export function closeDatabase(db: SqliteDatabase): void {
   } catch {
     // Ignore close errors
   }
+}
+
+export function createDrizzleDb(client: SqliteDatabase): DrizzleDatabase {
+  return drizzle(client, { schema });
 }
