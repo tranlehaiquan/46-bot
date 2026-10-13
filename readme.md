@@ -1,5 +1,8 @@
 # Family Bot (Zalo Bot)
 
+[![CI](https://github.com/tranlehaiquan/46-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/tranlehaiquan/46-bot/actions/workflows/ci.yml)
+[![CD](https://github.com/tranlehaiquan/46-bot/actions/workflows/cd.yml/badge.svg)](https://github.com/tranlehaiquan/46-bot/actions/workflows/cd.yml)
+
 Trợ lý ảo thông minh, thân thiện dành riêng cho nhóm chat gia đình trên Zalo. Bot được xây dựng trên nền tảng Node.js 22, TypeScript, SQLite, Fastify và tích hợp mô hình ngôn ngữ lớn (Gemini 3.8 Flash / DeepSeek) thông qua Vercel AI SDK với khả năng tự động gọi công cụ (Function Calling / Tool Calling).
 
 ---
@@ -284,6 +287,50 @@ pnpm test
 pnpm test src/tools/lists.test.ts
 pnpm test src/tools/events.test.ts
 pnpm test src/tools/holidays.test.ts
+```
+
+---
+
+## 🔄 CI/CD Pipelines & Container Registry
+
+Dự án sử dụng GitHub Actions để tự động hóa quy trình kiểm thử, build và phát hành container Docker lên GitHub Container Registry (GHCR):
+
+### 1. Continuous Integration (`.github/workflows/ci.yml`)
+- **Kích hoạt (Triggers):** Tự động chạy khi có commit push lên nhánh `main` hoặc khi tạo/cập nhật `Pull Request` vào nhánh `main`.
+- **Nội dung kiểm tra:**
+  - Thiết lập môi trường Node.js 22 và pnpm 12 kèm cache pnpm store tự động.
+  - Cài đặt dependencies với `pnpm install --frozen-lockfile`.
+  - Kiểm tra kiểu dữ liệu toàn bộ monorepo: `pnpm typecheck`.
+  - Chạy toàn bộ bộ test suite: `pnpm test`.
+  - Build thử nghiệm bundle: `pnpm build` (bao gồm build frontend admin và compile backend).
+  - Kiểm tra tính toàn vẹn của Dockerfile: Build thử nghiệm image Docker multi-stage mà không đẩy lên registry (`push: false`) kèm Buildx cache.
+
+### 2. Continuous Delivery / Container Release (`.github/workflows/cd.yml`)
+- **Kích hoạt (Triggers):** Khi push tag phiên bản (`v*.*.*`), khi merge vào nhánh `main`, hoặc kích hoạt thủ công qua `workflow_dispatch`.
+- **Quyền hạn (Permissions):** `contents: read`, `packages: write` sử dụng `GITHUB_TOKEN` mặc định của repo.
+- **Phát hành (GHCR):** Tự động đóng gói và xuất bản image Docker tới:
+  ```text
+  ghcr.io/<owner>/46-bot:<tag>
+  ```
+  - `ghcr.io/<owner>/46-bot:latest` (khi chạy trên nhánh `main`)
+  - `ghcr.io/<owner>/46-bot:sha-<commit-hash>`
+  - `ghcr.io/<owner>/46-bot:vX.Y.Z` (khi có release tag)
+
+### 3. Kéo và chạy image từ GHCR
+```bash
+# Đăng nhập GHCR (nếu repo ở chế độ private)
+echo $GITHUB_TOKEN | docker login ghcr.io -u <YOUR_GITHUB_USERNAME> --password-stdin
+
+# Kéo image mới nhất
+docker pull ghcr.io/<owner>/46-bot:latest
+
+# Chạy container
+docker run -d \
+  --name family-bot \
+  -p 3000:3000 \
+  -v $(pwd)/data:/data \
+  --env-file .env \
+  ghcr.io/<owner>/46-bot:latest
 ```
 
 ---

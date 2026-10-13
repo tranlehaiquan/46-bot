@@ -19,8 +19,6 @@ import path from "node:path";
 import fs from "node:fs";
 import type { SqliteDatabase } from "./db/connection.js";
 import { registerAdminRoutes } from "./admin/routes.js";
-import { createWordChainRepository, type WordChainRepository } from "./db/repositories/word-chain.js";
-import { WordChainService } from "./word-chain/service.js";
 
 import type { SettingsRepository } from "./db/repositories/settings.js";
 import { DynamicLlmClient } from "./admin/settings-helper.js";
@@ -45,8 +43,6 @@ export type ServerDeps = {
   channelRepo?: ChannelRepository;
   lookupsRepo?: LookupRepository;
   settingsRepo?: SettingsRepository;
-  wordChainRepo?: WordChainRepository;
-  wordChainService?: WordChainService;
   groupMemberRepo?: GroupMemberRepository;
   llmClient?: LlmClient;
 };
@@ -117,18 +113,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   app.get("/health", async () => ({ ok: true }));
 
-  const wordChainRepo = deps.wordChainRepo ?? (deps.db ? createWordChainRepository(deps.db) : undefined);
-  const wordChainService =
-    deps.wordChainService ??
-    (wordChainRepo
-      ? new WordChainService({
-          repo: wordChainRepo,
-          onTimeout: async (chatId, message) => {
-            await deps.zalo.sendMessage(chatId, message);
-          },
-        })
-      : undefined);
-
   const groupMemberRepo =
     deps.groupMemberRepo ?? (deps.db ? createGroupMemberRepository(deps.db) : undefined);
 
@@ -158,8 +142,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         channelRepo: deps.channelRepo,
         lookupsRepo: deps.lookupsRepo,
         settingsRepo: deps.settingsRepo,
-        wordChainRepo,
-        wordChainService,
         groupMemberRepo,
         llmClient: deps.llmClient,
         seen,

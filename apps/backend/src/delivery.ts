@@ -23,12 +23,8 @@ import { createWeatherTool } from "./tools/weather.js";
 import { createLotteryTool } from "./tools/lottery.js";
 import { createWebSearchTool } from "./tools/web-search.js";
 import { createCrawl4AiTool } from "./tools/crawl4ai.js";
-import { createWordChainTools } from "./tools/word-chain.js";
 import { createGroupMemberTools } from "./tools/group-members.js";
-import type { WordChainRepository } from "./db/repositories/word-chain.js";
 import type { GroupMemberRepository } from "./db/repositories/group-members.js";
-import type { WordChainService } from "./word-chain/service.js";
-import { splitSyllables, matchesChain } from "./word-chain/dictionary.js";
 import { splitText } from "./utils/split-text.js";
 import type { ZaloClient } from "./zalo-client.js";
 import { getEventsImageDir } from "./server.js";
@@ -110,8 +106,6 @@ export type DeliveryDependencies = {
   channelRepo?: ChannelRepository;
   lookupsRepo?: LookupRepository;
   settingsRepo?: SettingsRepository;
-  wordChainRepo?: WordChainRepository;
-  wordChainService?: WordChainService;
   groupMemberRepo?: GroupMemberRepository;
   llmClient?: LlmClient;
   seen?: Set<string>;
@@ -131,8 +125,6 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     channelRepo,
     lookupsRepo,
     settingsRepo,
-    wordChainRepo,
-    wordChainService,
     groupMemberRepo,
     llmClient,
     seen,
@@ -241,32 +233,9 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     return;
   }
 
-  const trimmedText = message.text ? message.text.trim() : "";
-  const lowerText = trimmedText.toLowerCase();
-  const isExplicitGameCmd =
-    lowerText === "!noichu" ||
-    lowerText.startsWith("!noichu ") ||
-    lowerText === "!dungnoichu" ||
-    lowerText.startsWith("!dungnoichu ") ||
-    lowerText === "!bxh" ||
-    lowerText.startsWith("!bxh ") ||
-    lowerText.startsWith("!bxh noichu");
+  const isAddressed = isDirect || isMentionedOrReplied(message, config.botId);
 
-  let isMatchingActiveChain = false;
-  if (wordChainService && !isExplicitGameCmd) {
-    const activeGame = await wordChainService.getActiveGame(message.chatId);
-    if (activeGame) {
-      const parts = splitSyllables(trimmedText);
-      if (parts && matchesChain(activeGame.currentWord, trimmedText)) {
-        isMatchingActiveChain = true;
-      }
-    }
-  }
-
-  const isWordChainTrigger = isExplicitGameCmd || isMatchingActiveChain;
-  const isAddressed = isDirect || isMentionedOrReplied(message, config.botId) || isWordChainTrigger;
-
-  // In groups, only respond if mentioned or replying to bot, or word chain game interaction
+  // In groups, only respond if mentioned or replying to bot
   if (isGroup && !isAddressed) {
     return;
   }
@@ -322,62 +291,6 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
     }
   }
 
-  // Fast-path Word Chain handler
-  if (wordChainService) {
-    if (lowerText === "!dungnoichu" || lowerText === "!noichu stop" || lowerText === "!noichu dung") {
-      const res = await wordChainService.stopGame(message.chatId);
-      await zalo.sendMessage(message.chatId, res.message);
-      return;
-    }
-    if (lowerText === "!bxh all" || lowerText === "!bxh noichu all" || lowerText === "!noichu bxh all") {
-      const entries = wordChainRepo ? await wordChainRepo.getLeaderboard(undefined, 10) : [];
-      const text = wordChainService.formatLeaderboard(entries, true);
-      await zalo.sendMessage(message.chatId, text);
-      return;
-    }
-    if (lowerText === "!bxh" || lowerText === "!bxh noichu" || lowerText === "!noichu bxh") {
-      const entries = wordChainRepo ? await wordChainRepo.getLeaderboard(message.chatId, 10) : [];
-      const text = wordChainService.formatLeaderboard(entries, false);
-      await zalo.sendMessage(message.chatId, text);
-      return;
-    }
-    if (lowerText === "!noichu stats" || lowerText === "!noichu diem" || lowerText === "!noichu me") {
-      const stats = wordChainRepo ? await wordChainRepo.getPlayerStats(message.chatId, message.senderId) : undefined;
-      const text = stats
-        ? wordChainService.formatPlayerStats(stats)
-        : "Bạn chưa có điểm nối chữ nào trong nhóm này. Gõ '!noichu' để bắt đầu chơi nhé!";
-      await zalo.sendMessage(message.chatId, text);
-      return;
-    }
-    if (lowerText === "!noichu" || lowerText.startsWith("!noichu ") || lowerText.startsWith("!noichu start")) {
-      const customWord = trimmedText.replace(/^!noichu(\s+start)?/i, "").trim() || undefined;
-      const res = await wordChainService.startGame(message.chatId, customWord);
-      await zalo.sendMessage(message.chatId, res.message);
-      return;
-    }
-
-    const activeGame = await wordChainService.getActiveGame(message.chatId);
-    if (activeGame) {
-      const syllables = splitSyllables(trimmedText);
-      if (syllables) {
-        const turnResult = await wordChainService.playTurn(
-          message.chatId,
-          message.senderId,
-          message.senderName || message.senderId,
-          trimmedText
-        );
-        if (
-          turnResult.status === "valid" ||
-          isAddressed ||
-          turnResult.status === "already_used" ||
-          turnResult.status === "not_in_dictionary"
-        ) {
-          await zalo.sendMessage(message.chatId, turnResult.message);
-          return;
-        }
-      }
-    }
-  }
 
   // Reply generation
   if (llmClient) {
@@ -479,15 +392,6 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       })
       : undefined;
 
-    const wordChainTools =
-      wordChainService && wordChainRepo
-        ? createWordChainTools(wordChainService, wordChainRepo, {
-            chatId: message.chatId,
-            senderId: message.senderId,
-            senderName: message.senderName || message.senderId,
-          })
-        : undefined;
-
     const groupMemberTools =
       isGroup && groupMemberRepo
         ? createGroupMemberTools(groupMemberRepo, {
@@ -507,7 +411,6 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       weatherTools ||
       lookupTools ||
       lotteryTools ||
-      wordChainTools ||
       groupMemberTools
         ? {
             ...listTools,
@@ -519,7 +422,6 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
             ...weatherTools,
             ...lookupTools,
             ...lotteryTools,
-            ...wordChainTools,
             ...groupMemberTools,
           }
         : undefined;
