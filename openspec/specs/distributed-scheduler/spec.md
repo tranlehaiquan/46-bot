@@ -2,9 +2,7 @@
 
 ## Purpose
 Provide distributed background queueing, worker concurrency control, job deduplication, and resilient task execution across multiple instances with automatic fallback to in-memory scheduling when Redis is not available.
-
 ## Requirements
-
 ### Requirement: Redis connection with graceful in-memory fallback
 The system SHALL connect to Redis when `REDIS_URL` is configured. If `REDIS_URL` is omitted, the system SHALL log a notice and fall back to the in-process timer scheduler so that single-node and local development run without external dependencies. If the configured Redis connection fails at startup, the system SHALL log an error and fall back to in-process scheduling without terminating the process.
 
@@ -40,3 +38,15 @@ Upon receiving application shutdown signals (`SIGINT` or `SIGTERM`), the schedul
 #### Scenario: In-flight task finishes on shutdown
 - **WHEN** a shutdown signal is received while a scheduled lookup is generating an LLM response
 - **THEN** the worker allows the in-flight job to finish and deliver before closing connections
+
+### Requirement: Unified task execution pipeline
+The system SHALL execute background scheduler tasks (morning briefings, weekly outlooks, event reminders, and scheduled lookups) through a unified task execution module shared by both the in-memory timer runner and distributed BullMQ workers. Both runners SHALL provide identical tool sets, system prompt formatting, text chunking, and error recording.
+
+#### Scenario: Scheduled lookup execution parity
+- **WHEN** a scheduled lookup is triggered by either the in-process timer runner or a BullMQ queue worker
+- **THEN** both runners invoke the shared lookup execution service with identical tool factories (weather, holidays, Tavily web search, Crawl4AI), prompt injection validation, and Zalo Markdown chunked delivery
+
+#### Scenario: Notification compilation and delivery parity
+- **WHEN** morning briefings, weekly outlooks, or event reminders are processed
+- **THEN** both runners execute identical data gathering, formatting, deduplication checks, and Zalo dispatch logic via shared execution functions
+

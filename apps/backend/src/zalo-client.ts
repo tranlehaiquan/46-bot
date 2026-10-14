@@ -32,6 +32,14 @@ type BotConstructor = new (config: {
   logger?: { error(message: string, error: unknown): void };
 }) => SdkBot;
 
+function isRejectedMessage(res: unknown): boolean {
+  if (res && typeof res === "object" && "messageId" in res) {
+    const msgId = String((res as { messageId?: string }).messageId ?? "");
+    return msgId.startsWith("local-");
+  }
+  return false;
+}
+
 export function createZaloClient(token: string): ZaloClient {
   const { Bot } = require("zalo-bot-js") as { Bot: BotConstructor };
   const bot = new Bot({
@@ -61,7 +69,11 @@ export function createZaloClient(token: string): ZaloClient {
       const payloadText = options?.parse_mode ? cleanOutboundText(text) : text;
       if (options?.parse_mode) {
         try {
-          await bot.sendMessage(chatId, payloadText, options);
+          const res = await bot.sendMessage(chatId, payloadText, options);
+          if (isRejectedMessage(res)) {
+            const msgId = (res as { messageId?: string })?.messageId;
+            throw new Error(`Zalo API rejected message with parse_mode ${options.parse_mode} (${msgId})`);
+          }
           return;
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error);
@@ -73,11 +85,23 @@ export function createZaloClient(token: string): ZaloClient {
           );
           const fallbackOptions = { ...options };
           delete fallbackOptions.parse_mode;
-          await bot.sendMessage(chatId, payloadText, Object.keys(fallbackOptions).length > 0 ? fallbackOptions : undefined);
+          const fallbackRes = await bot.sendMessage(
+            chatId,
+            payloadText,
+            Object.keys(fallbackOptions).length > 0 ? fallbackOptions : undefined
+          );
+          if (isRejectedMessage(fallbackRes)) {
+            const msgId = (fallbackRes as { messageId?: string })?.messageId;
+            throw new Error(`Zalo API rejected plain text fallback message (${msgId})`);
+          }
           return;
         }
       }
-      await bot.sendMessage(chatId, payloadText, options);
+      const res = await bot.sendMessage(chatId, payloadText, options);
+      if (isRejectedMessage(res)) {
+        const msgId = (res as { messageId?: string })?.messageId;
+        throw new Error(`Zalo API rejected message (${msgId})`);
+      }
     },
     async sendChatAction(chatId, action) {
       if (typeof bot.sendChatAction === "function") {

@@ -157,4 +157,80 @@ describe("createZaloClient sendMessage", () => {
       }
     }
   });
+
+  it("retries as plain text when bot.sendMessage returns synthetic local- messageId", async () => {
+    const zaloBotPath = require.resolve("zalo-bot-js");
+    const originalEntry = require.cache[zaloBotPath];
+
+    const calls: Array<{ chatId: string; text: string; options?: any }> = [];
+    class MockBot {
+      config: any;
+      constructor(config: any) {
+        this.config = config;
+      }
+      async sendMessage(chatId: string, text: string, options?: any) {
+        calls.push({ chatId, text, options });
+        if (options?.parse_mode) {
+          // Simulate Zalo API rejection returning fallback local message
+          return { messageId: "local-1728900000000" };
+        }
+        return { messageId: "real-msg-123" };
+      }
+    }
+
+    require.cache[zaloBotPath] = {
+      exports: { Bot: MockBot },
+    } as any;
+
+    try {
+      const client = createZaloClient("test-token");
+      await client.sendMessage("chat-1", "**Hello**", { parse_mode: "markdown" });
+      assert.equal(calls.length, 2);
+      assert.equal(calls[0].options?.parse_mode, "markdown");
+      assert.equal(calls[1].options, undefined);
+    } finally {
+      if (originalEntry) {
+        require.cache[zaloBotPath] = originalEntry;
+      } else {
+        delete require.cache[zaloBotPath];
+      }
+    }
+  });
+
+  it("throws error when plain text fallback also returns synthetic local- messageId", async () => {
+    const zaloBotPath = require.resolve("zalo-bot-js");
+    const originalEntry = require.cache[zaloBotPath];
+
+    class MockBot {
+      config: any;
+      constructor(config: any) {
+        this.config = config;
+      }
+      async sendMessage() {
+        return { messageId: "local-failed" };
+      }
+    }
+
+    require.cache[zaloBotPath] = {
+      exports: { Bot: MockBot },
+    } as any;
+
+    try {
+      const client = createZaloClient("test-token");
+      await assert.rejects(
+        async () => {
+          await client.sendMessage("chat-1", "Hello", { parse_mode: "markdown" });
+        },
+        {
+          message: /Zalo API rejected plain text fallback message/,
+        }
+      );
+    } finally {
+      if (originalEntry) {
+        require.cache[zaloBotPath] = originalEntry;
+      } else {
+        delete require.cache[zaloBotPath];
+      }
+    }
+  });
 });

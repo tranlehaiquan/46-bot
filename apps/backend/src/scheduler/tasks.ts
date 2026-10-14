@@ -262,7 +262,7 @@ export async function executeScheduledLookup(
       throw new Error("Empty reply from LLM for scheduled lookup");
     }
 
-    const chunks = splitText(effectiveReply, 2000);
+    const chunks = splitText(effectiveReply, 1200);
     for (const chunk of chunks) {
       await zalo.sendMessage(lookup.chatId, chunk, { parse_mode: "markdown" });
     }
