@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { redactText } from "./redact.js";
+import { cleanOutboundText } from "./utils/clean-text.js";
 
 const require = createRequire(import.meta.url);
 
@@ -57,9 +58,10 @@ export function createZaloClient(token: string): ZaloClient {
       return { outcome: result?.outcome ?? "" };
     },
     async sendMessage(chatId, text, options) {
+      const payloadText = options?.parse_mode ? cleanOutboundText(text) : text;
       if (options?.parse_mode) {
         try {
-          await bot.sendMessage(chatId, text, options);
+          await bot.sendMessage(chatId, payloadText, options);
           return;
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error);
@@ -71,11 +73,11 @@ export function createZaloClient(token: string): ZaloClient {
           );
           const fallbackOptions = { ...options };
           delete fallbackOptions.parse_mode;
-          await bot.sendMessage(chatId, text, Object.keys(fallbackOptions).length > 0 ? fallbackOptions : undefined);
+          await bot.sendMessage(chatId, payloadText, Object.keys(fallbackOptions).length > 0 ? fallbackOptions : undefined);
           return;
         }
       }
-      await bot.sendMessage(chatId, text, options);
+      await bot.sendMessage(chatId, payloadText, options);
     },
     async sendChatAction(chatId, action) {
       if (typeof bot.sendChatAction === "function") {

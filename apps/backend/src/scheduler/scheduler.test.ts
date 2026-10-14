@@ -473,6 +473,48 @@ describe("Background Scheduler Engine", () => {
     assert.equal(sendsForChat1.length, 1);
   });
 
+  it("cleans horizontal rules and excessive blank lines before sending scheduled lookup message", async () => {
+    const fireTime = new Date(Date.UTC(2026, 9, 5, 0, 0, 0));
+    const clock = makeClock(fireTime);
+
+    await channelRepo.upsertDiscovery({ chatId: "chat-clean-lookup", name: "Family", chatType: "GROUP", status: "active" });
+    const lookup = await lookupsRepo.createLookup({
+      chatId: "chat-clean-lookup",
+      instruction: "Báo cáo thời tiết",
+      recurrence: "daily",
+      hour: 7,
+      minute: 0,
+      createdBy: "user-1",
+    });
+
+    const config = loadConfig({
+      ZALO_BOT_TOKEN: "dummy-token",
+      FAMILY_CHAT_IDS: "chat-clean-lookup",
+      WEBHOOK_URL: "https://example.com/webhooks/zalo",
+      WEBHOOK_SECRET: "12345678",
+      MODE: "webhook",
+      PORT: "3000",
+      GEMINI_API_KEY: "key",
+    });
+
+    const llm = fakeLlm({ replyText: "Báo cáo thời tiết:\n\n\n---\n\n\nNhiệt độ 28 độ C." });
+
+    const scheduler = createScheduler({
+      config,
+      eventsRepo: repo,
+      lookupsRepo,
+      channelsRepo: channelRepo,
+      llm,
+      zalo,
+      clock,
+    });
+
+    await scheduler.tick();
+    const sent = zalo.sends.find((s) => s.chatId === "chat-clean-lookup");
+    assert.ok(sent);
+    assert.equal(sent.text, "Báo cáo thời tiết:\n\nNhiệt độ 28 độ C.");
+  });
+
   it("2.2 calls the model with only weather_check, web_search, and holiday_list_upcoming, no chat history, and the saved instruction wrapped as user data", async () => {
     const fireTime = new Date(Date.UTC(2026, 9, 5, 0, 0, 0));
     const clock = makeClock(fireTime);

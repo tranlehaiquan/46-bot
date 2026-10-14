@@ -27,6 +27,7 @@ import { createCrawl4AiTool } from "./tools/crawl4ai.js";
 import { createGroupMemberTools } from "./tools/group-members.js";
 import type { GroupMemberRepository } from "./db/repositories/group-members.js";
 import { splitText } from "./utils/split-text.js";
+import { cleanOutboundText } from "./utils/clean-text.js";
 import type { ZaloClient } from "./zalo-client.js";
 import { getEventsImageDir } from "./server.js";
 
@@ -511,7 +512,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       }
     }
 
-    const effectiveReply = replyText.trim() || FALLBACK_ERROR_MESSAGE;
+    const effectiveReply = cleanOutboundText(replyText) || FALLBACK_ERROR_MESSAGE;
     const chunks = splitText(effectiveReply, 2000).filter((c) => c.trim().length > 0);
     for (const chunk of chunks) {
       await zalo.sendMessage(message.chatId, chunk, { parse_mode: "markdown" });
@@ -528,7 +529,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
         senderId: "bot",
         senderName: "Family Bot",
         role: "assistant",
-        content: replyText,
+        content: effectiveReply,
       });
     }
 

@@ -8,6 +8,7 @@ import { createWeatherTool } from "../tools/weather.js";
 import { createWebSearchTool } from "../tools/web-search.js";
 import { createCrawl4AiTool } from "../tools/crawl4ai.js";
 import { splitText } from "../utils/split-text.js";
+import { cleanOutboundText } from "../utils/clean-text.js";
 import {
   formatEventReminder,
   formatMorningBriefing,
@@ -229,11 +230,12 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
           tools,
         });
 
-        if (!reply || reply.trim().length === 0) {
+        const effectiveReply = cleanOutboundText(reply);
+        if (!effectiveReply) {
           throw new Error("Empty reply from LLM for scheduled lookup");
         }
 
-        const chunks = splitText(reply, 2000);
+        const chunks = splitText(effectiveReply, 2000);
         for (const chunk of chunks) {
           await zalo.sendMessage(lookup.chatId, chunk, { parse_mode: "markdown" });
         }

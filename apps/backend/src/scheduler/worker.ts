@@ -21,6 +21,7 @@ import {
   type ScheduledLookupJobData,
   type SchedulerDependencies,
 } from "./types.js";
+import { cleanOutboundText } from "../utils/clean-text.js";
 
 export async function processMorningBriefing(
   deps: SchedulerDependencies,
@@ -213,11 +214,12 @@ export async function processSingleLookup(
       tools,
     });
 
-    if (!reply || reply.trim().length === 0) {
+    const effectiveReply = cleanOutboundText(reply);
+    if (!effectiveReply) {
       throw new Error("Empty reply from LLM for scheduled lookup");
     }
 
-    const chunks = splitText(reply, 2000);
+    const chunks = splitText(effectiveReply, 2000);
     for (const chunk of chunks) {
       await zalo.sendMessage(lookup.chatId, chunk, { parse_mode: "markdown" });
     }

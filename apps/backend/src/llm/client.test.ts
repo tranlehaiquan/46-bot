@@ -118,6 +118,11 @@ describe("buildSystemPrompt", () => {
     assert.match(DEFAULT_SYSTEM_PROMPT, /event_add/);
   });
 
+  it("instructs assistant in DEFAULT_SYSTEM_PROMPT to avoid horizontal rules and excessive blank lines", () => {
+    assert.match(DEFAULT_SYSTEM_PROMPT, /KHÔNG dùng đường kẻ ngang/);
+    assert.match(DEFAULT_SYSTEM_PROMPT, /KHÔNG để nhiều dòng trống liên tiếp/);
+  });
+
   it("unit test shows an active chat receives those four lookup tools", async () => {
     const { openDatabase, closeDatabase } = await import("../db/connection.js");
     const { migrate } = await import("../db/migrations.js");

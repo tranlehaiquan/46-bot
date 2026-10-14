@@ -122,4 +122,39 @@ describe("createZaloClient sendMessage", () => {
       }
     }
   });
+
+  it("cleans useless dividers and excessive blank lines when parse_mode is markdown", async () => {
+    const zaloBotPath = require.resolve("zalo-bot-js");
+    const originalEntry = require.cache[zaloBotPath];
+
+    const calls: Array<{ chatId: string; text: string; options?: any }> = [];
+    class MockBot {
+      config: any;
+      constructor(config: any) {
+        this.config = config;
+      }
+      async sendMessage(chatId: string, text: string, options?: any) {
+        calls.push({ chatId, text, options });
+        return { ok: true };
+      }
+    }
+
+    require.cache[zaloBotPath] = {
+      exports: { Bot: MockBot },
+    } as any;
+
+    try {
+      const client = createZaloClient("test-token");
+      const rawText = "Part 1\n\n\n---\n\n\nPart 2";
+      await client.sendMessage("chat-1", rawText, { parse_mode: "markdown" });
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].text, "Part 1\n\nPart 2");
+    } finally {
+      if (originalEntry) {
+        require.cache[zaloBotPath] = originalEntry;
+      } else {
+        delete require.cache[zaloBotPath];
+      }
+    }
+  });
 });

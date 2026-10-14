@@ -115,6 +115,7 @@ function testApp(
 
 function fakeZalo(): ZaloClient & {
   sends: Array<{ chatId: string; text: string }>;
+  sendCalls: Array<{ chatId: string; text: string; options?: any }>;
   actions: Array<{ chatId: string; action: string }>;
 } {
   const sends: Array<{ chatId: string; text: string }> = [];
@@ -477,6 +478,51 @@ describe("LLM conversation and database integration", () => {
     assert.equal(history[0].content, "@bot Chao buoi sang");
     assert.equal(history[1].role, "assistant");
     assert.equal(history[1].content, "Chao ban! Chuc mot ngay tot lanh.");
+
+    await app.close();
+    closeDatabase(db);
+  });
+
+  it("cleans horizontal rules and excessive blank lines before sending and saving assistant reply", async () => {
+    const db = openDatabase(":memory:");
+    await migrate(db);
+    const seenRepo = createSeenRepository(db);
+    const messageRepo = createMessageRepository(db);
+
+    const rawReply = "Section 1\n\n\n---\n\n\nSection 2\n   \n   \nSection 3";
+    const mockLlm: LlmClient = {
+      async generateReply() {
+        return rawReply;
+      },
+    };
+
+    const { app, zalo, queue } = testApp("group-1", undefined, {
+      seenRepo,
+      messageRepo,
+      llmClient: mockLlm,
+    });
+
+    const msg = envelope({
+      chatId: "group-1",
+      chatType: "GROUP",
+      text: "@bot hoi cau nay",
+      senderId: "user-1",
+      senderName: "Bob",
+      messageId: "msg-clean-test",
+    });
+
+    await post(app, JSON.stringify(msg));
+    await queue.drain();
+
+    const expectedCleaned = "Section 1\n\nSection 2\n\nSection 3";
+    assert.deepEqual(zalo.sends, [
+      { chatId: "group-1", text: expectedCleaned },
+    ]);
+
+    const history = await messageRepo.getRecent("group-1");
+    assert.equal(history.length, 2);
+    assert.equal(history[1].role, "assistant");
+    assert.equal(history[1].content, expectedCleaned);
 
     await app.close();
     closeDatabase(db);
