@@ -36,7 +36,14 @@ export {
 export { createInMemoryScheduler, startInMemoryScheduler } from "./in-memory.js";
 export { connectRedis, createRedisClient, closeRedis } from "./redis.js";
 export { createSchedulerQueue, registerRepeatableJobs, enqueueLookupJob, enqueueEventReminderJob } from "./queue.js";
-export { createSchedulerWorker, processJob } from "./worker.js";
+export { createSchedulerWorker, processJob, processMorningBriefing, processWeeklySummary, processEventReminders, processSingleLookup } from "./worker.js";
+export {
+  createSchedulerTools,
+  executeMorningBriefing,
+  executeWeeklySummary,
+  executeEventReminders,
+  executeScheduledLookup,
+} from "./tasks.js";
 
 export type DistributedSchedulerOptions = {
   deps: SchedulerDependencies;
