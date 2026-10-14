@@ -270,3 +270,11 @@ export function useTestCrawl4Ai() {
   });
 }
 
+export function useTestImou() {
+  return useMutation({
+    mutationFn: (params: { appId?: string; appSecret?: string; baseUrl?: string } = {}) =>
+      api.testImouSettings(params),
+  });
+}
+
+

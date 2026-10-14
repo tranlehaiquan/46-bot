@@ -108,6 +108,34 @@ const envSchema = z.object({
     (value) => (value === undefined || value === "" ? true : value === "true" || value === "1"),
     z.boolean().optional(),
   ),
+  IMOU_APP_ID: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
+  IMOU_APP_SECRET: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
+  IMOU_BASE_URL: z.preprocess(
+    (value) => (value === undefined || value === "" ? "https://openapi.easy4ip.com/openapi" : value),
+    z.string().min(1),
+  ),
+  IMOU_CAMERAS: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
+  IMOU_DEVICE_ID: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
+  IMOU_CHANNEL_ID: z.preprocess(
+    (value) => (value === undefined || value === "" ? "0" : value),
+    z.string().optional(),
+  ),
+  IMOU_DEVICE_NAME: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
 }).superRefine((data, ctx) => {
   const chosenProvider = data.LLM_PROVIDER ?? (data.GEMINI_API_KEY ? "gemini" : data.DEEPSEEK_API_KEY ? "deepseek" : undefined);
   if (!chosenProvider) {
@@ -144,6 +172,13 @@ export class ConfigError extends Error {
   }
 }
 
+export type CameraConfig = {
+  id: string;
+  name: string;
+  deviceId: string;
+  channelId: string;
+};
+
 export type AppConfig = {
   zaloBotToken: string;
   familyChatId: string;
@@ -169,6 +204,10 @@ export type AppConfig = {
   tursoAuthToken?: string;
   crawl4aiApiToken?: string;
   passiveMemoryEnabled: boolean;
+  imouAppId?: string;
+  imouAppSecret?: string;
+  imouBaseUrl?: string;
+  imouCameras?: CameraConfig[];
 };
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
@@ -199,6 +238,35 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     .filter((s) => s.length > 0);
   const familyChatId = familyChatIds[0] ?? "";
 
+  let imouCameras: CameraConfig[] = [];
+  if (parsed.data.IMOU_CAMERAS) {
+    try {
+      const raw = JSON.parse(parsed.data.IMOU_CAMERAS);
+      if (Array.isArray(raw)) {
+        imouCameras = raw
+          .map((c: Record<string, unknown>, idx: number) => ({
+            id: String(c.id || `camera_${idx + 1}`),
+            name: String(c.name || `Camera ${idx + 1}`),
+            deviceId: String(c.deviceId || ""),
+            channelId: String(c.channelId ?? "0"),
+          }))
+          .filter((c: CameraConfig) => c.deviceId.length > 0);
+      }
+    } catch {
+      // Ignore invalid JSON in environment
+    }
+  }
+  if (imouCameras.length === 0 && parsed.data.IMOU_DEVICE_ID) {
+    imouCameras = [
+      {
+        id: "default",
+        name: parsed.data.IMOU_DEVICE_NAME || "Camera",
+        deviceId: parsed.data.IMOU_DEVICE_ID,
+        channelId: parsed.data.IMOU_CHANNEL_ID || "0",
+      },
+    ];
+  }
+
   return {
     zaloBotToken: parsed.data.ZALO_BOT_TOKEN,
     familyChatId,
@@ -224,5 +292,9 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     tursoAuthToken: parsed.data.TURSO_AUTH_TOKEN,
     crawl4aiApiToken: parsed.data.CRAWL4AI_API_TOKEN,
     passiveMemoryEnabled: parsed.data.PASSIVE_MEMORY_ENABLED ?? true,
+    imouAppId: parsed.data.IMOU_APP_ID,
+    imouAppSecret: parsed.data.IMOU_APP_SECRET,
+    imouBaseUrl: parsed.data.IMOU_BASE_URL,
+    imouCameras,
   };
 }

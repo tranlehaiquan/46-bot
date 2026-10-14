@@ -359,6 +359,13 @@ export const api = {
       body: JSON.stringify({ token }),
     });
   },
+
+  async testImouSettings(params: { appId?: string; appSecret?: string; baseUrl?: string } = {}): Promise<TestSettingsResult> {
+    return await request<TestSettingsResult>("/api/admin/settings/test-imou", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  },
 };
 
 export type AdminSettings = {
@@ -377,6 +384,15 @@ export type AdminSettings = {
   hasCrawl4aiApiToken: boolean;
   crawl4aiApiTokenMasked: string | null;
   crawl4aiApiTokenSource: "db" | "env" | "none";
+  hasImouAppId: boolean;
+  imouAppIdMasked: string | null;
+  imouAppIdSource: "db" | "env" | "none";
+  hasImouAppSecret: boolean;
+  imouAppSecretMasked: string | null;
+  imouAppSecretSource: "db" | "env" | "none";
+  imouBaseUrl: string;
+  imouBaseUrlSource: "db" | "env";
+  imouCameras: string;
 };
 
 export type UpdateSettingsInput = {
@@ -388,21 +404,29 @@ export type UpdateSettingsInput = {
   tavilyApiKey?: string;
   crawl4aiApiKey?: string;
   crawl4aiApiToken?: string;
+  imouAppId?: string;
+  imouAppSecret?: string;
+  imouBaseUrl?: string;
+  imouCameras?: string;
 };
 
 export type TestSettingsInput = {
   provider?: "gemini" | "deepseek";
   apiKey?: string;
   model?: string;
-  testType?: "llm" | "tavily" | "crawl4ai";
+  testType?: "llm" | "tavily" | "crawl4ai" | "imou";
   tavilyApiKey?: string;
   crawl4aiApiKey?: string;
+  imouAppId?: string;
+  imouAppSecret?: string;
+  imouBaseUrl?: string;
 };
 
 export type TestSettingsResult = {
   ok: boolean;
   message?: string;
   reply?: string;
+  tokenPreview?: string;
   error?: string;
 };
 

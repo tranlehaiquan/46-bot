@@ -13,8 +13,9 @@ import {
   RefreshCw,
   RotateCcw,
   Zap,
+  Camera,
 } from "lucide-react";
-import { Button, Badge, TextField, Select, Callout } from "@radix-ui/themes";
+import { Button, Badge, TextField, Select, Callout, TextArea } from "@radix-ui/themes";
 import { toast } from "sonner";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
@@ -22,6 +23,7 @@ import {
   useUpdateSettings,
   useTestSettings,
   useTestCrawl4Ai,
+  useTestImou,
 } from "../hooks/useAdminQueries";
 
 const GEMINI_MODELS = [
@@ -36,11 +38,19 @@ const DEEPSEEK_MODELS = [
   { value: "deepseek-reasoner", label: "deepseek-reasoner (DeepSeek-R1)" },
 ];
 
+const IMOU_GATEWAYS = [
+  { value: "https://openapi-sg.easy4ip.com/openapi", label: "Singapore (Châu Á - TBD, Khuyên dùng)" },
+  { value: "https://openapi.easy4ip.com/openapi", label: "Toàn cầu (Global Default)" },
+  { value: "https://openapi-fk.easy4ip.com/openapi", label: "Frankfurt (Châu Âu)" },
+  { value: "https://openapi-or.easy4ip.com/openapi", label: "Oregon (Bắc Mỹ)" },
+];
+
 export function SettingsPage() {
   const { data: settings, isLoading, isError, refetch } = useSettings();
   const updateSettingsMutation = useUpdateSettings();
   const testSettingsMutation = useTestSettings();
   const testCrawl4AiMutation = useTestCrawl4Ai();
+  const testImouMutation = useTestImou();
 
   const [provider, setProvider] = useState<"gemini" | "deepseek">("gemini");
   const [geminiModel, setGeminiModel] = useState("gemini-3.8-flash");
@@ -57,18 +67,32 @@ export function SettingsPage() {
   const [crawl4aiApiToken, setCrawl4aiApiToken] = useState("");
   const [showCrawl4aiToken, setShowCrawl4aiToken] = useState(false);
 
+  const [imouAppId, setImouAppId] = useState("");
+  const [imouAppSecret, setImouAppSecret] = useState("");
+  const [showImouSecret, setShowImouSecret] = useState(false);
+  const [imouBaseUrl, setImouBaseUrl] = useState("https://openapi-sg.easy4ip.com/openapi");
+  const [imouCameras, setImouCameras] = useState("");
+
   const [statusMessage, setStatusMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
   const [resetKeyTarget, setResetKeyTarget] = useState<
-    "geminiApiKey" | "deepseekApiKey" | "tavilyApiKey" | "crawl4aiApiKey" | null
+    | "geminiApiKey"
+    | "deepseekApiKey"
+    | "tavilyApiKey"
+    | "crawl4aiApiKey"
+    | "imouAppId"
+    | "imouAppSecret"
+    | "imouBaseUrl"
+    | "imouCameras"
+    | null
   >(null);
 
-  const [testingTarget, setTestingTarget] = useState<"gemini" | "deepseek" | "tavily" | "crawl4ai" | null>(null);
+  const [testingTarget, setTestingTarget] = useState<"gemini" | "deepseek" | "tavily" | "crawl4ai" | "imou" | null>(null);
   const [testResult, setTestResult] = useState<{
-    target: "gemini" | "deepseek" | "tavily" | "crawl4ai";
+    target: "gemini" | "deepseek" | "tavily" | "crawl4ai" | "imou";
     ok: boolean;
     message: string;
     detail?: string;
@@ -80,12 +104,30 @@ export function SettingsPage() {
       setProvider(settings.llmProvider);
       setGeminiModel(settings.geminiModel || "gemini-3.8-flash");
       setDeepseekModel(settings.deepseekModel || "deepseek-chat");
+      setImouAppId("");
+      setImouAppSecret("");
+      setImouBaseUrl(settings.imouBaseUrl || "https://openapi-sg.easy4ip.com/openapi");
+      setImouCameras(settings.imouCameras || "");
     }
   }, [settings]);
 
   const handleSave = async () => {
     setStatusMessage(null);
     try {
+      if (imouCameras.trim()) {
+        try {
+          const parsed = JSON.parse(imouCameras.trim());
+          if (!Array.isArray(parsed)) {
+            throw new Error("Cấu hình camera phải là một mảng JSON các thiết bị [ { id, name, deviceId, channelId } ]");
+          }
+        } catch (jsonErr) {
+          const text = `JSON danh sách camera không hợp lệ: ${jsonErr instanceof Error ? jsonErr.message : String(jsonErr)}`;
+          setStatusMessage({ type: "error", text });
+          toast.error(text);
+          return;
+        }
+      }
+
       const updates: Parameters<typeof updateSettingsMutation.mutateAsync>[0] = {
         llmProvider: provider,
         geminiModel,
@@ -104,12 +146,26 @@ export function SettingsPage() {
       if (crawl4aiApiToken.trim()) {
         updates.crawl4aiApiKey = crawl4aiApiToken.trim();
       }
+      if (imouAppId.trim()) {
+        updates.imouAppId = imouAppId.trim();
+      }
+      if (imouAppSecret.trim()) {
+        updates.imouAppSecret = imouAppSecret.trim();
+      }
+      if (imouBaseUrl.trim()) {
+        updates.imouBaseUrl = imouBaseUrl.trim();
+      }
+      if (imouCameras !== undefined) {
+        updates.imouCameras = imouCameras.trim();
+      }
 
       await updateSettingsMutation.mutateAsync(updates);
       setGeminiApiKey("");
       setDeepseekApiKey("");
       setTavilyApiKey("");
       setCrawl4aiApiToken("");
+      setImouAppId("");
+      setImouAppSecret("");
       const successText = "Đã lưu cài đặt thành công! Cấu hình mới được áp dụng ngay lập tức.";
       setStatusMessage({
         type: "success",
@@ -131,7 +187,7 @@ export function SettingsPage() {
       await updateSettingsMutation.mutateAsync({
         [resetKeyTarget]: "",
       });
-      const successText = "Đã khôi phục cài đặt API Key về mặc định từ file .env.";
+      const successText = "Đã khôi phục cài đặt về mặc định từ file .env.";
       setStatusMessage({
         type: "success",
         text: successText,
@@ -146,11 +202,25 @@ export function SettingsPage() {
     }
   };
 
-  const handleTestConnection = async (target: "gemini" | "deepseek" | "tavily" | "crawl4ai") => {
+  const handleTestConnection = async (target: "gemini" | "deepseek" | "tavily" | "crawl4ai" | "imou") => {
     setTestingTarget(target);
     setTestResult(null);
     try {
-      if (target === "crawl4ai") {
+      if (target === "imou") {
+        const res = await testImouMutation.mutateAsync({
+          appId: imouAppId.trim() || undefined,
+          appSecret: imouAppSecret.trim() || undefined,
+          baseUrl: imouBaseUrl.trim() || undefined,
+        });
+        setTestResult({
+          target: "imou",
+          ok: res.ok,
+          message: res.ok
+            ? (res.message || "Kết nối Imou Cloud Open Platform thành công!")
+            : (res.error || res.message || "Kết nối Imou Cloud thất bại"),
+          detail: res.tokenPreview ? `Access Token: ${res.tokenPreview}` : undefined,
+        });
+      } else if (target === "crawl4ai") {
         const candidate = crawl4aiApiToken.trim() || undefined;
         const res = await testCrawl4AiMutation.mutateAsync(candidate);
         setTestResult({
@@ -819,12 +889,239 @@ export function SettingsPage() {
         </div>
       </div>
 
+      {/* Imou Camera Integration Card */}
+      <div className="glass-panel p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-white/5 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <Camera size={18} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-white">Imou Cloud Camera (Camera giám sát)</h2>
+              <p className="text-xs text-slate-400">
+                Chụp ảnh snapshot trực tiếp và dùng Gemini Vision kiểm tra hiện trường qua Zalo
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              id="btn-test-imou"
+              variant="soft"
+              color="gray"
+              size="1"
+              loading={testingTarget === "imou"}
+              onClick={() => handleTestConnection("imou")}
+              className="cursor-pointer"
+            >
+              <Zap size={14} className="text-amber-400" />
+              <span>Kiểm tra kết nối</span>
+            </Button>
+          </div>
+        </div>
+
+        {testResult && testResult.target === "imou" && (
+          <Callout.Root color={testResult.ok ? "green" : "red"} size="1">
+            <Callout.Icon>
+              {testResult.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+            </Callout.Icon>
+            <Callout.Text>
+              <div className="space-y-1">
+                <div className="font-medium">{testResult.message}</div>
+                {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
+              </div>
+            </Callout.Text>
+          </Callout.Root>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Gateway selector */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                <Globe size={13} className="text-amber-400" />
+                <span>Khu vực / Gateway API</span>
+              </label>
+              {settings.imouBaseUrlSource === "db" && (
+                <button
+                  onClick={() => setResetKeyTarget("imouBaseUrl")}
+                  className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                  title="Khôi phục về mặc định"
+                >
+                  <RotateCcw size={11} />
+                  <span>Đặt lại</span>
+                </button>
+              )}
+            </div>
+            <Select.Root value={imouBaseUrl} onValueChange={setImouBaseUrl}>
+              <Select.Trigger id="select-imou-gateway" className="w-full" />
+              <Select.Content>
+                {IMOU_GATEWAYS.map((gw) => (
+                  <Select.Item key={gw.value} value={gw.value}>
+                    {gw.label}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Root>
+            <p className="text-[11px] text-slate-400">
+              Chọn Gateway theo khu vực tài khoản Imou Life của bạn (Thường là Singapore cho Việt Nam).
+            </p>
+          </div>
+
+          {/* App ID */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                <Key size={13} className="text-amber-400" />
+                <span>Imou App ID</span>
+              </label>
+              <div className="flex items-center gap-2">
+                {renderKeySourceBadge(settings.imouAppIdSource)}
+                {settings.imouAppIdSource === "db" && (
+                  <button
+                    onClick={() => setResetKeyTarget("imouAppId")}
+                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                    title="Khôi phục về giá trị từ .env"
+                  >
+                    <RotateCcw size={11} />
+                    <span>Đặt lại</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <TextField.Root
+              id="input-imou-appid"
+              placeholder={
+                settings.imouAppIdMasked
+                  ? `Hiện tại: ${settings.imouAppIdMasked} (để trống nếu không đổi)`
+                  : "Nhập Imou App ID (lco...)"
+              }
+              value={imouAppId}
+              onChange={(e) => setImouAppId(e.target.value)}
+              className="font-mono"
+            />
+          </div>
+
+          {/* App Secret */}
+          <div className="space-y-2 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                <Key size={13} className="text-amber-400" />
+                <span>Imou App Secret</span>
+              </label>
+              <div className="flex items-center gap-2">
+                {renderKeySourceBadge(settings.imouAppSecretSource)}
+                {settings.imouAppSecretSource === "db" && (
+                  <button
+                    onClick={() => setResetKeyTarget("imouAppSecret")}
+                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                    title="Khôi phục về secret từ .env"
+                  >
+                    <RotateCcw size={11} />
+                    <span>Đặt lại</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <TextField.Root
+              id="input-imou-secret"
+              type={showImouSecret ? "text" : "password"}
+              placeholder={
+                settings.imouAppSecretMasked
+                  ? `Hiện tại: ${settings.imouAppSecretMasked} (để trống nếu không đổi)`
+                  : "Nhập Imou App Secret"
+              }
+              value={imouAppSecret}
+              onChange={(e) => setImouAppSecret(e.target.value)}
+              className="font-mono"
+            >
+              <TextField.Slot side="right">
+                <button
+                  type="button"
+                  onClick={() => setShowImouSecret(!showImouSecret)}
+                  className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  {showImouSecret ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </TextField.Slot>
+            </TextField.Root>
+            <p className="text-[11px] text-slate-400">
+              Lấy App ID và App Secret tại{" "}
+              <a
+                href="https://open.imoulife.com/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-amber-400 hover:underline"
+              >
+                Imou Cloud Open Platform Console
+              </a>
+              .
+            </p>
+          </div>
+
+          {/* Camera List JSON */}
+          <div className="space-y-2 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                <Camera size={13} className="text-amber-400" />
+                <span>Danh sách Camera (JSON)</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <Badge
+                  color={settings.imouCameras && settings.imouCameras !== "[]" ? "amber" : "gray"}
+                  variant="soft"
+                >
+                  {settings.imouCameras && settings.imouCameras !== "[]" ? "Đã cấu hình" : "Chưa có camera"}
+                </Badge>
+                {imouCameras && (
+                  <button
+                    onClick={() => {
+                      try {
+                        const parsed = JSON.parse(imouCameras);
+                        setImouCameras(JSON.stringify(parsed, null, 2));
+                      } catch {
+                        toast.error("Không thể định dạng: JSON chưa hợp lệ");
+                      }
+                    }}
+                    className="text-[11px] text-slate-400 hover:text-slate-200 cursor-pointer"
+                    title="Định dạng lại chuỗi JSON"
+                  >
+                    Format JSON
+                  </button>
+                )}
+                {settings.imouCameras && (
+                  <button
+                    onClick={() => setResetKeyTarget("imouCameras")}
+                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                    title="Khôi phục danh sách camera từ .env"
+                  >
+                    <RotateCcw size={11} />
+                    <span>Đặt lại</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <TextArea
+              id="input-imou-cameras"
+              placeholder={`[\n  {\n    "id": "phong-khach",\n    "name": "Phòng khách",\n    "deviceId": "9H03C68PAZ...",\n    "channelId": 0\n  }\n]`}
+              value={imouCameras}
+              onChange={(e) => setImouCameras(e.target.value)}
+              className="font-mono text-xs"
+              rows={5}
+            />
+            <p className="text-[11px] text-slate-400">
+              Định dạng mảng JSON các thiết bị camera. Các trường gồm: <code className="text-amber-300 font-mono">id</code> (slug), <code className="text-amber-300 font-mono">name</code> (tên gọi tiếng Việt), <code className="text-amber-300 font-mono">deviceId</code> (Serial Number in trên camera), <code className="text-amber-300 font-mono">channelId</code> (mặc định là 0).
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Confirm Reset Key Dialog */}
       <ConfirmDialog
         open={resetKeyTarget !== null}
         onOpenChange={(open) => !open && setResetKeyTarget(null)}
-        title="Khôi phục API Key về mặc định"
-        description="Bạn có chắc muốn xóa ghi đè database cho API Key này để quay về giá trị mặc định trong file .env?"
+        title="Khôi phục cài đặt về mặc định"
+        description="Bạn có chắc muốn xóa ghi đè database cho cài đặt này để quay về giá trị mặc định trong file .env?"
         confirmText="Đặt lại"
         cancelText="Hủy"
         variant="destructive"

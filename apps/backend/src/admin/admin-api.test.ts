@@ -792,6 +792,46 @@ describe("Admin REST API", () => {
       // Falls back to effective key in DB, or if empty token without db returns 400
       assert.ok(testCrawlEmpty.statusCode === 200 || testCrawlEmpty.statusCode === 400);
 
+      // 8. Set and verify Imou camera settings
+      const imouPatch = await app.inject({
+        method: "PATCH",
+        url: "/api/admin/settings",
+        headers: authHeaders,
+        payload: {
+          imouAppId: "test-imou-app-id",
+          imouAppSecret: "test-imou-secret-123456",
+          imouBaseUrl: "https://openapi-sg.easy4ip.com/openapi",
+          imouCameras: JSON.stringify([
+            { id: "cam_living", name: "Phòng khách", deviceId: "DEV123", channelId: "0" },
+          ]),
+        },
+      });
+      assert.equal(imouPatch.statusCode, 200);
+      assert.equal(await settingsRepo.get("imou_app_id"), "test-imou-app-id");
+      assert.equal(await settingsRepo.get("imou_app_secret"), "test-imou-secret-123456");
+      assert.equal(await settingsRepo.get("imou_base_url"), "https://openapi-sg.easy4ip.com/openapi");
+      assert.equal(
+        await settingsRepo.get("imou_cameras"),
+        JSON.stringify([{ id: "cam_living", name: "Phòng khách", deviceId: "DEV123", channelId: "0" }]),
+      );
+
+      const imouPatchBody = JSON.parse(imouPatch.body);
+      assert.equal(imouPatchBody.settings.hasImouAppId, true);
+      assert.equal(imouPatchBody.settings.imouAppIdSource, "db");
+      assert.equal(imouPatchBody.settings.hasImouAppSecret, true);
+      assert.equal(imouPatchBody.settings.imouAppSecretSource, "db");
+      assert.match(imouPatchBody.settings.imouAppSecretMasked, /test\.\.\.3456/);
+
+      // 9. Test /api/admin/settings/test-imou endpoint
+      const testImouMissing = await app.inject({
+        method: "POST",
+        url: "/api/admin/settings/test-imou",
+        headers: authHeaders,
+        payload: { appId: "", appSecret: "" },
+      });
+      // Since DB has keys, it uses DB keys or fails on mock network
+      assert.ok(testImouMissing.statusCode === 200 || testImouMissing.statusCode === 400);
+
       await app.close();
     } finally {
       closeDatabase(db);

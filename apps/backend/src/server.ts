@@ -68,6 +68,27 @@ export function getEventsImageDir(dbPath?: string): string {
   return fallback;
 }
 
+export function getCameraImageDir(dbPath?: string): string {
+  const candidates: string[] = [];
+  if (dbPath && dbPath !== ":memory:" && !dbPath.startsWith(":memory:")) {
+    candidates.push(path.join(path.dirname(dbPath), "images", "camera"));
+  }
+  candidates.push(path.resolve(process.cwd(), "data", "images", "camera"));
+  candidates.push(path.join(os.tmpdir(), "family-bot", "images", "camera"));
+
+  for (const candidate of candidates) {
+    try {
+      fs.mkdirSync(candidate, { recursive: true });
+      return candidate;
+    } catch {
+      // try next candidate
+    }
+  }
+  const fallback = path.join(os.tmpdir(), "family-bot", "images", "camera");
+  fs.mkdirSync(fallback, { recursive: true });
+  return fallback;
+}
+
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const queue = deps.queue ?? new WorkQueue();
   const seen = new Set<string>();
@@ -78,6 +99,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   const eventsImageDir = getEventsImageDir(deps.config.dbPath);
   fs.mkdirSync(eventsImageDir, { recursive: true });
+
+  const cameraImageDir = getCameraImageDir(deps.config.dbPath);
+  fs.mkdirSync(cameraImageDir, { recursive: true });
 
   app.get("/images/events/:filename", async (request, reply) => {
     const { filename } = request.params as { filename: string };
@@ -100,9 +124,36 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return reply.code(404).send({ message: "Image not found" });
   });
 
+  app.get("/images/camera/:filename", async (request, reply) => {
+    const { filename } = request.params as { filename: string };
+    const safeFilename = path.basename(filename);
+    const candidateDirs = [
+      cameraImageDir,
+      path.resolve(process.cwd(), "data", "images", "camera"),
+      path.resolve(process.cwd(), "apps/backend/data/images/camera"),
+      path.join(os.tmpdir(), "family-bot", "images", "camera"),
+    ];
+    for (const dir of candidateDirs) {
+      const fullPath = path.join(dir, safeFilename);
+      if (fs.existsSync(fullPath)) {
+        reply.header("Cache-Control", "public, max-age=300, s-maxage=300");
+        const stream = fs.createReadStream(fullPath);
+        return reply.type(safeFilename.endsWith(".png") ? "image/png" : "image/jpeg").send(stream);
+      }
+    }
+    reply.header("Cache-Control", "no-store, no-cache, must-revalidate");
+    return reply.code(404).send({ message: "Image not found" });
+  });
+
   app.register(fastifyStatic, {
     root: eventsImageDir,
     prefix: "/images/events/",
+    decorateReply: false,
+  });
+
+  app.register(fastifyStatic, {
+    root: cameraImageDir,
+    prefix: "/images/camera/",
     decorateReply: false,
   });
 

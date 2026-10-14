@@ -17,7 +17,9 @@ import { FALLBACK_ERROR_MESSAGE, type LlmClient } from "./llm/client.js";
 import { PROMPT_INJECTION_REFUSAL_MESSAGE } from "./llm/prompt-security.js";
 import { createLogger } from "./logger.js";
 import { WorkQueue } from "./queue.js";
-import { BODY_LIMIT, buildServer } from "./server.js";
+import fs from "node:fs";
+import path from "node:path";
+import { BODY_LIMIT, buildServer, getCameraImageDir } from "./server.js";
 import type { ZaloClient } from "./zalo-client.js";
 
 const token = "bot-token-value";
@@ -168,6 +170,39 @@ describe("webhook http", () => {
     assert.equal((await app.inject({ method: "GET", url: "/other" })).statusCode, 404);
     assert.equal((await app.inject({ method: "POST", url: "/health" })).statusCode, 404);
     await app.close();
+  });
+
+  it("serves camera images from /images/camera/:filename and returns 404 for missing images", async () => {
+    const config = configFor("");
+    const { app } = testApp("");
+    const cameraDir = getCameraImageDir(config.dbPath);
+    const testFilename = `test_snap_${Date.now()}.jpg`;
+    const testFilePath = path.join(cameraDir, testFilename);
+    const fakeImageData = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x12, 0x34]);
+
+    fs.writeFileSync(testFilePath, fakeImageData);
+
+    try {
+      const okRes = await app.inject({
+        method: "GET",
+        url: `/images/camera/${testFilename}`,
+      });
+      assert.equal(okRes.statusCode, 200);
+      assert.equal(okRes.headers["content-type"], "image/jpeg");
+      assert.deepEqual(okRes.rawPayload, fakeImageData);
+
+      const notFoundRes = await app.inject({
+        method: "GET",
+        url: "/images/camera/non_existent.jpg",
+      });
+      assert.equal(notFoundRes.statusCode, 404);
+      assert.deepEqual(JSON.parse(notFoundRes.body), { message: "Image not found" });
+    } finally {
+      if (fs.existsSync(testFilePath)) {
+        fs.unlinkSync(testFilePath);
+      }
+      await app.close();
+    }
   });
 
   it("rejects an oversized body", async () => {

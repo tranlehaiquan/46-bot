@@ -17,6 +17,7 @@ import {
 } from "./settings-helper.js";
 import { createLlmClient } from "../llm/client.js";
 import { tavily } from "@tavily/core";
+import { ImouClient } from "../camera/imou-client.js";
 
 function parseJsonBody(body: unknown): Record<string, unknown> {
   if (Buffer.isBuffer(body)) {
@@ -534,6 +535,15 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       handleKey(body.deepseekApiKey, "deepseek_api_key");
       handleKey(body.tavilyApiKey, "tavily_api_key");
       handleKey(body.crawl4aiApiKey ?? body.crawl4aiApiToken, "crawl4ai_api_token");
+      handleKey(body.imouAppId, "imou_app_id");
+      handleKey(body.imouAppSecret, "imou_app_secret");
+
+      if (typeof body.imouBaseUrl === "string") {
+        updates.imou_base_url = body.imouBaseUrl.trim() || null;
+      }
+      if (typeof body.imouCameras === "string") {
+        updates.imou_cameras = body.imouCameras.trim() || null;
+      }
 
       if (Object.keys(updates).length > 0) {
         await deps.settingsRepo.setMany(updates);
@@ -550,6 +560,56 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
 
       const settings = toMaskedSettings(effective, dbEntries, deps.config);
       return reply.send({ ok: true, settings });
+    });
+
+    adminScope.post("/api/admin/settings/test-imou", async (request, reply) => {
+      const body = parseJsonBody(request.body);
+      const { effective } = await resolveEffectiveSettings(deps.settingsRepo, deps.config);
+
+      const appId =
+        (typeof body.appId === "string" && body.appId.trim()) ||
+        (typeof body.imouAppId === "string" && body.imouAppId.trim()) ||
+        effective.imouAppId;
+
+      const rawSecret = body.appSecret ?? body.imouAppSecret;
+      const appSecret =
+        typeof rawSecret === "string" &&
+        !rawSecret.includes("...") &&
+        !rawSecret.includes("***") &&
+        rawSecret.trim()
+          ? rawSecret.trim()
+          : effective.imouAppSecret;
+
+      const baseUrl =
+        (typeof body.baseUrl === "string" && body.baseUrl.trim()) ||
+        (typeof body.imouBaseUrl === "string" && body.imouBaseUrl.trim()) ||
+        effective.imouBaseUrl;
+
+      if (!appId || !appSecret) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Chưa cấu hình Imou AppId hoặc AppSecret." });
+      }
+
+      try {
+        const client = new ImouClient({
+          appId,
+          appSecret,
+          baseUrl,
+        });
+        const testRes = await client.testConnection();
+        if (!testRes.success) {
+          return reply.code(400).send({ ok: false, error: testRes.message });
+        }
+        return reply.send({
+          ok: true,
+          message: testRes.message,
+          tokenPreview: testRes.tokenPreview,
+        });
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        return reply.code(400).send({ ok: false, error });
+      }
     });
 
     adminScope.post("/api/admin/settings/test-crawl4ai", async (request, reply) => {
@@ -625,6 +685,49 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return reply.code(400).send({ ok: false, error: `Kiểm tra Tavily thất bại: ${message}` });
+        }
+      }
+
+      if (testType === "imou") {
+        const appId =
+          (typeof body.appId === "string" && body.appId.trim()) ||
+          (typeof body.imouAppId === "string" && body.imouAppId.trim()) ||
+          effective.imouAppId;
+
+        const rawSecret = body.appSecret ?? body.imouAppSecret;
+        const appSecret =
+          typeof rawSecret === "string" &&
+          !rawSecret.includes("...") &&
+          !rawSecret.includes("***") &&
+          rawSecret.trim()
+            ? rawSecret.trim()
+            : effective.imouAppSecret;
+
+        const baseUrl =
+          (typeof body.baseUrl === "string" && body.baseUrl.trim()) ||
+          (typeof body.imouBaseUrl === "string" && body.imouBaseUrl.trim()) ||
+          effective.imouBaseUrl;
+
+        if (!appId || !appSecret) {
+          return reply
+            .code(400)
+            .send({ ok: false, error: "Chưa cấu hình Imou AppId hoặc AppSecret." });
+        }
+
+        try {
+          const client = new ImouClient({ appId, appSecret, baseUrl });
+          const testRes = await client.testConnection();
+          if (!testRes.success) {
+            return reply.code(400).send({ ok: false, error: testRes.message });
+          }
+          return reply.send({
+            ok: true,
+            message: testRes.message,
+            tokenPreview: testRes.tokenPreview,
+          });
+        } catch (err) {
+          const error = err instanceof Error ? err.message : String(err);
+          return reply.code(400).send({ ok: false, error });
         }
       }
 

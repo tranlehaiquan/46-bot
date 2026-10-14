@@ -10,6 +10,10 @@ export type EffectiveSettings = {
   deepseekApiKey?: string;
   tavilyApiKey?: string;
   crawl4aiApiToken?: string;
+  imouAppId?: string;
+  imouAppSecret?: string;
+  imouBaseUrl?: string;
+  imouCameras?: string;
 };
 
 export type MaskedSettings = {
@@ -28,6 +32,15 @@ export type MaskedSettings = {
   hasCrawl4aiApiToken: boolean;
   crawl4aiApiTokenMasked: string | null;
   crawl4aiApiTokenSource: "db" | "env" | "none";
+  hasImouAppId: boolean;
+  imouAppIdMasked: string | null;
+  imouAppIdSource: "db" | "env" | "none";
+  hasImouAppSecret: boolean;
+  imouAppSecretMasked: string | null;
+  imouAppSecretSource: "db" | "env" | "none";
+  imouBaseUrl: string;
+  imouBaseUrlSource: "db" | "env";
+  imouCameras: string;
 };
 
 export function maskSecret(secret?: string): string | null {
@@ -56,6 +69,15 @@ export async function resolveEffectiveSettings(
   const tavilyApiKey = dbEntries.tavily_api_key || config.tavilyApiKey;
   const crawl4aiApiToken = dbEntries.crawl4ai_api_token || config.crawl4aiApiToken;
 
+  const imouAppId = dbEntries.imou_app_id || config.imouAppId;
+  const imouAppSecret = dbEntries.imou_app_secret || config.imouAppSecret;
+  const imouBaseUrl = dbEntries.imou_base_url || config.imouBaseUrl || "https://openapi.easy4ip.com/openapi";
+  const imouCameras =
+    dbEntries.imou_cameras ||
+    (config.imouCameras && config.imouCameras.length > 0
+      ? JSON.stringify(config.imouCameras)
+      : "[]");
+
   return {
     effective: {
       llmProvider,
@@ -65,6 +87,10 @@ export async function resolveEffectiveSettings(
       deepseekApiKey,
       tavilyApiKey,
       crawl4aiApiToken,
+      imouAppId,
+      imouAppSecret,
+      imouBaseUrl,
+      imouCameras,
     },
     dbEntries,
   };
@@ -99,6 +125,20 @@ export function toMaskedSettings(
       ? "env"
       : "none";
 
+  const imouAppIdSource: "db" | "env" | "none" = dbEntries.imou_app_id
+    ? "db"
+    : config.imouAppId
+      ? "env"
+      : "none";
+
+  const imouAppSecretSource: "db" | "env" | "none" = dbEntries.imou_app_secret
+    ? "db"
+    : config.imouAppSecret
+      ? "env"
+      : "none";
+
+  const imouBaseUrlSource: "db" | "env" = dbEntries.imou_base_url ? "db" : "env";
+
   return {
     llmProvider: effective.llmProvider,
     geminiModel: effective.geminiModel,
@@ -115,6 +155,15 @@ export function toMaskedSettings(
     hasCrawl4aiApiToken: Boolean(effective.crawl4aiApiToken),
     crawl4aiApiTokenMasked: maskSecret(effective.crawl4aiApiToken),
     crawl4aiApiTokenSource: crawl4aiSource,
+    hasImouAppId: Boolean(effective.imouAppId),
+    imouAppIdMasked: maskSecret(effective.imouAppId),
+    imouAppIdSource: imouAppIdSource,
+    hasImouAppSecret: Boolean(effective.imouAppSecret),
+    imouAppSecretMasked: maskSecret(effective.imouAppSecret),
+    imouAppSecretSource: imouAppSecretSource,
+    imouBaseUrl: effective.imouBaseUrl || "https://openapi.easy4ip.com/openapi",
+    imouBaseUrlSource: imouBaseUrlSource,
+    imouCameras: effective.imouCameras || "[]",
   };
 }
 

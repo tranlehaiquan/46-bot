@@ -29,7 +29,10 @@ import type { GroupMemberRepository } from "./db/repositories/group-members.js";
 import { splitText } from "./utils/split-text.js";
 import { cleanOutboundText } from "./utils/clean-text.js";
 import type { ZaloClient } from "./zalo-client.js";
-import { getEventsImageDir } from "./server.js";
+import { getEventsImageDir, getCameraImageDir } from "./server.js";
+import { createCameraTools } from "./tools/camera.js";
+import { ImouClient } from "./camera/imou-client.js";
+import type { CameraConfig } from "./config.js";
 
 export const CANNED_REPLY = "Mình nhận được.";
 export const ONBOARDING_MESSAGE_PREFIX = "Nhóm này chưa nằm trong danh sách cho phép. Vui lòng thêm chat ID";
@@ -403,6 +406,58 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
           })
         : undefined;
 
+    const effectiveImouAppId =
+      (settingsRepo ? await settingsRepo.get("imou_app_id") : null) || config.imouAppId;
+    const effectiveImouAppSecret =
+      (settingsRepo ? await settingsRepo.get("imou_app_secret") : null) || config.imouAppSecret;
+    const effectiveImouBaseUrl =
+      (settingsRepo ? await settingsRepo.get("imou_base_url") : null) || config.imouBaseUrl;
+    const effectiveImouCamerasRaw =
+      settingsRepo ? await settingsRepo.get("imou_cameras") : null;
+
+    let effectiveCameras: CameraConfig[] = config.imouCameras ?? [];
+    if (effectiveImouCamerasRaw) {
+      try {
+        const parsed = JSON.parse(effectiveImouCamerasRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          effectiveCameras = parsed
+            .map((c: Record<string, unknown>, idx: number) => ({
+              id: String(c.id || `camera_${idx + 1}`),
+              name: String(c.name || `Camera ${idx + 1}`),
+              deviceId: String(c.deviceId || ""),
+              channelId: String(c.channelId ?? "0"),
+            }))
+            .filter((c: CameraConfig) => c.deviceId.length > 0);
+        }
+      } catch {
+        // Fall back to config.imouCameras
+      }
+    }
+
+    const effectiveGeminiKey =
+      (settingsRepo ? await settingsRepo.get("gemini_api_key") : null) || config.geminiApiKey;
+    const effectiveGeminiModel =
+      (settingsRepo ? await settingsRepo.get("gemini_model") : null) || config.geminiModel;
+
+    const cameraTools =
+      effectiveImouAppId && effectiveImouAppSecret && effectiveCameras.length > 0
+        ? createCameraTools({
+            chatId: message.chatId,
+            senderName: message.senderName || message.senderId,
+            client: new ImouClient({
+              appId: effectiveImouAppId,
+              appSecret: effectiveImouAppSecret,
+              baseUrl: effectiveImouBaseUrl,
+            }),
+            cameras: effectiveCameras,
+            zalo,
+            publicBaseUrl,
+            outputDir: getCameraImageDir(config.dbPath),
+            geminiApiKey: effectiveGeminiKey,
+            geminiModel: effectiveGeminiModel,
+          })
+        : undefined;
+
     const tools =
       listTools ||
       eventTools ||
@@ -413,6 +468,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       weatherTools ||
       lookupTools ||
       lotteryTools ||
+      cameraTools ||
       groupMemberTools
         ? {
             ...listTools,
@@ -424,6 +480,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
             ...weatherTools,
             ...lookupTools,
             ...lotteryTools,
+            ...cameraTools,
             ...groupMemberTools,
           }
         : undefined;

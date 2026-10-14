@@ -205,5 +205,51 @@ describe("loadConfig", () => {
     assert.equal(tursoConfig.tursoDatabaseUrl, "libsql://family-bot.turso.io");
     assert.equal(tursoConfig.tursoAuthToken, "jwt-token-xyz");
   });
+
+  it("loads optional Imou configuration and parses single or multi cameras", () => {
+    const config = loadConfig(validEnv());
+    assert.equal(config.imouAppId, undefined);
+    assert.equal(config.imouAppSecret, undefined);
+    assert.equal(config.imouBaseUrl, "https://openapi.easy4ip.com/openapi");
+    assert.deepEqual(config.imouCameras, []);
+
+    // Single camera setup
+    const singleConfig = loadConfig(
+      validEnv({
+        IMOU_APP_ID: "my-app-id",
+        IMOU_APP_SECRET: "my-app-secret",
+        IMOU_DEVICE_ID: "9L09123456",
+        IMOU_CHANNEL_ID: "0",
+        IMOU_DEVICE_NAME: "Phòng khách",
+      }),
+    );
+    assert.equal(singleConfig.imouAppId, "my-app-id");
+    assert.equal(singleConfig.imouAppSecret, "my-app-secret");
+    assert.ok(singleConfig.imouCameras);
+    assert.equal(singleConfig.imouCameras.length, 1);
+    assert.deepEqual(singleConfig.imouCameras[0], {
+      id: "default",
+      name: "Phòng khách",
+      deviceId: "9L09123456",
+      channelId: "0",
+    });
+
+    // Multi camera JSON setup
+    const multiConfig = loadConfig(
+      validEnv({
+        IMOU_APP_ID: "my-app-id",
+        IMOU_APP_SECRET: "my-app-secret",
+        IMOU_CAMERAS: JSON.stringify([
+          { id: "cam1", name: "Sân trước", deviceId: "DEV1", channelId: "0" },
+          { id: "cam2", name: "Sân sau", deviceId: "DEV2", channelId: "1" },
+        ]),
+      }),
+    );
+    assert.ok(multiConfig.imouCameras);
+    assert.equal(multiConfig.imouCameras.length, 2);
+    assert.equal(multiConfig.imouCameras[0].name, "Sân trước");
+    assert.equal(multiConfig.imouCameras[1].id, "cam2");
+  });
 });
+
 
