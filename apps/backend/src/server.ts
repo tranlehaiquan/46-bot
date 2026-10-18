@@ -45,6 +45,7 @@ export type ServerDeps = {
   settingsRepo?: SettingsRepository;
   groupMemberRepo?: GroupMemberRepository;
   llmClient?: LlmClient;
+  webDistPath?: string;
 };
 
 export function getEventsImageDir(dbPath?: string): string {
@@ -203,12 +204,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerAdminRoutes(app, deps);
 
   const candidateDistPaths = [
+    deps.webDistPath,
     path.resolve(process.cwd(), "apps/admin/dist"),
     path.resolve(process.cwd(), "../admin/dist"),
     path.resolve(process.cwd(), "web/dist"),
     path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../admin/dist"),
     path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../../apps/admin/dist"),
-  ];
+  ].filter((p): p is string => Boolean(p));
   const webDistPath = candidateDistPaths.find((p) => fs.existsSync(p)) ?? candidateDistPaths[0];
 
   if (fs.existsSync(webDistPath)) {
