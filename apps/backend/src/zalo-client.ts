@@ -16,6 +16,7 @@ export type ZaloClient = {
   sendMessage(chatId: string, text: string, options?: SendMessageOptions): Promise<void>;
   sendChatAction?(chatId: string, action: string): Promise<void>;
   sendPhoto?(chatId: string, photo: string, caption?: string): Promise<void>;
+  sendSticker?(chatId: string, stickerId: string): Promise<void>;
 };
 
 type SdkBot = {
@@ -25,6 +26,7 @@ type SdkBot = {
   sendMessage(chatId: string, text: string, options?: SendMessageOptions): Promise<unknown>;
   sendChatAction?(chatId: string, action: string): Promise<unknown>;
   sendPhoto?(chatId: string, caption: string, photo: string, options?: unknown): Promise<unknown>;
+  sendSticker?(chatId: string, sticker: string, options?: unknown): Promise<unknown>;
 };
 
 type BotConstructor = new (config: {
@@ -115,6 +117,17 @@ export function createZaloClient(token: string): ZaloClient {
           const msgId = String((res as { messageId?: string }).messageId ?? "");
           if (msgId.startsWith("local-")) {
             throw new Error(`Zalo API rejected photo URL: ${photo}`);
+          }
+        }
+      }
+    },
+    async sendSticker(chatId, stickerId) {
+      if (typeof bot.sendSticker === "function") {
+        const res = await bot.sendSticker(chatId, stickerId);
+        if (res && typeof res === "object" && "messageId" in res) {
+          const msgId = String((res as { messageId?: string }).messageId ?? "");
+          if (msgId.startsWith("local-")) {
+            throw new Error(`Zalo API rejected sticker: ${stickerId}`);
           }
         }
       }

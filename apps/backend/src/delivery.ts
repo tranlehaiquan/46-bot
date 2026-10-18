@@ -31,6 +31,7 @@ import { cleanOutboundText } from "./utils/clean-text.js";
 import type { ZaloClient } from "./zalo-client.js";
 import { getEventsImageDir, getCameraImageDir } from "./server.js";
 import { createCameraTools } from "./tools/camera.js";
+import { createStickerTool } from "./tools/sticker.js";
 import { ImouClient } from "./camera/imou-client.js";
 import type { CameraConfig } from "./config.js";
 
@@ -458,6 +459,10 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
           })
         : undefined;
 
+    const stickerTools = zalo.sendSticker
+      ? createStickerTool(zalo, message.chatId)
+      : undefined;
+
     const tools =
       listTools ||
       eventTools ||
@@ -469,7 +474,8 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       lookupTools ||
       lotteryTools ||
       cameraTools ||
-      groupMemberTools
+      groupMemberTools ||
+      stickerTools
         ? {
             ...listTools,
             ...eventTools,
@@ -482,6 +488,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
             ...lotteryTools,
             ...cameraTools,
             ...groupMemberTools,
+            ...stickerTools,
           }
         : undefined;
 
