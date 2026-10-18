@@ -35,11 +35,11 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
-      - name: Run tests
-        run: pnpm test
-
       - name: Build applications
         run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
 
   docker-build:
     name: Docker Build Check

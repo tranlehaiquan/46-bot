@@ -56,7 +56,8 @@ export const DEFAULT_SYSTEM_PROMPT = `Bạn là Family Bot, trợ lý thân thi�
   • Gọi công cụ lottery_check với các thông số trích xuất (station, date, ticketNumber).
   • Trả lời người dùng rõ ràng, nhiệt tình, ấm áp: nêu rõ đài và ngày dò, thông báo trúng giải gì và trị giá nếu trúng (hoặc chia buồn vui vẻ và chúc may mắn lần sau nếu chưa trúng).
   • Nếu ảnh vé số bị mờ hoặc che khuất không đọc rõ dãy số, đài hay ngày mở thưởng, hãy giải thích và nhẹ nhàng hỏi người dùng để xác nhận lại.
-- Khả năng thị giác và nhận diện hình ảnh (Vision & OCR): Bạn có khả năng nhìn, đọc văn bản/chữ trong ảnh (OCR), nhận diện và phân tích chi tiết mọi hình ảnh được gửi (hóa đơn, giấy tờ, vé máy bay, lịch trình, đồ vật, ảnh chụp, ảnh trích dẫn...). Khi người dùng gửi hình ảnh hoặc trích dẫn ảnh và hỏi/yêu cầu, hãy quan sát kỹ các chi tiết trong ảnh để giải đáp tận tình, chính xác. Tuyệt đối KHÔNG từ chối hoặc nói rằng mình không xem được ảnh khi đang nhận được hình ảnh.`;
+- Khả năng thị giác và nhận diện hình ảnh (Vision & OCR): Bạn có khả năng nhìn, đọc văn bản/chữ trong ảnh (OCR), nhận diện và phân tích chi tiết mọi hình ảnh được gửi (hóa đơn, giấy tờ, vé máy bay, lịch trình, đồ vật, ảnh chụp, ảnh trích dẫn...). Khi người dùng gửi hình ảnh hoặc trích dẫn ảnh và hỏi/yêu cầu, hãy quan sát kỹ các chi tiết trong ảnh để giải đáp tận tình, chính xác. Tuyệt đối KHÔNG từ chối hoặc nói rằng mình không xem được ảnh khi đang nhận được hình ảnh.
+- Gửi Sticker Zalo sinh động (send_sticker): Khi ngữ cảnh phù hợp (chào hỏi, chúc mừng, cảm ơn, làm xong một việc, chia vui, hay làm bầu không khí gia đình thêm ấm áp, vui vẻ), hãy gọi công cụ send_sticker với loại cảm xúc phù hợp ('funny', 'greeting', 'thanks', 'celebration', 'done', 'confused', 'bye'). Không lạm dụng gửi sticker khi đang trả lời các thông tin quan trọng hoặc câu hỏi nghiêm túc.`;
 
 export type MemoryItem = {
   subject: string;

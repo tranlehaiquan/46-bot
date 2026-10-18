@@ -234,3 +234,80 @@ describe("createZaloClient sendMessage", () => {
     }
   });
 });
+
+describe("createZaloClient sendSticker", () => {
+  it("calls bot.sendSticker with chatId and stickerId", async () => {
+    const zaloBotPath = require.resolve("zalo-bot-js");
+    const originalEntry = require.cache[zaloBotPath];
+
+    const calls: Array<{ chatId: string; stickerId: string }> = [];
+    class MockBot {
+      config: any;
+      constructor(config: any) {
+        this.config = config;
+      }
+      async sendSticker(chatId: string, stickerId: string) {
+        calls.push({ chatId, stickerId });
+        return { messageId: "msg-123" };
+      }
+    }
+
+    require.cache[zaloBotPath] = {
+      exports: { Bot: MockBot },
+    } as any;
+
+    try {
+      const client = createZaloClient("test-token");
+      await client.sendSticker!("chat-1", "sticker-abc");
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0], {
+        chatId: "chat-1",
+        stickerId: "sticker-abc",
+      });
+    } finally {
+      if (originalEntry) {
+        require.cache[zaloBotPath] = originalEntry;
+      } else {
+        delete require.cache[zaloBotPath];
+      }
+    }
+  });
+
+  it("throws error when bot.sendSticker returns synthetic local- messageId", async () => {
+    const zaloBotPath = require.resolve("zalo-bot-js");
+    const originalEntry = require.cache[zaloBotPath];
+
+    class MockBot {
+      config: any;
+      constructor(config: any) {
+        this.config = config;
+      }
+      async sendSticker() {
+        return { messageId: "local-failed" };
+      }
+    }
+
+    require.cache[zaloBotPath] = {
+      exports: { Bot: MockBot },
+    } as any;
+
+    try {
+      const client = createZaloClient("test-token");
+      await assert.rejects(
+        async () => {
+          await client.sendSticker!("chat-1", "invalid-id");
+        },
+        {
+          message: /Zalo API rejected sticker: invalid-id/,
+        }
+      );
+    } finally {
+      if (originalEntry) {
+        require.cache[zaloBotPath] = originalEntry;
+      } else {
+        delete require.cache[zaloBotPath];
+      }
+    }
+  });
+});
+

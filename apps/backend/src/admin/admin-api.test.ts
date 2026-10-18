@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import { closeDatabase, openDatabase } from "../db/connection.js";
 import { migrate } from "../db/migrations.js";
 import { createChannelRepository } from "../db/repositories/channels.js";
@@ -392,45 +395,69 @@ describe("Admin REST API", () => {
   });
 
   it("serves static SPA assets at /admin", async () => {
-    const app = buildServer({
-      config: mockConfig(),
-      log: createLogger(),
-      zalo: fakeZalo(),
-    });
+    const candidateDistPaths = [
+      path.resolve(process.cwd(), "apps/admin/dist"),
+      path.resolve(process.cwd(), "../admin/dist"),
+      path.resolve(process.cwd(), "web/dist"),
+    ];
+    let tempDir: string | undefined;
+    let webDistPath = candidateDistPaths.find((p) => fs.existsSync(path.join(p, "index.html")));
 
-    // 1. GET /admin redirects to /admin/
-    const redirectRes = await app.inject({
-      method: "GET",
-      url: "/admin",
-    });
-    assert.equal(redirectRes.statusCode, 302);
-    assert.equal(redirectRes.headers.location, "/admin/");
+    if (!webDistPath) {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "46bot-admin-test-"));
+      fs.writeFileSync(
+        path.join(tempDir, "index.html"),
+        "<!DOCTYPE html><html><head><title>46-Bot Control Center</title></head><body><div id='root'></div></body></html>",
+      );
+      webDistPath = tempDir;
+    }
 
-    // 2. GET /admin/ serves index.html
-    const indexRes = await app.inject({
-      method: "GET",
-      url: "/admin/",
-    });
-    assert.equal(indexRes.statusCode, 200);
-    assert.match(indexRes.body, /46-Bot Control Center/);
+    try {
+      const app = buildServer({
+        config: mockConfig(),
+        log: createLogger(),
+        zalo: fakeZalo(),
+        webDistPath,
+      });
 
-    // 3. Fallback for client routing e.g. /admin/channels/group-123
-    const routeRes = await app.inject({
-      method: "GET",
-      url: "/admin/channels/group-123",
-    });
-    assert.equal(routeRes.statusCode, 200);
-    assert.match(routeRes.body, /46-Bot Control Center/);
+      // 1. GET /admin redirects to /admin/
+      const redirectRes = await app.inject({
+        method: "GET",
+        url: "/admin",
+      });
+      assert.equal(redirectRes.statusCode, 302);
+      assert.equal(redirectRes.headers.location, "/admin/");
 
-    // 4. Fallback for /admin/chat/UUID
-    const chatRouteRes = await app.inject({
-      method: "GET",
-      url: "/admin/chat/c5b08493-2ce5-4127-94d0-4bf690fa2ba5",
-    });
-    assert.equal(chatRouteRes.statusCode, 200);
-    assert.match(chatRouteRes.body, /46-Bot Control Center/);
+      // 2. GET /admin/ serves index.html
+      const indexRes = await app.inject({
+        method: "GET",
+        url: "/admin/",
+      });
+      assert.equal(indexRes.statusCode, 200);
+      assert.match(indexRes.body, /46-Bot Control Center/);
 
-    await app.close();
+      // 3. Fallback for client routing e.g. /admin/channels/group-123
+      const routeRes = await app.inject({
+        method: "GET",
+        url: "/admin/channels/group-123",
+      });
+      assert.equal(routeRes.statusCode, 200);
+      assert.match(routeRes.body, /46-Bot Control Center/);
+
+      // 4. Fallback for /admin/chat/UUID
+      const chatRouteRes = await app.inject({
+        method: "GET",
+        url: "/admin/chat/c5b08493-2ce5-4127-94d0-4bf690fa2ba5",
+      });
+      assert.equal(chatRouteRes.statusCode, 200);
+      assert.match(chatRouteRes.body, /46-Bot Control Center/);
+
+      await app.close();
+    } finally {
+      if (tempDir) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    }
   });
 
   it("covers channel lookups API: list with failed last run, pause, resume, delete, and HTTP 401 without session", async () => {
