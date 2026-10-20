@@ -46,7 +46,7 @@ export function createImageGenerateTool(context: ImageGenerateContext) {
         const geminiImageModel =
           resolved?.effective.geminiImageModel ||
           config.geminiImageModel ||
-          "imagen-3.0-generate-002";
+          "gemini-3.1-flash-image";
         const ziplineUrl = resolved?.effective.ziplineUrl || config.ziplineUrl;
         const ziplineToken = resolved?.effective.ziplineToken || config.ziplineToken;
 

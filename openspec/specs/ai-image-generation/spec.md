@@ -17,7 +17,7 @@ The system SHALL register an `image_generate` tool available to the LLM agent du
 - **THEN** the system executes the image generation handler with the specified prompt
 
 ### Requirement: Image generation via Google Imagen model
-The system SHALL generate images using Google's Generative AI image model (configured by `GEMINI_IMAGE_MODEL`, defaulting to `imagen-3.0-generate-002`) using the active `GEMINI_API_KEY`.
+The system SHALL generate images using Google's Generative AI image model (configured by `GEMINI_IMAGE_MODEL`, defaulting to `gemini-3.1-flash-image`) using the active `GEMINI_API_KEY`.
 
 #### Scenario: Successful image synthesis
 - **WHEN** `image_generate` is called with a valid prompt and a valid Gemini API key is configured

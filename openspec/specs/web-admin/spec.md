@@ -229,10 +229,10 @@ The system SHALL support inspecting and customizing the Gemini image generation 
 
 #### Scenario: Retrieve settings with geminiImageModel
 - **WHEN** authenticated admin requests `GET /api/admin/settings`
-- **THEN** response includes `geminiImageModel` (effective model name, defaulting to `imagen-3.0-generate-002` or `GEMINI_IMAGE_MODEL` env) and source indicator
+- **THEN** response includes `geminiImageModel` (effective model name, defaulting to `gemini-3.1-flash-image` or `GEMINI_IMAGE_MODEL` env) and source indicator
 
 #### Scenario: Update geminiImageModel via PATCH
-- **WHEN** authenticated admin sends `PATCH /api/admin/settings` with `{ "geminiImageModel": "imagen-3.0-generate-002" }`
+- **WHEN** authenticated admin sends `PATCH /api/admin/settings` with `{ "geminiImageModel": "gemini-3.1-flash-image" }`
 - **THEN** system persists `gemini_image_model` into `system_settings` and updates effective settings immediately
 
 #### Scenario: Admin views and edits Gemini Image Model in UI

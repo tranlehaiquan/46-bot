@@ -37,7 +37,7 @@ function mockConfig(): AppConfig {
     llmApiKey: "test-key",
     llmModel: "deepseek-chat",
     geminiModel: "gemini-3.8-flash",
-    geminiImageModel: "imagen-3.0-generate-002",
+    geminiImageModel: "gemini-3.1-flash-image",
     deepseekModel: "deepseek-chat",
     passiveMemoryEnabled: true,
   };
@@ -719,7 +719,7 @@ describe("Admin REST API", () => {
       const body1 = JSON.parse(getRes1.body);
       assert.equal(body1.ok, true);
       assert.equal(body1.settings.llmProvider, "deepseek");
-      assert.equal(body1.settings.geminiImageModel, "imagen-3.0-generate-002");
+      assert.equal(body1.settings.geminiImageModel, "gemini-3.1-flash-image");
       assert.equal(body1.settings.hasGeminiApiKey, true);
       assert.equal(body1.settings.geminiApiKeySource, "env");
       assert.match(body1.settings.geminiApiKeyMasked, /AQ\.t\.\.\.3456/);
@@ -743,7 +743,7 @@ describe("Admin REST API", () => {
         payload: {
           llmProvider: "gemini",
           geminiModel: "gemini-2.5-flash",
-          geminiImageModel: "imagen-3.0-fast-generate-001",
+          geminiImageModel: "gemini-3-pro-image",
           geminiApiKey: "AQ.custom-gemini-key-8888",
           deepseekModel: "deepseek-reasoner",
           deepseekApiKey: "sk-custom-deepseek-key-7777",
@@ -755,7 +755,7 @@ describe("Admin REST API", () => {
       assert.equal(patchBody.ok, true);
       assert.equal(patchBody.settings.llmProvider, "gemini");
       assert.equal(patchBody.settings.geminiModel, "gemini-2.5-flash");
-      assert.equal(patchBody.settings.geminiImageModel, "imagen-3.0-fast-generate-001");
+      assert.equal(patchBody.settings.geminiImageModel, "gemini-3-pro-image");
       assert.equal(patchBody.settings.geminiApiKeySource, "db");
       assert.equal(patchBody.settings.deepseekModel, "deepseek-reasoner");
       assert.equal(patchBody.settings.deepseekApiKeySource, "db");
@@ -763,7 +763,7 @@ describe("Admin REST API", () => {
 
       // Verify stored in DB
       assert.equal(await settingsRepo.get("llm_provider"), "gemini");
-      assert.equal(await settingsRepo.get("gemini_image_model"), "imagen-3.0-fast-generate-001");
+      assert.equal(await settingsRepo.get("gemini_image_model"), "gemini-3-pro-image");
       assert.equal(await settingsRepo.get("gemini_api_key"), "AQ.custom-gemini-key-8888");
       assert.equal(await settingsRepo.get("deepseek_api_key"), "sk-custom-deepseek-key-7777");
 

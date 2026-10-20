@@ -67,7 +67,7 @@ const envSchema = z.object({
     z.string().min(1),
   ),
   GEMINI_IMAGE_MODEL: z.preprocess(
-    (value) => (value === undefined || value === "" ? "imagen-3.0-generate-002" : value),
+    (value) => (value === undefined || value === "" ? "gemini-3.1-flash-image" : value),
     z.string().min(1),
   ),
   DEEPSEEK_API_KEY: z.preprocess(

@@ -34,8 +34,11 @@ const GEMINI_MODELS = [
 ];
 
 const GEMINI_IMAGE_MODELS = [
-  { value: "imagen-3.0-generate-002", label: "imagen-3.0-generate-002 (Imagen 3, Khuyên dùng)" },
-  { value: "imagen-3.0-fast-generate-001", label: "imagen-3.0-fast-generate-001 (Imagen 3 Fast)" },
+  { value: "gemini-3.1-flash-image", label: "gemini-3.1-flash-image (Nano Banana 2 - Khuyên dùng)" },
+  { value: "gemini-3.1-flash-lite-image", label: "gemini-3.1-flash-lite-image (Nano Banana 2 Lite - Nhanh & Nhẹ)" },
+  { value: "gemini-3-pro-image", label: "gemini-3-pro-image (Nano Banana Pro - Chất lượng cao)" },
+  { value: "gemini-nano-banana-2.1", label: "gemini-nano-banana-2.1 (Nano Banana 2.1)" },
+  { value: "gemini-2.5-flash-image", label: "gemini-2.5-flash-image (Gemini 2.5 Flash)" },
 ];
 
 const DEEPSEEK_MODELS = [
@@ -52,7 +55,7 @@ export function SettingsPage() {
 
   const [provider, setProvider] = useState<"gemini" | "deepseek">("gemini");
   const [geminiModel, setGeminiModel] = useState("gemini-3.8-flash");
-  const [geminiImageModel, setGeminiImageModel] = useState("imagen-3.0-generate-002");
+  const [geminiImageModel, setGeminiImageModel] = useState("gemini-3.1-flash-image");
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [showGeminiKey, setShowGeminiKey] = useState(false);
 
@@ -532,9 +535,9 @@ export function SettingsPage() {
             <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <ImageIcon size={13} className="text-indigo-400" />
-                <span>Model tạo hình ảnh (Gemini Imagen)</span>
+                <span>Model tạo hình ảnh (Gemini Image / Nano Banana)</span>
               </span>
-              <span className="text-[11px] text-slate-500">Mặc định: imagen-3.0-generate-002</span>
+              <span className="text-[11px] text-slate-500">Mặc định: gemini-3.1-flash-image</span>
             </label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Select.Root
@@ -558,7 +561,7 @@ export function SettingsPage() {
 
               <TextField.Root
                 id="input-gemini-image-model"
-                placeholder="Nhập tên model (ví dụ: imagen-3.0-generate-002)"
+                placeholder="Nhập tên model (ví dụ: gemini-3.1-flash-image)"
                 value={geminiImageModel}
                 onChange={(e) => setGeminiImageModel(e.target.value)}
               />

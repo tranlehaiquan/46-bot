@@ -61,7 +61,7 @@ export async function resolveEffectiveSettings(
   const geminiModel = dbEntries.gemini_model || config.geminiModel || "gemini-3.8-flash";
   const geminiApiKey = dbEntries.gemini_api_key || config.geminiApiKey;
   const geminiImageModel =
-    dbEntries.gemini_image_model || config.geminiImageModel || "imagen-3.0-generate-002";
+    dbEntries.gemini_image_model || config.geminiImageModel || "gemini-3.1-flash-image";
 
   const deepseekModel = dbEntries.deepseek_model || config.deepseekModel || "deepseek-chat";
   const deepseekApiKey = dbEntries.deepseek_api_key || config.deepseekApiKey;

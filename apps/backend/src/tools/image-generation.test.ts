@@ -21,7 +21,7 @@ function mockConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     llmModel: "gemini-3.8-flash",
     geminiApiKey: "test-gemini-key",
     geminiModel: "gemini-3.8-flash",
-    geminiImageModel: "imagen-3.0-generate-002",
+    geminiImageModel: "gemini-3.1-flash-image",
     deepseekModel: "deepseek-chat",
     ziplineUrl: "https://zipline.example.com",
     ziplineToken: "zip-token-123",
@@ -145,7 +145,7 @@ describe("AI Image Generation Tool (image_generate)", () => {
     assert.equal(result.url, "https://zipline.example.com/u/cat_123.png");
     assert.match(result.message, /Đã vẽ và gửi thành công/);
 
-    assert.equal(generatedModelId, "imagen-3.0-generate-002");
+    assert.equal(generatedModelId, "gemini-3.1-flash-image");
     assert.equal(generatedPrompt, "chú mèo lông vàng dễ thương");
     assert.equal(generatedAspect, "16:9");
 
@@ -200,10 +200,10 @@ describe("AI Image Generation Tool (image_generate)", () => {
     };
 
     const mockSettingsRepo: SettingsRepository = {
-      get: async (key: string) => (key === "gemini_image_model" ? "imagen-3.0-fast-generate-001" : null),
+      get: async (key: string) => (key === "gemini_image_model" ? "gemini-3-pro-image" : null),
       set: async () => {},
       delete: async () => {},
-      getAll: async () => ({ gemini_image_model: "imagen-3.0-fast-generate-001" }),
+      getAll: async () => ({ gemini_image_model: "gemini-3-pro-image" }),
       setMany: async () => {},
     };
 
@@ -220,6 +220,6 @@ describe("AI Image Generation Tool (image_generate)", () => {
       { toolCallId: "call-6", messages: [] },
     );
 
-    assert.equal(invokedModelId, "imagen-3.0-fast-generate-001");
+    assert.equal(invokedModelId, "gemini-3-pro-image");
   });
 });
