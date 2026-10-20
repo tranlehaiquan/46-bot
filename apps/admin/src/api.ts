@@ -371,6 +371,8 @@ export const api = {
 export type AdminSettings = {
   llmProvider: "gemini" | "deepseek";
   geminiModel: string;
+  geminiImageModel: string;
+  geminiImageModelSource?: "db" | "env" | "default";
   hasGeminiApiKey: boolean;
   geminiApiKeyMasked: string | null;
   geminiApiKeySource: "db" | "env" | "none";
@@ -393,6 +395,7 @@ export type AdminSettings = {
 export type UpdateSettingsInput = {
   llmProvider?: "gemini" | "deepseek";
   geminiModel?: string;
+  geminiImageModel?: string;
   geminiApiKey?: string;
   deepseekModel?: string;
   deepseekApiKey?: string;

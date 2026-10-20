@@ -29,6 +29,7 @@ function mockConfig(familyChatIds: string[] = []): AppConfig {
     llmApiKey: "test-key",
     llmModel: "deepseek-chat",
     geminiModel: "gemini-3.8-flash",
+    geminiImageModel: "imagen-3.0-generate-002",
     deepseekModel: "deepseek-chat",
     passiveMemoryEnabled: true,
   };

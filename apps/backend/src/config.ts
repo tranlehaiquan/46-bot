@@ -66,6 +66,10 @@ const envSchema = z.object({
     (value) => (value === undefined || value === "" ? "gemini-3.8-flash" : value),
     z.string().min(1),
   ),
+  GEMINI_IMAGE_MODEL: z.preprocess(
+    (value) => (value === undefined || value === "" ? "imagen-3.0-generate-002" : value),
+    z.string().min(1),
+  ),
   DEEPSEEK_API_KEY: z.preprocess(
     (value) => (value === undefined || value === "" ? undefined : value),
     z.string().optional(),
@@ -168,6 +172,7 @@ export type AppConfig = {
   llmModel: string;
   geminiApiKey?: string;
   geminiModel: string;
+  geminiImageModel: string;
   deepseekApiKey?: string;
   deepseekModel: string;
   tavilyApiKey?: string;
@@ -225,6 +230,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     llmModel: model,
     geminiApiKey: parsed.data.GEMINI_API_KEY,
     geminiModel: parsed.data.GEMINI_MODEL,
+    geminiImageModel: parsed.data.GEMINI_IMAGE_MODEL,
     deepseekApiKey: parsed.data.DEEPSEEK_API_KEY,
     deepseekModel: parsed.data.DEEPSEEK_MODEL,
     tavilyApiKey: parsed.data.TAVILY_API_KEY,

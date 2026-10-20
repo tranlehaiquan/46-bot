@@ -30,6 +30,7 @@ import { splitText } from "./utils/split-text.js";
 import { cleanOutboundText } from "./utils/clean-text.js";
 import type { ZaloClient } from "./zalo-client.js";
 import { createStickerTool } from "./tools/sticker.js";
+import { createImageGenerateTool } from "./tools/image-generation.js";
 
 export const CANNED_REPLY = "Mình nhận được.";
 export const ONBOARDING_MESSAGE_PREFIX = "Nhóm này chưa nằm trong danh sách cho phép. Vui lòng thêm chat ID";
@@ -405,6 +406,13 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       ? createStickerTool(zalo, message.chatId)
       : undefined;
 
+    const imageGenerateTools = createImageGenerateTool({
+      chatId: message.chatId,
+      config,
+      settingsRepo,
+      zalo,
+    });
+
     const tools =
       listTools ||
       eventTools ||
@@ -416,7 +424,8 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       lookupTools ||
       lotteryTools ||
       groupMemberTools ||
-      stickerTools
+      stickerTools ||
+      imageGenerateTools
         ? {
             ...listTools,
             ...eventTools,
@@ -429,6 +438,7 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
             ...lotteryTools,
             ...groupMemberTools,
             ...stickerTools,
+            ...imageGenerateTools,
           }
         : undefined;
 

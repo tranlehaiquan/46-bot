@@ -515,6 +515,15 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         if (val) updates.gemini_model = val;
       }
 
+      if (typeof body.geminiImageModel === "string") {
+        const val = body.geminiImageModel.trim();
+        if (val === "") {
+          updates.gemini_image_model = null;
+        } else {
+          updates.gemini_image_model = val;
+        }
+      }
+
       if (typeof body.deepseekModel === "string") {
         const val = body.deepseekModel.trim();
         if (val) updates.deepseek_model = val;

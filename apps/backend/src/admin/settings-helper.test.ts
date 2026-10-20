@@ -29,6 +29,7 @@ function mockConfig(): AppConfig {
     llmModel: "gemini-3.8-flash",
     geminiApiKey: "AQ.default-gemini-key-123456",
     geminiModel: "gemini-3.8-flash",
+    geminiImageModel: "imagen-3.0-generate-002",
     deepseekModel: "deepseek-chat",
     tavilyApiKey: "tvly-default-key-123456",
     passiveMemoryEnabled: true,

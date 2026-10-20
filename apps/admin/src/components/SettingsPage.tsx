@@ -33,6 +33,11 @@ const GEMINI_MODELS = [
   { value: "gemini-1.5-flash", label: "gemini-1.5-flash" },
 ];
 
+const GEMINI_IMAGE_MODELS = [
+  { value: "imagen-3.0-generate-002", label: "imagen-3.0-generate-002 (Imagen 3, Khuyên dùng)" },
+  { value: "imagen-3.0-fast-generate-001", label: "imagen-3.0-fast-generate-001 (Imagen 3 Fast)" },
+];
+
 const DEEPSEEK_MODELS = [
   { value: "deepseek-chat", label: "deepseek-chat (DeepSeek-V3, Khuyên dùng)" },
   { value: "deepseek-reasoner", label: "deepseek-reasoner (DeepSeek-R1)" },
@@ -47,6 +52,7 @@ export function SettingsPage() {
 
   const [provider, setProvider] = useState<"gemini" | "deepseek">("gemini");
   const [geminiModel, setGeminiModel] = useState("gemini-3.8-flash");
+  const [geminiImageModel, setGeminiImageModel] = useState("imagen-3.0-generate-002");
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [showGeminiKey, setShowGeminiKey] = useState(false);
 
@@ -86,6 +92,7 @@ export function SettingsPage() {
     if (settings) {
       setProvider(settings.llmProvider);
       setGeminiModel(settings.geminiModel || "gemini-3.8-flash");
+      setGeminiImageModel(settings.geminiImageModel || "imagen-3.0-generate-002");
       setDeepseekModel(settings.deepseekModel || "deepseek-chat");
       setZiplineUrl(settings.ziplineUrl || "");
     }
@@ -97,6 +104,7 @@ export function SettingsPage() {
       const updates: Parameters<typeof updateSettingsMutation.mutateAsync>[0] = {
         llmProvider: provider,
         geminiModel,
+        geminiImageModel,
         deepseekModel,
         ziplineUrl: ziplineUrl.trim(),
       };
@@ -516,6 +524,47 @@ export function SettingsPage() {
             </TextField.Root>
             <p className="text-[11px] text-slate-400">
               Khóa API bắt đầu bằng <code className="text-indigo-300 font-mono">AQ...</code> từ Google AI Studio.
+            </p>
+          </div>
+
+          {/* Gemini Image Model */}
+          <div className="space-y-2 md:col-span-2 border-t border-white/5 pt-4">
+            <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <ImageIcon size={13} className="text-indigo-400" />
+                <span>Model tạo hình ảnh (Gemini Imagen)</span>
+              </span>
+              <span className="text-[11px] text-slate-500">Mặc định: imagen-3.0-generate-002</span>
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Select.Root
+                value={GEMINI_IMAGE_MODELS.some((m) => m.value === geminiImageModel) ? geminiImageModel : "custom"}
+                onValueChange={(val) => {
+                  if (val !== "custom") {
+                    setGeminiImageModel(val);
+                  }
+                }}
+              >
+                <Select.Trigger className="w-full" id="select-gemini-image-model" />
+                <Select.Content position="popper">
+                  {GEMINI_IMAGE_MODELS.map((m) => (
+                    <Select.Item key={m.value} value={m.value}>
+                      {m.label}
+                    </Select.Item>
+                  ))}
+                  <Select.Item value="custom">Tùy chỉnh model ID khác...</Select.Item>
+                </Select.Content>
+              </Select.Root>
+
+              <TextField.Root
+                id="input-gemini-image-model"
+                placeholder="Nhập tên model (ví dụ: imagen-3.0-generate-002)"
+                value={geminiImageModel}
+                onChange={(e) => setGeminiImageModel(e.target.value)}
+              />
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Model được dùng khi người dùng yêu cầu chatbot vẽ tranh, tạo hình ảnh trong hội thoại.
             </p>
           </div>
         </div>

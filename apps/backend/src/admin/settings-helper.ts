@@ -8,6 +8,7 @@ export type EffectiveSettings = {
   llmProvider: "gemini" | "deepseek";
   geminiModel: string;
   geminiApiKey?: string;
+  geminiImageModel: string;
   deepseekModel: string;
   deepseekApiKey?: string;
   tavilyApiKey?: string;
@@ -19,6 +20,8 @@ export type EffectiveSettings = {
 export type MaskedSettings = {
   llmProvider: "gemini" | "deepseek";
   geminiModel: string;
+  geminiImageModel: string;
+  geminiImageModelSource: "db" | "env" | "default";
   hasGeminiApiKey: boolean;
   geminiApiKeyMasked: string | null;
   geminiApiKeySource: "db" | "env" | "none";
@@ -57,6 +60,8 @@ export async function resolveEffectiveSettings(
 
   const geminiModel = dbEntries.gemini_model || config.geminiModel || "gemini-3.8-flash";
   const geminiApiKey = dbEntries.gemini_api_key || config.geminiApiKey;
+  const geminiImageModel =
+    dbEntries.gemini_image_model || config.geminiImageModel || "imagen-3.0-generate-002";
 
   const deepseekModel = dbEntries.deepseek_model || config.deepseekModel || "deepseek-chat";
   const deepseekApiKey = dbEntries.deepseek_api_key || config.deepseekApiKey;
@@ -71,6 +76,7 @@ export async function resolveEffectiveSettings(
       llmProvider,
       geminiModel,
       geminiApiKey,
+      geminiImageModel,
       deepseekModel,
       deepseekApiKey,
       tavilyApiKey,
@@ -87,6 +93,12 @@ export function toMaskedSettings(
   dbEntries: Record<string, string>,
   config: AppConfig,
 ): MaskedSettings {
+  const geminiImageModelSource: "db" | "env" | "default" = dbEntries.gemini_image_model
+    ? "db"
+    : config.geminiImageModel
+      ? "env"
+      : "default";
+
   const geminiSource: "db" | "env" | "none" = dbEntries.gemini_api_key
     ? "db"
     : config.geminiApiKey
@@ -120,6 +132,8 @@ export function toMaskedSettings(
   return {
     llmProvider: effective.llmProvider,
     geminiModel: effective.geminiModel,
+    geminiImageModel: effective.geminiImageModel,
+    geminiImageModelSource,
     hasGeminiApiKey: Boolean(effective.geminiApiKey),
     geminiApiKeyMasked: maskSecret(effective.geminiApiKey),
     geminiApiKeySource: geminiSource,
