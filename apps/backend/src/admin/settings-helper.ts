@@ -1,6 +1,8 @@
 import type { AppConfig } from "../config.js";
 import type { SettingsRepository } from "../db/repositories/settings.js";
 import { createLlmClient, type LlmClient, type LlmClientOptions } from "../llm/client.js";
+import { testZiplineConnection } from "../storage/zipline.js";
+export { testZiplineConnection };
 
 export type EffectiveSettings = {
   llmProvider: "gemini" | "deepseek";
@@ -10,6 +12,8 @@ export type EffectiveSettings = {
   deepseekApiKey?: string;
   tavilyApiKey?: string;
   crawl4aiApiToken?: string;
+  ziplineUrl?: string;
+  ziplineToken?: string;
 };
 
 export type MaskedSettings = {
@@ -28,6 +32,10 @@ export type MaskedSettings = {
   hasCrawl4aiApiToken: boolean;
   crawl4aiApiTokenMasked: string | null;
   crawl4aiApiTokenSource: "db" | "env" | "none";
+  ziplineUrl: string;
+  hasZiplineToken: boolean;
+  ziplineTokenMasked: string | null;
+  ziplineTokenSource: "db" | "env" | "none";
 };
 
 export function maskSecret(secret?: string): string | null {
@@ -55,6 +63,8 @@ export async function resolveEffectiveSettings(
 
   const tavilyApiKey = dbEntries.tavily_api_key || config.tavilyApiKey;
   const crawl4aiApiToken = dbEntries.crawl4ai_api_token || config.crawl4aiApiToken;
+  const ziplineUrl = dbEntries.zipline_url || config.ziplineUrl;
+  const ziplineToken = dbEntries.zipline_token || config.ziplineToken;
 
   return {
     effective: {
@@ -65,6 +75,8 @@ export async function resolveEffectiveSettings(
       deepseekApiKey,
       tavilyApiKey,
       crawl4aiApiToken,
+      ziplineUrl,
+      ziplineToken,
     },
     dbEntries,
   };
@@ -99,6 +111,12 @@ export function toMaskedSettings(
       ? "env"
       : "none";
 
+  const ziplineSource: "db" | "env" | "none" = dbEntries.zipline_token
+    ? "db"
+    : config.ziplineToken
+      ? "env"
+      : "none";
+
   return {
     llmProvider: effective.llmProvider,
     geminiModel: effective.geminiModel,
@@ -115,6 +133,10 @@ export function toMaskedSettings(
     hasCrawl4aiApiToken: Boolean(effective.crawl4aiApiToken),
     crawl4aiApiTokenMasked: maskSecret(effective.crawl4aiApiToken),
     crawl4aiApiTokenSource: crawl4aiSource,
+    ziplineUrl: effective.ziplineUrl || "",
+    hasZiplineToken: Boolean(effective.ziplineToken),
+    ziplineTokenMasked: maskSecret(effective.ziplineToken),
+    ziplineTokenSource: ziplineSource,
   };
 }
 

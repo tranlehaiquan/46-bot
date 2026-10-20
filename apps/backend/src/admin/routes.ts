@@ -14,6 +14,7 @@ import {
   createLlmClientFromSettings,
   DynamicLlmClient,
   testCrawl4AiConnection,
+  testZiplineConnection,
 } from "./settings-helper.js";
 import { createLlmClient } from "../llm/client.js";
 import { tavily } from "@tavily/core";
@@ -519,6 +520,15 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         if (val) updates.deepseek_model = val;
       }
 
+      if (typeof body.ziplineUrl === "string") {
+        const val = body.ziplineUrl.trim();
+        if (val === "") {
+          updates.zipline_url = null;
+        } else {
+          updates.zipline_url = val;
+        }
+      }
+
       const handleKey = (keyParam: unknown, dbKey: string) => {
         if (typeof keyParam === "string") {
           const trimmed = keyParam.trim();
@@ -534,6 +544,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       handleKey(body.deepseekApiKey, "deepseek_api_key");
       handleKey(body.tavilyApiKey, "tavily_api_key");
       handleKey(body.crawl4aiApiKey ?? body.crawl4aiApiToken, "crawl4ai_api_token");
+      handleKey(body.ziplineToken ?? body.ziplineApiKey, "zipline_token");
 
       if (Object.keys(updates).length > 0) {
         await deps.settingsRepo.setMany(updates);
@@ -569,6 +580,39 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
       }
 
       const result = await testCrawl4AiConnection(key);
+      if (!result.success) {
+        return reply.code(400).send({ ok: false, error: result.error });
+      }
+      return reply.send({ ok: true, message: result.message });
+    });
+
+    adminScope.post("/api/admin/settings/test-zipline", async (request, reply) => {
+      const body = parseJsonBody(request.body);
+      const { effective } = await resolveEffectiveSettings(deps.settingsRepo, deps.config);
+
+      const rawUrl = body.url ?? body.ziplineUrl;
+      const url =
+        typeof rawUrl === "string" && rawUrl.trim()
+          ? rawUrl.trim()
+          : effective.ziplineUrl;
+
+      const rawToken = body.token ?? body.ziplineToken ?? body.ziplineApiKey;
+      const token =
+        typeof rawToken === "string" &&
+        !rawToken.includes("...") &&
+        !rawToken.includes("***") &&
+        rawToken.trim()
+          ? rawToken.trim()
+          : effective.ziplineToken;
+
+      if (!url || !token) {
+        return reply.code(400).send({
+          ok: false,
+          error: "Chưa cấu hình đầy đủ Zipline URL và API Token.",
+        });
+      }
+
+      const result = await testZiplineConnection({ url, token });
       if (!result.success) {
         return reply.code(400).send({ ok: false, error: result.error });
       }
@@ -626,6 +670,36 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
           const message = err instanceof Error ? err.message : String(err);
           return reply.code(400).send({ ok: false, error: `Kiểm tra Tavily thất bại: ${message}` });
         }
+      }
+
+      if (testType === "zipline") {
+        const rawUrl = body.url ?? body.ziplineUrl;
+        const url =
+          typeof rawUrl === "string" && rawUrl.trim()
+            ? rawUrl.trim()
+            : effective.ziplineUrl;
+
+        const rawToken = body.token ?? body.ziplineToken ?? body.ziplineApiKey ?? body.apiKey;
+        const token =
+          typeof rawToken === "string" &&
+          !rawToken.includes("...") &&
+          !rawToken.includes("***") &&
+          rawToken.trim()
+            ? rawToken.trim()
+            : effective.ziplineToken;
+
+        if (!url || !token) {
+          return reply.code(400).send({
+            ok: false,
+            error: "Chưa cấu hình đầy đủ Zipline URL và API Token.",
+          });
+        }
+
+        const result = await testZiplineConnection({ url, token });
+        if (!result.success) {
+          return reply.code(400).send({ ok: false, error: result.error });
+        }
+        return reply.send({ ok: true, message: result.message });
       }
 
       // Default: LLM test

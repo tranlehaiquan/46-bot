@@ -13,6 +13,7 @@ import {
   RefreshCw,
   RotateCcw,
   Zap,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Button, Badge, TextField, Select, Callout } from "@radix-ui/themes";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ import {
   useUpdateSettings,
   useTestSettings,
   useTestCrawl4Ai,
+  useTestZipline,
 } from "../hooks/useAdminQueries";
 
 const GEMINI_MODELS = [
@@ -41,6 +43,7 @@ export function SettingsPage() {
   const updateSettingsMutation = useUpdateSettings();
   const testSettingsMutation = useTestSettings();
   const testCrawl4AiMutation = useTestCrawl4Ai();
+  const testZiplineMutation = useTestZipline();
 
   const [provider, setProvider] = useState<"gemini" | "deepseek">("gemini");
   const [geminiModel, setGeminiModel] = useState("gemini-3.8-flash");
@@ -57,18 +60,22 @@ export function SettingsPage() {
   const [crawl4aiApiToken, setCrawl4aiApiToken] = useState("");
   const [showCrawl4aiToken, setShowCrawl4aiToken] = useState(false);
 
+  const [ziplineUrl, setZiplineUrl] = useState("");
+  const [ziplineToken, setZiplineToken] = useState("");
+  const [showZiplineToken, setShowZiplineToken] = useState(false);
+
   const [statusMessage, setStatusMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
   const [resetKeyTarget, setResetKeyTarget] = useState<
-    "geminiApiKey" | "deepseekApiKey" | "tavilyApiKey" | "crawl4aiApiKey" | null
+    "geminiApiKey" | "deepseekApiKey" | "tavilyApiKey" | "crawl4aiApiKey" | "ziplineToken" | null
   >(null);
 
-  const [testingTarget, setTestingTarget] = useState<"gemini" | "deepseek" | "tavily" | "crawl4ai" | null>(null);
+  const [testingTarget, setTestingTarget] = useState<"gemini" | "deepseek" | "tavily" | "crawl4ai" | "zipline" | null>(null);
   const [testResult, setTestResult] = useState<{
-    target: "gemini" | "deepseek" | "tavily" | "crawl4ai";
+    target: "gemini" | "deepseek" | "tavily" | "crawl4ai" | "zipline";
     ok: boolean;
     message: string;
     detail?: string;
@@ -80,6 +87,7 @@ export function SettingsPage() {
       setProvider(settings.llmProvider);
       setGeminiModel(settings.geminiModel || "gemini-3.8-flash");
       setDeepseekModel(settings.deepseekModel || "deepseek-chat");
+      setZiplineUrl(settings.ziplineUrl || "");
     }
   }, [settings]);
 
@@ -90,6 +98,7 @@ export function SettingsPage() {
         llmProvider: provider,
         geminiModel,
         deepseekModel,
+        ziplineUrl: ziplineUrl.trim(),
       };
 
       if (geminiApiKey.trim()) {
@@ -104,12 +113,16 @@ export function SettingsPage() {
       if (crawl4aiApiToken.trim()) {
         updates.crawl4aiApiKey = crawl4aiApiToken.trim();
       }
+      if (ziplineToken.trim()) {
+        updates.ziplineToken = ziplineToken.trim();
+      }
 
       await updateSettingsMutation.mutateAsync(updates);
       setGeminiApiKey("");
       setDeepseekApiKey("");
       setTavilyApiKey("");
       setCrawl4aiApiToken("");
+      setZiplineToken("");
       const successText = "Đã lưu cài đặt thành công! Cấu hình mới được áp dụng ngay lập tức.";
       setStatusMessage({
         type: "success",
@@ -146,11 +159,20 @@ export function SettingsPage() {
     }
   };
 
-  const handleTestConnection = async (target: "gemini" | "deepseek" | "tavily" | "crawl4ai") => {
+  const handleTestConnection = async (target: "gemini" | "deepseek" | "tavily" | "crawl4ai" | "zipline") => {
     setTestingTarget(target);
     setTestResult(null);
     try {
-      if (target === "crawl4ai") {
+      if (target === "zipline") {
+        const candidateUrl = ziplineUrl.trim() || undefined;
+        const candidateToken = ziplineToken.trim() || undefined;
+        const res = await testZiplineMutation.mutateAsync({ url: candidateUrl, token: candidateToken });
+        setTestResult({
+          target: "zipline",
+          ok: res.ok,
+          message: res.message || "Kết nối Zipline thành công!",
+        });
+      } else if (target === "crawl4ai") {
         const candidate = crawl4aiApiToken.trim() || undefined;
         const res = await testCrawl4AiMutation.mutateAsync(candidate);
         setTestResult({
@@ -816,6 +838,117 @@ export function SettingsPage() {
             </a>
             .
           </p>
+        </div>
+      </div>
+
+      {/* Zipline Image Storage Configuration */}
+      <div className="glass-panel p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-white/5 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+              <ImageIcon size={18} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-white">Zipline (Lưu trữ ảnh sự kiện & lịch)</h2>
+              <p className="text-xs text-slate-400">Dịch vụ lưu trữ ảnh tự lưu (self-hosted) để tải lên và chia sẻ ảnh lịch qua Zalo</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="soft"
+              color="gray"
+              size="1"
+              loading={testingTarget === "zipline"}
+              onClick={() => handleTestConnection("zipline")}
+              className="cursor-pointer"
+            >
+              <Zap size={14} className="text-amber-400" />
+              <span>Kiểm tra kết nối</span>
+            </Button>
+          </div>
+        </div>
+
+        {testResult && testResult.target === "zipline" && (
+          <Callout.Root color={testResult.ok ? "green" : "red"} size="1">
+            <Callout.Icon>
+              {testResult.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+            </Callout.Icon>
+            <Callout.Text>
+              <div className="space-y-1">
+                <div className="font-medium">{testResult.message}</div>
+                {testResult.detail && <div className="text-slate-300">{testResult.detail}</div>}
+              </div>
+            </Callout.Text>
+          </Callout.Root>
+        )}
+
+        <div className="space-y-4 max-w-xl">
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+              <Globe size={13} className="text-purple-400" />
+              <span>Zipline URL</span>
+            </label>
+            <TextField.Root
+              id="input-zipline-url"
+              type="text"
+              placeholder="https://zipline.example.com"
+              value={ziplineUrl}
+              onChange={(e) => setZiplineUrl(e.target.value)}
+              className="font-mono"
+            />
+            <p className="text-[11px] text-slate-400">
+              Địa chỉ máy chủ Zipline công khai của bạn (ví dụ: https://zipline.domain.com).
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                <Key size={13} className="text-purple-400" />
+                <span>Zipline API Token</span>
+              </label>
+              <div className="flex items-center gap-2">
+                {renderKeySourceBadge(settings.ziplineTokenSource)}
+                {settings.ziplineTokenSource === "db" && (
+                  <button
+                    onClick={() => setResetKeyTarget("ziplineToken")}
+                    className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                    title="Khôi phục về token từ .env"
+                  >
+                    <RotateCcw size={11} />
+                    <span>Đặt lại</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <TextField.Root
+              id="input-zipline-token"
+              type={showZiplineToken ? "text" : "password"}
+              placeholder={
+                settings.ziplineTokenMasked
+                  ? `Hiện tại: ${settings.ziplineTokenMasked} (để trống nếu không đổi)`
+                  : "Nhập Zipline API Token"
+              }
+              value={ziplineToken}
+              onChange={(e) => setZiplineToken(e.target.value)}
+              className="font-mono"
+            >
+              <TextField.Slot side="right">
+                <button
+                  type="button"
+                  onClick={() => setShowZiplineToken(!showZiplineToken)}
+                  className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  {showZiplineToken ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </TextField.Slot>
+            </TextField.Root>
+            <p className="text-[11px] text-slate-400">
+              Tạo Authorization Token trong mục User Profile / Tokens trên giao diện web Zipline của bạn.
+            </p>
+          </div>
         </div>
       </div>
 

@@ -170,7 +170,9 @@ describe("Event tools", () => {
         chatId: "chat-events",
         senderName: "Ba",
         zalo: mockZalo,
-        publicBaseUrl: "https://mybot.vn",
+        uploadImageFn: async ({ filename }) => ({
+          url: `https://zipline.mybot.vn/u/${filename}`,
+        }),
       });
 
       // 1. Monthly scope
@@ -183,10 +185,10 @@ describe("Event tools", () => {
       assert.equal(monthRes.success, true);
       assert.equal(monthRes.scope, "month");
       assert.equal(monthRes.sentToChannel, true);
-      assert.ok(monthRes.imageUrl.startsWith("https://mybot.vn/images/events/events_chat-events_month_"));
+      assert.ok(monthRes.imageUrl.startsWith("https://zipline.mybot.vn/u/events_chat-events_month_"));
       assert.equal(sentPhotos.length, 1);
       assert.equal(sentPhotos[0]?.chatId, "chat-events");
-      assert.ok(sentPhotos[0]?.photo.startsWith("https://mybot.vn/images/events/"));
+      assert.ok(sentPhotos[0]?.photo.startsWith("https://zipline.mybot.vn/u/events_chat-events_"));
 
       // 2. Weekly scope
       const weekRes = (await tools.event_send_image.execute?.(
@@ -211,6 +213,19 @@ describe("Event tools", () => {
       assert.equal(yearRes.scope, "year");
       assert.equal(sentPhotos.length, 3);
       assert.ok(sentPhotos[2]?.photo.includes("_year_"));
+
+      // 4. Unconfigured Zipline returns friendly error without failing
+      const toolsNoZipline = createEventTools(repo, {
+        chatId: "chat-events",
+        senderName: "Ba",
+        zalo: mockZalo,
+      });
+      const unconfiguredRes = (await toolsNoZipline.event_send_image.execute?.(
+        { scope: "week" },
+        {} as any,
+      )) as any;
+      assert.equal(unconfiguredRes.sentToChannel, false);
+      assert.match(unconfiguredRes.message, /Chưa cấu hình Zipline URL/);
     } finally {
       closeDatabase(db);
     }

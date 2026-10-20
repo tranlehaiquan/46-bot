@@ -104,6 +104,14 @@ const envSchema = z.object({
     (value) => (value === undefined || value === "" ? undefined : value),
     z.string().optional(),
   ),
+  ZIPLINE_URL: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
+  ZIPLINE_TOKEN: z.preprocess(
+    (value) => (value === undefined || value === "" ? undefined : value),
+    z.string().optional(),
+  ),
   PASSIVE_MEMORY_ENABLED: z.preprocess(
     (value) => (value === undefined || value === "" ? true : value === "true" || value === "1"),
     z.boolean().optional(),
@@ -168,6 +176,8 @@ export type AppConfig = {
   tursoDatabaseUrl?: string;
   tursoAuthToken?: string;
   crawl4aiApiToken?: string;
+  ziplineUrl?: string;
+  ziplineToken?: string;
   passiveMemoryEnabled: boolean;
 };
 
@@ -223,6 +233,8 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     tursoDatabaseUrl: parsed.data.TURSO_DATABASE_URL,
     tursoAuthToken: parsed.data.TURSO_AUTH_TOKEN,
     crawl4aiApiToken: parsed.data.CRAWL4AI_API_TOKEN,
+    ziplineUrl: parsed.data.ZIPLINE_URL,
+    ziplineToken: parsed.data.ZIPLINE_TOKEN,
     passiveMemoryEnabled: parsed.data.PASSIVE_MEMORY_ENABLED ?? true,
   };
 }

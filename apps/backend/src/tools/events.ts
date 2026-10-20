@@ -10,7 +10,8 @@ import {
   type EventsRepository,
 } from "../db/repositories/events.js";
 import type { ZaloClient } from "../zalo-client.js";
-import { saveCalendarImage } from "./calendar-image-renderer.js";
+import { renderCalendarPng } from "./calendar-image-renderer.js";
+import { uploadImageToZipline } from "../storage/zipline.js";
 
 const eventKindSchema = z.enum([
   "event",
@@ -35,6 +36,9 @@ export type EventToolsContext = {
   chatId: string;
   senderName: string;
   zalo?: ZaloClient;
+  ziplineUrl?: string;
+  ziplineToken?: string;
+  uploadImageFn?: (options: { buffer: Buffer; filename: string }) => Promise<{ url: string }>;
   publicBaseUrl?: string;
   outputDir?: string;
 };
@@ -301,7 +305,7 @@ export function createEventTools(
         subtitle = `Danh sách sự kiện, sinh nhật, giỗ chạp trong tháng ${targetMonth}`;
       }
 
-      const { filename } = await saveCalendarImage({
+      const buffer = await renderCalendarPng({
         scope,
         chatId,
         title,
@@ -310,11 +314,37 @@ export function createEventTools(
         startDate,
         endDate,
         referenceDate: refDate,
-        outputDir: context.outputDir,
       });
 
-      const baseUrl = context.publicBaseUrl ? context.publicBaseUrl.replace(/\/+$/, "") : "";
-      const photoUrl = baseUrl ? `${baseUrl}/images/events/${filename}` : `/images/events/${filename}`;
+      const safeChatId = chatId.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `events_${safeChatId}_${scope}_${Date.now()}.png`;
+
+      let photoUrl: string | undefined;
+      let uploadError: string | undefined;
+
+      if (context.uploadImageFn) {
+        try {
+          const res = await context.uploadImageFn({ buffer, filename });
+          photoUrl = res.url;
+        } catch (err: any) {
+          uploadError = err.message || String(err);
+        }
+      } else if (context.ziplineUrl && context.ziplineToken) {
+        try {
+          const res = await uploadImageToZipline({
+            url: context.ziplineUrl,
+            token: context.ziplineToken,
+            buffer,
+            filename,
+            mimeType: "image/png",
+          });
+          photoUrl = res.url;
+        } catch (err: any) {
+          uploadError = err.message || String(err);
+        }
+      } else {
+        uploadError = "Chưa cấu hình Zipline URL và API token để lưu trữ và tải ảnh.";
+      }
 
       const finalCaption =
         caption ??
@@ -323,9 +353,8 @@ export function createEventTools(
       let sentToChannel = false;
       let sendError: string | undefined;
 
-      if (!baseUrl) {
-        sendError = "Thiếu cấu hình URL công khai (WEBHOOK_URL) để Zalo tải ảnh.";
-        console.warn(`[event_send_image] Cannot send photo: baseUrl is empty`);
+      if (!photoUrl) {
+        sendError = uploadError ?? "Không thể tải ảnh lên dịch vụ Zipline.";
       } else if (context.zalo && typeof context.zalo.sendPhoto === "function") {
         try {
           await context.zalo.sendPhoto(chatId, photoUrl, finalCaption);
@@ -334,11 +363,13 @@ export function createEventTools(
           sendError = err instanceof Error ? err.message : String(err);
           console.error(`[event_send_image] Failed to send photo to ${chatId}:`, sendError);
         }
+      } else {
+        sendError = "Không có client Zalo để gửi ảnh.";
       }
 
       const message = sentToChannel
         ? `Đã tạo và gửi thành công ảnh lịch sự kiện (${occurrences.length} sự kiện) vào nhóm chat.`
-        : `Đã tạo ảnh lịch sự kiện (${occurrences.length} sự kiện), nhưng không thể gửi ảnh vào nhóm (Lý do: ${sendError ?? "Không có client gửi ảnh"}).`;
+        : `Đã tạo ảnh lịch sự kiện (${occurrences.length} sự kiện), nhưng không thể gửi ảnh vào nhóm (Lý do: ${sendError ?? "Lỗi không xác định"}).`;
 
       return {
         success: true,

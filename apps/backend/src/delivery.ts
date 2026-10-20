@@ -29,7 +29,6 @@ import type { GroupMemberRepository } from "./db/repositories/group-members.js";
 import { splitText } from "./utils/split-text.js";
 import { cleanOutboundText } from "./utils/clean-text.js";
 import type { ZaloClient } from "./zalo-client.js";
-import { getEventsImageDir } from "./server.js";
 import { createStickerTool } from "./tools/sticker.js";
 
 export const CANNED_REPLY = "Mình nhận được.";
@@ -341,20 +340,18 @@ export async function handleDelivery(input: DeliveryDependencies): Promise<void>
       })
       : undefined;
 
-    let publicBaseUrl: string | undefined;
-    try {
-      publicBaseUrl = new URL(config.webhookUrl).origin;
-    } catch {
-      // ignore
-    }
+    const effectiveZiplineUrl =
+      (settingsRepo ? await settingsRepo.get("zipline_url") : null) || config.ziplineUrl;
+    const effectiveZiplineToken =
+      (settingsRepo ? await settingsRepo.get("zipline_token") : null) || config.ziplineToken;
 
     const eventTools = eventsRepo
       ? createEventTools(eventsRepo, {
         chatId: message.chatId,
         senderName: message.senderName || message.senderId,
         zalo,
-        publicBaseUrl,
-        outputDir: getEventsImageDir(config.dbPath),
+        ziplineUrl: effectiveZiplineUrl,
+        ziplineToken: effectiveZiplineToken,
       })
       : undefined;
 

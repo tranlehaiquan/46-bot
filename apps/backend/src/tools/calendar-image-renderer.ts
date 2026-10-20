@@ -6,7 +6,6 @@ import {
   getUtc7Parts,
   formatUtc7DateStr,
 } from "../db/repositories/events.js";
-import { getEventsImageDir } from "../server.js";
 
 export type CalendarScope = "week" | "month" | "year";
 
@@ -420,15 +419,17 @@ export async function saveCalendarImage(
   options: RenderCalendarImageOptions & { outputDir?: string; filename?: string },
 ): Promise<{ filePath: string; filename: string; buffer: Buffer }> {
   const buffer = await renderCalendarPng(options);
-  const dir = options.outputDir ?? getEventsImageDir(process.env.DB_PATH);
-  await fs.mkdir(dir, { recursive: true });
-
   const safeChatId = options.chatId.replace(/[^a-zA-Z0-9_-]/g, "_");
   const filename =
     options.filename ??
     `events_${safeChatId}_${options.scope}_${Date.now()}.png`;
-  const filePath = path.join(dir, filename);
 
-  await fs.writeFile(filePath, buffer);
-  return { filePath, filename, buffer };
+  if (options.outputDir) {
+    await fs.mkdir(options.outputDir, { recursive: true });
+    const filePath = path.join(options.outputDir, filename);
+    await fs.writeFile(filePath, buffer);
+    return { filePath, filename, buffer };
+  }
+
+  return { filePath: "", filename, buffer };
 }

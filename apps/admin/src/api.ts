@@ -359,6 +359,13 @@ export const api = {
       body: JSON.stringify({ token }),
     });
   },
+
+  async testZiplineSettings(url?: string, token?: string): Promise<TestSettingsResult> {
+    return await request<TestSettingsResult>("/api/admin/settings/test-zipline", {
+      method: "POST",
+      body: JSON.stringify({ url, token }),
+    });
+  },
 };
 
 export type AdminSettings = {
@@ -377,6 +384,10 @@ export type AdminSettings = {
   hasCrawl4aiApiToken: boolean;
   crawl4aiApiTokenMasked: string | null;
   crawl4aiApiTokenSource: "db" | "env" | "none";
+  ziplineUrl: string;
+  hasZiplineToken: boolean;
+  ziplineTokenMasked: string | null;
+  ziplineTokenSource: "db" | "env" | "none";
 };
 
 export type UpdateSettingsInput = {
@@ -388,15 +399,20 @@ export type UpdateSettingsInput = {
   tavilyApiKey?: string;
   crawl4aiApiKey?: string;
   crawl4aiApiToken?: string;
+  ziplineUrl?: string;
+  ziplineToken?: string;
+  ziplineApiKey?: string;
 };
 
 export type TestSettingsInput = {
   provider?: "gemini" | "deepseek";
   apiKey?: string;
   model?: string;
-  testType?: "llm" | "tavily" | "crawl4ai";
+  testType?: "llm" | "tavily" | "crawl4ai" | "zipline";
   tavilyApiKey?: string;
   crawl4aiApiKey?: string;
+  ziplineUrl?: string;
+  ziplineToken?: string;
 };
 
 export type TestSettingsResult = {

@@ -48,63 +48,12 @@ export type ServerDeps = {
   webDistPath?: string;
 };
 
-export function getEventsImageDir(dbPath?: string): string {
-  const candidates: string[] = [];
-  if (dbPath && dbPath !== ":memory:" && !dbPath.startsWith(":memory:")) {
-    candidates.push(path.join(path.dirname(dbPath), "images", "events"));
-  }
-  candidates.push(path.resolve(process.cwd(), "data", "images", "events"));
-  candidates.push(path.join(os.tmpdir(), "family-bot", "images", "events"));
-
-  for (const candidate of candidates) {
-    try {
-      fs.mkdirSync(candidate, { recursive: true });
-      return candidate;
-    } catch {
-      // try next candidate
-    }
-  }
-  const fallback = path.join(os.tmpdir(), "family-bot", "images", "events");
-  fs.mkdirSync(fallback, { recursive: true });
-  return fallback;
-}
-
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const queue = deps.queue ?? new WorkQueue();
   const seen = new Set<string>();
   const app = Fastify({
     logger: false,
     bodyLimit: BODY_LIMIT,
-  });
-
-  const eventsImageDir = getEventsImageDir(deps.config.dbPath);
-  fs.mkdirSync(eventsImageDir, { recursive: true });
-
-  app.get("/images/events/:filename", async (request, reply) => {
-    const { filename } = request.params as { filename: string };
-    const safeFilename = path.basename(filename);
-    const candidateDirs = [
-      eventsImageDir,
-      path.resolve(process.cwd(), "data", "images", "events"),
-      path.resolve(process.cwd(), "apps/backend/data/images/events"),
-      path.join(os.tmpdir(), "family-bot", "images", "events"),
-    ];
-    for (const dir of candidateDirs) {
-      const fullPath = path.join(dir, safeFilename);
-      if (fs.existsSync(fullPath)) {
-        reply.header("Cache-Control", "public, max-age=3600, s-maxage=3600");
-        const stream = fs.createReadStream(fullPath);
-        return reply.type("image/png").send(stream);
-      }
-    }
-    reply.header("Cache-Control", "no-store, no-cache, must-revalidate");
-    return reply.code(404).send({ message: "Image not found" });
-  });
-
-  app.register(fastifyStatic, {
-    root: eventsImageDir,
-    prefix: "/images/events/",
-    decorateReply: false,
   });
 
   app.removeContentTypeParser("application/json");

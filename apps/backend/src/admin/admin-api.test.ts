@@ -819,6 +819,44 @@ describe("Admin REST API", () => {
       // Falls back to effective key in DB, or if empty token without db returns 400
       assert.ok(testCrawlEmpty.statusCode === 200 || testCrawlEmpty.statusCode === 400);
 
+      // 8. Set Zipline URL & API token
+      const ziplinePatch = await app.inject({
+        method: "PATCH",
+        url: "/api/admin/settings",
+        headers: authHeaders,
+        payload: {
+          ziplineUrl: "https://zipline.mybot.vn",
+          ziplineToken: "zipline-secret-token-1234",
+        },
+      });
+      assert.equal(ziplinePatch.statusCode, 200);
+      assert.equal(await settingsRepo.get("zipline_url"), "https://zipline.mybot.vn");
+      assert.equal(await settingsRepo.get("zipline_token"), "zipline-secret-token-1234");
+      const ziplinePatchBody = JSON.parse(ziplinePatch.body);
+      assert.equal(ziplinePatchBody.settings.ziplineUrl, "https://zipline.mybot.vn");
+      assert.equal(ziplinePatchBody.settings.hasZiplineToken, true);
+      assert.equal(ziplinePatchBody.settings.ziplineTokenSource, "db");
+      assert.equal(ziplinePatchBody.settings.ziplineTokenMasked, "zipl...1234");
+
+      // 9. Test /api/admin/settings/test-zipline endpoint with missing fields
+      const testZiplineMissing = await app.inject({
+        method: "POST",
+        url: "/api/admin/settings/test-zipline",
+        headers: authHeaders,
+        payload: { url: "", token: "" },
+      });
+      // Since DB already has url and token, empty candidates fallback to DB values (or error if invalid)
+      assert.ok(testZiplineMissing.statusCode === 200 || testZiplineMissing.statusCode === 400);
+
+      // 10. Test /api/admin/settings/test with testType="zipline"
+      const testZiplineType = await app.inject({
+        method: "POST",
+        url: "/api/admin/settings/test",
+        headers: authHeaders,
+        payload: { testType: "zipline" },
+      });
+      assert.ok(testZiplineType.statusCode === 200 || testZiplineType.statusCode === 400);
+
       await app.close();
     } finally {
       closeDatabase(db);

@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     make \
     g++ \
   && rm -rf /var/lib/apt/lists/* \
-  && npm install -g pnpm@12.9.1
+  && npm install -g pnpm@12.14.0
 
 # Copy workspace config and package manifests
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
@@ -35,7 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
   && fc-cache -f \
   && rm -rf /var/lib/apt/lists/* \
-  && npm install -g pnpm@12.9.1 \
+  && npm install -g pnpm@12.14.0 \
   && groupadd --gid 10001 bot \
   && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin bot
 

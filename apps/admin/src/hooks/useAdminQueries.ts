@@ -270,3 +270,9 @@ export function useTestCrawl4Ai() {
   });
 }
 
+export function useTestZipline() {
+  return useMutation({
+    mutationFn: ({ url, token }: { url?: string; token?: string }) => api.testZiplineSettings(url, token),
+  });
+}
+
