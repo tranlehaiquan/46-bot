@@ -64,9 +64,8 @@ export function createDistributedScheduler(options: DistributedSchedulerOptions)
   }
 
   async function runCatchUp(): Promise<void> {
-    const now = deps.clock?.now() ?? new Date();
-    await processMorningBriefing(deps, now);
-    await processEventReminders(deps, now);
+    // On startup/restart, only catch up due lookups; do not send morning briefings or event reminders
+    await tick();
   }
 
   async function tick(): Promise<void> {

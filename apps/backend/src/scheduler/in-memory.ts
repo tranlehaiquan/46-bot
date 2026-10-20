@@ -56,20 +56,9 @@ export function createInMemoryScheduler(deps: SchedulerDependencies): SchedulerI
 
   async function runCatchUp(): Promise<void> {
     const now = clock.now();
-    const { hour } = getLocalTimeInfo(now);
 
-    // Due lookups catch-up
+    // Due lookups catch-up; do not send morning briefings or event reminders on restart
     await runDueLookups(now);
-
-    // Morning briefing window catch-up: between 07:00 and 09:00
-    if (hour >= 7 && hour < 9) {
-      await runMorningBriefing(now);
-    }
-
-    // Event reminders window catch-up: between 08:00 and 10:00
-    if (hour >= 8 && hour < 10) {
-      await runEventReminders(now);
-    }
   }
 
   async function tick(): Promise<void> {

@@ -8,7 +8,7 @@ import { createEventsRepository, createUtc7Date, type EventsRepository } from ".
 import { createLookupRepository, type LookupRepository } from "../db/repositories/lookups.js";
 import type { LlmClient } from "../llm/client.js";
 import type { ZaloClient } from "../zalo-client.js";
-import { createScheduler, startScheduler, type Clock } from "./index.js";
+import { createScheduler, createDistributedScheduler, startScheduler, type Clock } from "./index.js";
 
 function fakeZalo() {
   const sends: Array<{ chatId: string; text: string }> = [];
@@ -345,8 +345,8 @@ describe("Background Scheduler Engine", () => {
     assert.match(zalo.sends[0]?.text ?? "", /Sinh nhật bé Na/);
   });
 
-  it("catches up missed reminders on startup within 2 hours", async () => {
-    // 08:30 (UTC+7) -> missed 08:00 reminder
+  it("does not send event reminders or morning briefings on startup catch-up", async () => {
+    // 08:30 (UTC+7) -> startup after 08:00
     const catchUpTime = new Date(Date.UTC(2026, 9, 5, 1, 30, 0));
     const clock = makeClock(catchUpTime);
 
@@ -380,9 +380,8 @@ describe("Background Scheduler Engine", () => {
     await scheduler.runCatchUp();
 
     const reminderSend = zalo.sends.find((s) => s.text.includes("Nhắc nhở"));
-    assert.ok(reminderSend);
-    assert.equal(reminderSend.chatId, "chat-A");
-    assert.match(reminderSend.text, /Đi họp/);
+    assert.equal(reminderSend, undefined);
+    assert.equal(zalo.sends.length, 0);
   });
 
   it("2.1 sends one plain-text message on fire day, sends on later same-day tick after restart, and does not duplicate once sent", async () => {
@@ -767,6 +766,60 @@ describe("Background Scheduler Engine", () => {
 
     assert.ok(instance);
     await instance.stop();
+  });
+
+  it("createDistributedScheduler runCatchUp does not send event reminders or briefings on restart", async () => {
+    const catchUpTime = new Date(Date.UTC(2026, 9, 20, 10, 48, 0)); // 17:48 UTC+7
+    const clock = makeClock(catchUpTime);
+
+    await repo.createEvent({
+      chatId: "chat-B",
+      title: "Ngày Phụ nữ Việt Nam",
+      day: 20,
+      month: 10,
+      year: 2026,
+      remindDaysBefore: 0,
+      createdBy: "user-1",
+    });
+
+    const config = loadConfig({
+      ZALO_BOT_TOKEN: "dummy-token",
+      FAMILY_CHAT_IDS: "chat-B",
+      WEBHOOK_URL: "https://example.com/webhook",
+      WEBHOOK_SECRET: "secret123",
+      MODE: "webhook",
+      PORT: "3000",
+      GEMINI_API_KEY: "key",
+      REDIS_URL: "redis://127.0.0.1:6379",
+    });
+
+    const mockRedis: any = {
+      disconnect: () => {},
+      quit: async () => {},
+    };
+    const mockQueue: any = {
+      close: async () => {},
+    };
+    const mockWorker: any = {
+      close: async () => {},
+    };
+
+    const distributed = createDistributedScheduler({
+      deps: {
+        config,
+        eventsRepo: repo,
+        zalo,
+        clock,
+        lookupsRepo,
+      },
+      redisClient: mockRedis,
+      queue: mockQueue,
+      worker: mockWorker,
+    });
+
+    await distributed.runCatchUp();
+
+    assert.equal(zalo.sends.length, 0);
   });
 });
 
