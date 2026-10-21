@@ -3,7 +3,7 @@
 [![CI](https://github.com/tranlehaiquan/46-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/tranlehaiquan/46-bot/actions/workflows/ci.yml)
 [![CD](https://github.com/tranlehaiquan/46-bot/actions/workflows/cd.yml/badge.svg)](https://github.com/tranlehaiquan/46-bot/actions/workflows/cd.yml)
 
-Trợ lý ảo thông minh, thân thiện dành riêng cho nhóm chat gia đình trên Zalo. Bot được xây dựng trên nền tảng Node.js 22, TypeScript, SQLite, Fastify và tích hợp mô hình ngôn ngữ lớn (Gemini 3.8 Flash / DeepSeek) thông qua Vercel AI SDK với khả năng tự động gọi công cụ (Function Calling / Tool Calling).
+Trợ lý ảo thông minh, thân thiện dành riêng cho nhóm chat gia đình trên **Zalo**. Bot được xây dựng trên nền tảng **Node.js 22**, **TypeScript**, **Fastify**, **SQLite / libSQL / Turso**, tích hợp hàng đợi **Redis & BullMQ** cùng mô hình ngôn ngữ lớn (**Google Gemini 3.8 Flash / DeepSeek**) thông qua Vercel AI SDK với khả năng tự động gọi công cụ (Function Calling / Tool Calling) và giao diện quản trị **Web Admin Dashboard** trực quan.
 
 ---
 
@@ -12,9 +12,9 @@ Trợ lý ảo thông minh, thân thiện dành riêng cho nhóm chat gia đình
 ZaloBot đóng vai trò là một thành viên hỗ trợ đa năng trong gia đình với các khả năng cốt lõi:
 
 ### 1. 🤖 Trò chuyện & Tương tác thông minh
-- **Kích hoạt khi cần:** Phản hồi tự động khi được nhắc tên (`@bot`) hoặc khi có thành viên trong nhóm trả lời (`reply`) tin nhắn của bot.
+- **Kích hoạt linh hoạt:** Phản hồi tự động khi được nhắc tên (`@bot`), khi có thành viên trong nhóm trả lời (`reply`) tin nhắn của bot, hoặc khi chat trực tiếp 1-1.
 - **Phong cách thân thiện:** Giọng điệu ấm áp, tự nhiên, gần gũi như người trong gia đình; ngôn ngữ mặc định là tiếng Việt (tự động chuyển sang tiếng Anh nếu người dùng chat bằng tiếng Anh).
-- **Định dạng hiển thị Zalo:** Tự động định dạng văn bản thuần, không dùng Markdown phức tạp (tránh lỗi hiển thị ký tự thô trên Zalo), hiển thị danh sách dạng bullet (`•`) hoặc số thứ tự rõ ràng kèm emoji sinh động.
+- **Định dạng hiển thị Zalo:** Tự động định dạng văn bản tương thích với Zalo (in đậm, in nghiêng, danh sách gạch đầu dòng, màu sắc Zalo `{green}...{/green}`, `{orange}...{/orange}`), tự loại bỏ các cú pháp không hỗ trợ như bảng Markdown hay link ẩn.
 - **Nhận diện ngữ cảnh:** Lưu trữ lịch sử 20 lượt trò chuyện gần nhất, ghi nhận tên người gửi (Bố, Mẹ, Con...) để hiểu đúng ngữ cảnh và xưng hô chuẩn xác.
 
 ### 2. 📝 Quản lý danh sách dùng chung (Shared Lists)
@@ -28,70 +28,103 @@ ZaloBot đóng vai trò là một thành viên hỗ trợ đa năng trong gia đ
 - **Đa dạng loại sự kiện:** Quản lý ngày giỗ chạp (`gio`), sinh nhật (`birthday`), lịch hẹn khám bệnh (`appointment`), ngày kỷ niệm (`anniversary`), nhắc nhở việc quan trọng (`reminder`).
 - **Tần suất lặp lại (Recurrence):** Tự động tính toán ngày kế tiếp cho các sự kiện định kỳ hàng năm (`yearly`), hàng tháng (`monthly`), hàng tuần (`weekly`), hàng ngày (`daily`), hoặc diễn ra một lần (`none`).
 - **Nhắc nhở trước N ngày:** Cài đặt số ngày cần nhắc trước (`remindDaysBefore`) để gia đình chuẩn bị chu đáo (mua sắm đồ cúng giỗ, quà sinh nhật...).
+- **Render ảnh lịch trực quan:** Hỗ trợ vẽ và gửi ảnh lịch âm dương hàng tháng sinh động trực tiếp vào khung chat.
 
 ### 4. 🇻🇳 Tra cứu & Đồng bộ Ngày lễ Việt Nam (Vietnamese Holidays)
 - **Dữ liệu đầy đủ:** Cập nhật toàn bộ các ngày nghỉ lễ chính thức theo Bộ luật Lao động (Tết Nguyên Đán, Giỗ Tổ Hùng Vương, 30/4 - 1/5, Quốc khánh 2/9, Tết Dương lịch) cùng số ngày nghỉ quy định.
 - **Lễ hội truyền thống:** Tra cứu các ngày lễ phong tục cổ truyền (Tết Trung Thu, Lễ Vu Lan, Tết Hàn Thực, Tết Đoan Ngọ, Tết Ông Công Ông Táo...).
 - **Đồng bộ tự động:** Tính năng nhập tự động các ngày lễ vào lịch sự kiện của nhóm chat chỉ bằng một câu lệnh.
 
-### 5. 🔍 Tìm kiếm thông tin thời gian thực (Real-time Web Search)
-- Tích hợp công cụ tìm kiếm Tavily Search để tra cứu thông tin thời gian thực trên Internet: thời tiết hôm nay, giá cả thị trường, tin tức nóng, kết quả thể thao, công thức nấu ăn...
-- Tổng hợp thông tin ngắn gọn, súc tích kèm nguồn tham khảo khi cần.
+### 5. ⛅ Tra cứu Thời tiết & Dự báo (Weather Forecast)
+- Tra cứu thời tiết thời gian thực và dự báo 1–3 ngày tới tại bất kỳ tỉnh thành, địa phương nào tại Việt Nam cũng như trên toàn thế giới qua wttr.in.
+- Không cần cấu hình API key, phản hồi nhanh chóng với nhiệt độ thực tế, cảm giác ngoài trời, độ ẩm, sức gió và khả năng mưa.
 
-### 6. ⏰ Nhắc nhở & Điểm tin tự động (Scheduled Messages)
+### 6. 🎟️ Dò & Tra cứu Kết quả Xổ số (Lottery Checker)
+- **Hỗ trợ toàn diện:** Tra cứu kết quả và tự động dò vé số kiến thiết cả 3 miền (Miền Bắc, Miền Nam, Miền Trung) và các dòng vé số Vietlott (Mega 6/45, Power 6/55).
+- **Hỗ trợ qua ảnh:** Thành viên chỉ cần chụp và gửi ảnh vé số vào nhóm chat, bot kết hợp AI Vision đọc số vé, đài quay, ngày mở thưởng và tự động báo kết quả trúng thưởng.
+
+### 7. 🎨 Tạo ảnh AI & Gửi Sticker sinh động
+- **Tạo ảnh AI (Text-to-Image):** Tích hợp Google Imagen / Gemini Image model để vẽ tranh, tạo hình ảnh minh họa theo yêu cầu của thành viên và lưu trữ qua Zipline.
+- **Sticker Zalo sống động:** Tự động gửi sticker biểu cảm phong phú (chào hỏi, cảm ơn, chúc mừng, buồn cười, tạm biệt...) từ các bộ sticker Zalo quen thuộc (SiuKay, Zapy, Anh Tre).
+
+### 8. 🧠 Ký ức Gia đình & Cuốn sổ Kỷ niệm (Memory & Memory Book)
+- **Ghi nhớ thông tin & thói quen:** Lưu lại sở thích, thói quen, chế độ dinh dưỡng (ví dụ: *Bố uống cà phê ít đường*, *Mẹ dị ứng hải sản*, *Bé Na học lớp 3*). Tự động phân cấp thông tin cốt lõi (`core`) và thông tin chung (`general`).
+- **Ghi nhớ thụ động (Passive Memory):** Tự động phát hiện và trích xuất những thói quen, thông tin quan trọng qua các cuộc hội thoại thường nhật mà không cần ra lệnh trực tiếp.
+- **Cuốn sổ Kỷ niệm (Memory Book):** Lưu lại những câu chuyện, cột mốc gia đình ý nghĩa (chuyến du lịch, ngày đầu tiên con biết bơi...) và cho phép tìm kiếm lại khi gia đình ôn chuyện cũ.
+- **Bảo mật quyền riêng tư:** Tự động từ chối và chặn ghi nhớ các thông tin nhạy cảm như mật khẩu, tài khoản ngân hàng, số thẻ tín dụng hoặc CCCD.
+
+### 9. 🔍 Tìm kiếm Web & Cào dữ liệu chuyên sâu
+- **Tavily Search:** Tra cứu tin tức thời gian thực, giá vàng, thị trường, công thức nấu ăn.
+- **Crawl4AI:** Đọc và tóm tắt sâu nội dung từ các đường link trang web (URL) được thành viên chia sẻ.
+
+### 10. ⏰ Nhắc nhở & Bản tin tự động (Scheduler)
 - **Bản tin buổi sáng (07:00):** Điểm tin ngày mới, sự kiện hôm nay, các ngày lễ hoặc sinh nhật/ngày giỗ sắp diễn ra trong 7 ngày tới.
 - **Tổng kết tuần (Chủ nhật 20:00):** Tổng hợp lịch trình, kế hoạch và các việc cần chú ý cho tuần tới.
-- **Thông báo nhắc hẹn (08:00):** Gửi tin nhắn thông báo đúng ngày diễn ra sự kiện hoặc trước N ngày theo cài đặt.
-- **Chống gửi lặp (Idempotent):** Ghi nhận trạng thái đã gửi vào SQLite để đảm bảo không bao giờ spam hay gửi trùng lặp khi khởi động lại ứng dụng.
+- **Lịch tra cứu định kỳ (Scheduled Lookups):** Đặt lịch tự động tra cứu nội dung định kỳ (báo thời tiết mỗi sáng, điểm giá vàng hàng ngày).
+- **Chống gửi lặp:** Ghi nhận trạng thái gửi vào cơ sở dữ liệu để đảm bảo không bao giờ spam hay gửi trùng lặp.
 
-### 7. 🛡️ An toàn, Tin cậy & Hiệu năng cao
-- **Acknowledge tức thì (Fast ack):** Phản hồi Webhook 200 OK ngay lập tức (< 200ms) để không bị Zalo timeout, sau đó xử lý bất đồng bộ qua hàng đợi.
-- **Chống trùng lặp (Deduplication):** Lưu trữ mã tin nhắn (`message_id`) vào cơ sở dữ liệu để loại bỏ tin nhắn gửi lặp khi mạng chập chờn.
-- **Bảo mật Webhook:** Xác thực mã token bí mật `X-Bot-Api-Secret-Token` qua so sánh thời gian cố định (`timingSafeEqual`).
-- **Hiệu ứng gõ (Typing Indicator):** Tự động gửi trạng thái đang gõ phím (`sendChatAction: typing`) để người dùng trong nhóm biết bot đang xử lý câu trả lời.
+### 11. 💻 Web Admin Dashboard
+- Giao diện quản trị web hiện đại tích hợp sẵn tại `/admin` xây dựng bằng React 19, Vite, Radix UI Themes và Tailwind CSS.
+- Cấu hình linh hoạt các thông số bot, chuyển đổi mô hình AI (Gemini/DeepSeek), quản lý API Keys, quản lý thành viên nhóm, duyệt kênh chat, tra cứu lịch và ký ức gia đình trực tiếp từ trình duyệt.
 
 ---
 
 ## 🛠️ Table of Tools (Bảng tra cứu công cụ của Bot)
 
-Dưới đây là bảng tổng hợp chi tiết các công cụ (tools) được tích hợp vào mô hình AI để tự động thực thi khi người dùng yêu cầu:
+Dưới đây là bảng tổng hợp các công cụ (tools) được tích hợp vào mô hình AI để tự động thực thi khi người dùng yêu cầu:
 
 | Tên công cụ (Tool Name) | Nhóm chức năng | Mô tả chức năng | Tham số đầu vào (Parameters) | Ví dụ câu lệnh thực tế |
 | :--- | :--- | :--- | :--- | :--- |
-| `list_create` | **Danh sách (Lists)** | Tạo một danh sách mới cho nhóm chat. | • `name` *(string, bắt buộc)*: Tên danh sách cần tạo. | *"Tạo cho mình danh sách Đi chợ"*<br>*"Lập danh sách Đồ đi biển"* |
-| `list_add_item` | **Danh sách (Lists)** | Thêm một hoặc nhiều mục/món vào danh sách đã có (tự động tạo danh sách nếu chưa có). | • `listName` *(string, bắt buộc)*: Tên danh sách.<br>• `items` *(string[], bắt buộc)*: Mảng các món/việc cần thêm. | *"Thêm thịt bò, cà chua, hành lá vào danh sách Đi chợ"*<br>*"Ghi thêm kem chống nắng vào đồ đi biển"* |
-| `list_check_item` | **Danh sách (Lists)** | Đánh dấu một món trong danh sách là đã hoàn thành (`[x]`) hoặc chưa (`[ ]`). | • `listName` *(string, bắt buộc)*: Tên danh sách.<br>• `itemText` *(string, bắt buộc)*: Tên hoặc từ khóa món.<br>• `done` *(boolean, mặc định `true`)*: Trạng thái hoàn thành. | *"Đã mua thịt bò rồi nhé"*<br>*"Check xong cà chua trong danh sách Đi chợ"*<br>*"Bỏ tích món hành lá"* |
-| `list_remove_item` | **Danh sách (Lists)** | Xóa bỏ hẳn một món ra khỏi danh sách. | • `listName` *(string, bắt buộc)*: Tên danh sách.<br>• `itemText` *(string, bắt buộc)*: Tên hoặc từ khóa món cần xóa. | *"Xóa cà chua khỏi danh sách Đi chợ"*<br>*"Bỏ món kem chống nắng đi"* |
-| `list_show` | **Danh sách (Lists)** | Hiển thị nội dung chi tiết của một danh sách hoặc xem tất cả danh sách hiện có trong nhóm. | • `listName` *(string, tùy chọn)*: Tên danh sách cần xem. Nếu để trống sẽ liệt kê tất cả danh sách. | *"Xem danh sách Đi chợ"*<br>*"Hiện tại nhóm mình có những danh sách nào?"* |
-| `event_add` | **Sự kiện & Nhắc nhở (Events)** | Thêm sự kiện, lịch hẹn, sinh nhật, ngày giỗ chạp, nhắc nhở (hỗ trợ cả Dương lịch và Âm lịch). | • `title` *(string, bắt buộc)*: Tên sự kiện.<br>• `kind` *(enum: `event`, `reminder`, `birthday`, `anniversary`, `gio`, `appointment`)*.<br>• `calendar` *(enum: `solar`, `lunar`, mặc định `solar`)*.<br>• `day` *(number, 1–31)*.<br>• `month` *(number, 1–12)*.<br>• `year` *(number, tùy chọn)*.<br>• `isLeapMonth` *(boolean, mặc định `false`)*.<br>• `recurrence` *(enum: `none`, `yearly`, `monthly`, `weekly`, `daily`)*.<br>• `remindDaysBefore` *(number, số ngày nhắc trước)*.<br>• `notes` *(string, tùy chọn)*. | *"Nhắc ngày giỗ ông nội vào ngày 15 tháng 8 âm lịch hàng năm"*<br>*"Thêm sinh nhật Mẹ ngày 24/11 hàng năm, nhắc trước 3 ngày"*<br>*"Hẹn lịch khám mắt ngày 10/10/2026"* |
-| `event_list_upcoming` | **Sự kiện & Nhắc nhở (Events)** | Liệt kê các sự kiện, ngày giỗ, sinh nhật sắp tới trong khoảng thời gian xác định. | • `windowDays` *(number, 1–365, mặc định `30`)*: Số ngày tới cần tìm. | *"Sắp tới có sự kiện hay ngày giỗ nào không?"*<br>*"Xem lịch sinh nhật trong 60 ngày tới"* |
-| `event_update` | **Sự kiện & Nhắc nhở (Events)** | Cập nhật thông tin chi tiết của một sự kiện/lịch hẹn đã lưu thông qua ID. | • `id` *(number, bắt buộc)*: ID của sự kiện.<br>• Các trường tùy chọn cập nhật: `title`, `kind`, `calendar`, `day`, `month`, `year`, `recurrence`, `remindDaysBefore`, `notes`. | *"Đổi lịch khám mắt ID 3 sang ngày 15/10"*<br>*"Chỉnh sự kiện số 2 nhắc trước 5 ngày"* |
-| `event_delete` | **Sự kiện & Nhắc nhở (Events)** | Xóa bỏ một sự kiện/lịch hẹn khỏi cơ sở dữ liệu theo ID. | • `id` *(number, bắt buộc)*: ID của sự kiện cần xóa. | *"Xóa sự kiện ID 4"*<br>*"Hủy nhắc nhở số 2 giúp mình"* |
-| `holiday_list_upcoming`| **Ngày lễ Việt Nam (Holidays)** | Tra cứu các ngày nghỉ lễ chính thức hoặc lễ hội truyền thống sắp tới tại Việt Nam. | • `windowDays` *(number, 1–365, mặc định `365`)*: Khoảng thời gian tra cứu.<br>• `publicOnly` *(boolean, mặc định `false`)*: Chỉ lọc các ngày nghỉ lễ chính thức hưởng nguyên lương theo luật. | *"Sắp tới có ngày nghỉ lễ nào không?"*<br>*"Năm nay Tết Nguyên Đán rơi vào ngày nào dương lịch?"*<br>*"Bao giờ đến Tết Trung Thu?"* |
-| `holiday_import` | **Ngày lễ Việt Nam (Holidays)** | Tự động thêm các ngày nghỉ lễ chính thức hoặc toàn bộ lễ hội truyền thống vào lịch sự kiện của nhóm. | • `includeTraditional` *(boolean, mặc định `false`)*: `true` nếu muốn thêm cả các lễ truyền thống (Trung Thu, Vu Lan, Ông Táo...). | *"Lưu các ngày nghỉ lễ năm nay vào lịch nhóm"*<br>*"Nhập tất cả ngày lễ truyền thống vào lịch"* |
-| `web_search` | **Tìm kiếm Web (Search)** | Tìm kiếm thông tin thời gian thực từ Internet qua Tavily Search API. | • `query` *(string, bắt buộc)*: Từ khóa hoặc câu hỏi cần tra cứu.<br>• `maxResults` *(number, 1–5, mặc định `3`)*: Số kết quả tối đa cần trả về. | *"Thời tiết Đà Lạt cuối tuần này thế nào?"*<br>*"Giá vàng hôm nay bao nhiêu?"*<br>*"Tìm công thức nấu bò kho ngon"* |
-| `lookup_schedule_create` | **Lịch tra cứu định kỳ (Lookups)** | Đặt lịch tra cứu thông tin Internet định kỳ hàng ngày, hàng tuần hoặc hàng tháng (ví dụ: báo thời tiết mỗi sáng, cập nhật giá vàng). Tự động dùng 07:00 nếu yêu cầu buổi sáng không nói giờ cụ thể. Tháng ngắn hơn tự động chuyển về ngày cuối tháng. | • `instruction` *(string, bắt buộc)*: Nội dung tra cứu.<br>• `recurrence` *(enum: `daily`, `weekly`, `monthly`)*.<br>• `time` *(string, định dạng HH:mm)*.<br>• `isMorning` *(boolean)*.<br>• `weekday` *(number, 0–6 cho weekly)*.<br>• `dayOfMonth` *(number, 1–31 cho monthly)*. | *"Mỗi ngày lúc 7:00 sáng báo thời tiết TP.HCM"*<br>*"Hàng ngày 08:30 cập nhật giá vàng SJC"*<br>*"Sáng thứ 2 hàng tuần lúc 08:00 điểm tin tài chính"* |
-| `lookup_schedule_list` | **Lịch tra cứu định kỳ (Lookups)** | Xem danh sách các lịch tra cứu Internet định kỳ hiện có trong nhóm chat kèm trạng thái và kết quả lần chạy gần nhất. | Không có tham số. | *"Xem danh sách lịch tra cứu của nhóm"*<br>*"Nhóm mình đang có những lịch hẹn tra cứu nào?"* |
-| `lookup_schedule_update` | **Lịch tra cứu định kỳ (Lookups)** | Cập nhật chỉ dẫn, giờ thực hiện hoặc tạm dừng/bật lại một lịch tra cứu định kỳ theo ID. | • `id` *(number, bắt buộc)*.<br>• Các trường tùy chọn: `instruction`, `recurrence`, `time`, `weekday`, `dayOfMonth`, `active`. | *"Đổi lịch tra cứu số 1 sang 07:30"*<br>*"Tạm dừng lịch tra cứu ID 2"* |
-| `lookup_schedule_cancel` | **Lịch tra cứu định kỳ (Lookups)** | Hủy và xóa hoàn toàn một lịch tra cứu định kỳ khỏi nhóm chat theo ID. | • `id` *(number, bắt buộc)*: ID của lịch tra cứu cần hủy. | *"Hủy lịch tra cứu số 3"*<br>*"Xóa lịch báo thời tiết ID 1"* |
+| `list_create` | **Danh sách (Lists)** | Tạo một danh sách mới cho nhóm chat. | • `name` *(string, bắt buộc)*: Tên danh sách. | *"Tạo cho mình danh sách Đi chợ"* |
+| `list_add_item` | **Danh sách (Lists)** | Thêm một hoặc nhiều món vào danh sách đã có (tự động tạo mới nếu chưa có). | • `listName` *(string, bắt buộc)*<br>• `items` *(string[], bắt buộc)* | *"Thêm thịt bò, cà chua, hành lá vào danh sách Đi chợ"* |
+| `list_check_item` | **Danh sách (Lists)** | Đánh dấu hoàn thành (`[x]`) hoặc chưa hoàn thành (`[ ]`). | • `listName` *(string, bắt buộc)*<br>• `itemText` *(string, bắt buộc)*<br>• `done` *(boolean, mặc định `true`)* | *"Đã mua thịt bò rồi nhé"*<br>*"Check xong cà chua trong danh sách Đi chợ"* |
+| `list_remove_item` | **Danh sách (Lists)** | Xóa bỏ một món ra khỏi danh sách. | • `listName` *(string, bắt buộc)*<br>• `itemText` *(string, bắt buộc)* | *"Xóa cà chua khỏi danh sách Đi chợ"* |
+| `list_show` | **Danh sách (Lists)** | Hiển thị nội dung chi tiết danh sách hoặc xem tất cả danh sách hiện có. | • `listName` *(string, tùy chọn)* | *"Xem danh sách Đi chợ"*<br>*"Nhóm mình có những danh sách nào?"* |
+| `event_add` | **Sự kiện & Nhắc nhở (Events)** | Thêm sự kiện, lịch hẹn, sinh nhật, ngày giỗ chạp (hỗ trợ cả Dương lịch và Âm lịch). | • `title` *(string, bắt buộc)*<br>• `kind` *(enum: `event`, `reminder`, `birthday`, `anniversary`, `gio`, `appointment`)*<br>• `calendar` *(enum: `solar`, `lunar`, mặc định `solar`)*<br>• `day` *(number, 1–31)*<br>• `month` *(number, 1–12)*<br>• `year` *(number, tùy chọn)*<br>• `recurrence` *(enum: `none`, `yearly`, `monthly`, `weekly`, `daily`)*<br>• `remindDaysBefore` *(number)*<br>• `notes` *(string, tùy chọn)* | *"Nhắc ngày giỗ ông nội vào ngày 15 tháng 8 âm lịch hàng năm"*<br>*"Thêm sinh nhật Mẹ ngày 24/11 hàng năm, nhắc trước 3 ngày"* |
+| `event_list_upcoming` | **Sự kiện & Nhắc nhở (Events)** | Liệt kê các sự kiện, ngày giỗ, sinh nhật sắp tới trong khoảng thời gian xác định. | • `windowDays` *(number, 1–365, mặc định `30`)* | *"Sắp tới có sự kiện hay ngày giỗ nào không?"*<br>*"Xem lịch sinh nhật trong 60 ngày tới"* |
+| `event_update` | **Sự kiện & Nhắc nhở (Events)** | Cập nhật thông tin chi tiết của một sự kiện/lịch hẹn đã lưu theo ID. | • `id` *(number, bắt buộc)*<br>• Các trường tùy chọn cần cập nhật. | *"Đổi lịch khám mắt ID 3 sang ngày 15/10"* |
+| `event_delete` | **Sự kiện & Nhắc nhở (Events)** | Xóa bỏ sự kiện/lịch hẹn theo ID. | • `id` *(number, bắt buộc)* | *"Xóa sự kiện ID 4"* |
+| `holiday_list_upcoming`| **Ngày lễ Việt Nam (Holidays)** | Tra cứu các ngày nghỉ lễ chính thức hoặc lễ hội truyền thống sắp tới tại Việt Nam. | • `windowDays` *(number, mặc định `365`)*<br>• `publicOnly` *(boolean, mặc định `false`)* | *"Sắp tới có ngày nghỉ lễ nào không?"*<br>*"Bao giờ đến Tết Trung Thu?"* |
+| `holiday_import` | **Ngày lễ Việt Nam (Holidays)** | Tự động thêm các ngày nghỉ lễ chính thức hoặc toàn bộ lễ hội truyền thống vào lịch nhóm. | • `includeTraditional` *(boolean, mặc định `false`)* | *"Lưu các ngày nghỉ lễ năm nay vào lịch nhóm"* |
+| `weather_check` | **Thời tiết (Weather)** | Tra cứu thời tiết hiện tại và dự báo thời tiết 1–3 ngày tới tại bất kỳ tỉnh thành nào. | • `location` *(string, bắt buộc)*: Tên địa phương.<br>• `days` *(number, 1–3, mặc định `1`)* | *"Thời tiết Hà Nội hôm nay thế nào?"*<br>*"Dự báo thời tiết Đà Lạt 3 ngày tới"* |
+| `lottery_check` | **Dò Vé Số (Lottery)** | Tra cứu kết quả xổ số 3 miền hoặc Vietlott và tự động so khớp vé trúng thưởng. | • `station` *(string, bắt buộc)*: Đài/tỉnh mở thưởng.<br>• `date` *(string, tùy chọn)*: Ngày mở thưởng.<br>• `ticketNumber` *(string, tùy chọn)*: Số vé cần dò. | *"Dò vé số TP.HCM ngày 20/10 số 750136"*<br>*"Kết quả xổ số Miền Bắc hôm nay"* |
+| `image_generate` | **Tạo ảnh AI (Images)** | Tạo ảnh AI bằng Google Imagen/Gemini, tải lên Zipline và gửi ảnh trực tiếp vào nhóm chat. | • `prompt` *(string, bắt buộc)*: Mô tả ảnh cần tạo.<br>• `aspectRatio` *(enum: `1:1`, `3:4`, `4:3`, `9:16`, `16:9`)*<br>• `caption` *(string, tùy chọn)* | *"Vẽ cho mình chú mèo ngồi bên tách cà phê"*<br>*"Tạo ảnh phong cảnh hoàng hôn trên biển 16:9"* |
+| `send_sticker` | **Sticker Zalo (Stickers)** | Gửi sticker Zalo sinh động phù hợp với ngữ cảnh hội thoại. | • `category` *(enum: `funny`, `greeting`, `thanks`, `celebration`, `done`, `confused`, `bye`)* | *"Gửi sticker cảm ơn cả nhà"*<br>*"Gửi sticker chúc mừng sinh nhật"* |
+| `remember` | **Ghi nhớ (Memory)** | Ghi nhớ thói quen, sở thích, thông tin thành viên gia đình (có hỗ trợ điều kiện và ràng buộc). | • `subject` *(string, bắt buộc)*<br>• `fact` *(string, bắt buộc)*<br>• `category` *(enum: `core`, `general`)*<br>• `condition` *(string)*, `avoidAction` *(string)* | *"Nhớ là Bố thích uống cà phê ít đường"*<br>*"Mẹ dị ứng hành tây, nhớ nhắc khi chọn món"* |
+| `list_memories` | **Ghi nhớ (Memory)** | Tra cứu danh sách các thông tin, thói quen đã lưu về gia đình hoặc thành viên cụ thể. | • `subject` *(string, tùy chọn)*<br>• `category` *(enum: `core`, `general`, `all`)* | *"Nhóm mình đã lưu những thói quen gì của Bố?"* |
+| `memory_book_add` | **Sổ Kỷ niệm (Memory Book)** | Lưu câu chuyện, kỷ niệm gia đình ý nghĩa vào Cuốn sổ Kỷ niệm. | • `title` *(string, bắt buộc)*<br>• `story` *(string, bắt buộc)*<br>• `people` *(string)*, `happenedOn` *(string)* | *"Lưu vào sổ kỷ niệm: Chuyến đi Phú Quốc hè 2024 của cả nhà..."* |
+| `memory_book_search` | **Sổ Kỷ niệm (Memory Book)** | Tìm kiếm các câu chuyện, kỷ niệm trong Cuốn sổ Kỷ niệm theo từ khóa. | • `query` *(string, bắt buộc)* | *"Tìm lại kỷ niệm chuyến đi Phú Quốc năm ngoái"* |
+| `memory_search` | **Tìm kiếm Ký ức (Memory Search)**| Tìm kiếm thông minh kết hợp (hybrid) xếp hạng liên quan trên cả thói quen và sổ kỷ niệm. | • `query` *(string, bắt buộc)*<br>• `type` *(enum: `all`, `facts`, `stories`)*<br>• `limit` *(number, mặc định `10`)* | *"Cả nhà mình có kỷ niệm hay thói quen gì liên quan đến bơi lội không?"* |
+| `list_group_members` | **Thành viên nhóm (Members)** | Xem danh sách thành viên trong nhóm, tên hiển thị, biệt danh, vai vế và ghi chú. | Không có tham số. | *"Xem danh sách thành viên trong nhóm mình"* |
+| `update_group_member`| **Thành viên nhóm (Members)** | Cập nhật vai vế, biệt danh trong gia đình (Bố, Mẹ, Bé Bông...) cho một thành viên. | • `target` *(string)*, `alias` *(string)*, `relationship` *(string)*, `notes` *(string)* | *"Đặt biệt danh cho mình là Mẹ nhé"*<br>*"Ghi nhận anh Nam là Bố"* |
+| `web_search` | **Tìm kiếm Web (Search)** | Tìm kiếm thông tin thời gian thực từ Internet qua Tavily Search API. | • `query` *(string, bắt buộc)*<br>• `maxResults` *(number, mặc định `3`)* | *"Giá vàng hôm nay bao nhiêu?"*<br>*"Cách nấu canh chua cá lóc miền Tây"* |
+| `scrape_url` | **Cào web (Crawl4AI)** | Thu thập và đọc toàn bộ nội dung bài viết từ một đường link trang web. | • `url` *(string, bắt buộc, URL hợp lệ)* | *"Tóm tắt bài viết này giúp mình: https://..."* |
+| `lookup_schedule_create` | **Lịch tra cứu (Lookups)** | Đặt lịch tra cứu thông tin Internet định kỳ (báo thời tiết mỗi sáng, cập nhật giá vàng). | • `instruction` *(string, bắt buộc)*<br>• `recurrence` *(enum: `daily`, `weekly`, `monthly`)*<br>• `time` *(string, HH:mm)* | *"Mỗi ngày lúc 7:00 sáng báo thời tiết TP.HCM"*<br>*"Hàng ngày 08:30 cập nhật giá vàng SJC"* |
+| `lookup_schedule_list` | **Lịch tra cứu (Lookups)** | Xem danh sách các lịch tra cứu định kỳ của nhóm kèm trạng thái chạy gần nhất. | Không có tham số. | *"Xem danh sách lịch tra cứu của nhóm"* |
+| `lookup_schedule_update` | **Lịch tra cứu (Lookups)** | Cập nhật chỉ dẫn, giờ chạy hoặc bật/tắt lịch tra cứu theo ID. | • `id` *(number, bắt buộc)*<br>• Các trường tùy chọn cập nhật. | *"Đổi lịch tra cứu số 1 sang 07:30"* |
+| `lookup_schedule_cancel` | **Lịch tra cứu (Lookups)** | Hủy và xóa hoàn toàn lịch tra cứu định kỳ khỏi nhóm theo ID. | • `id` *(number, bắt buộc)* | *"Hủy lịch tra cứu số 2"* |
 
 ---
 
 ## 🏗️ Kiến trúc & Công nghệ (Tech Stack)
 
 - **Ngôn ngữ & Runtime:** Node.js 22 (LTS), TypeScript (Strict Mode), ESM module.
-- **Giao thức Zalo:** Webhook API chính thức của Zalo (`zalo-bot-js` & Fastify Webhook Handler).
+- **Giao diện Web Admin:** React 19, Vite, Radix UI Themes, Tailwind CSS, Lucide Icons, Wouter routing.
+- **Backend Server:** Fastify với Fastify Helmet, Fastify Rate Limit và Fastify Static (phục vụ dashboard tại `/admin`).
+- **Giao thức Zalo:** Webhook API chính thức của Zalo thông qua thư viện `zalo-bot-js`. Tự động đăng ký webhook qua `setWebhook` khi khởi động.
+- **AI Core:** Vercel AI SDK (`ai`), hỗ trợ Google Gemini (`@ai-sdk/google`) và DeepSeek (`@ai-sdk/deepseek`).
 - **Cơ sở dữ liệu:** libSQL / Turso client (`@libsql/client`), hỗ trợ cả database SQLite cục bộ (`file:...`) và cloud distributed Turso database (`libsql://...` hoặc `https://...`).
-- **Âm lịch Việt Nam:** Thư viện tính toán thiên văn dựa trên thuật toán Hồ Ngọc Đức, múi giờ GMT+7, hỗ trợ đầy đủ các chu kỳ tháng nhuận và năm nhuận.
-- **Tìm kiếm thời gian thực:** `@tavily/core` API client.
-- **Lập lịch (Scheduling):** In-process scheduler chạy nền theo múi giờ `Asia/Ho_Chi_Minh`.
-- **Triển khai (Deployment):** Docker (Node 22-slim), Docker Compose, tương thích hoàn hảo với nền tảng Dokploy.
+- **Hàng đợi & Lập lịch (Scheduler):** Redis & BullMQ cho môi trường phân tán; tự động fallback sang in-process timer nếu không có Redis. Múi giờ mặc định: `Asia/Ho_Chi_Minh`.
+- **Âm lịch Việt Nam:** Thuật toán thiên văn Hồ Ngọc Đức (GMT+7), hỗ trợ tính toán tháng nhuận và năm nhuận.
+- **Thời tiết:** wttr.in JSON API (nhanh, miễn phí, hỗ trợ toàn cầu).
+- **Lưu trữ hình ảnh:** Zipline API integration.
+- **Triển khai (Deployment):** Docker Multi-stage build (Node 22-slim), Docker Compose, hỗ trợ Dokploy, VPS hoặc Kubernetes.
 
 ---
 
 ## 🗄️ Sơ đồ thực thể–quan hệ (ERD)
 
-SQLite (`/data/family.db`) lưu dữ liệu theo nhóm chat. `channels.chat_id` là khóa logic của hầu hết bảng. Chỉ `list_items.list_id` và `reminders_sent.event_id` là khóa ngoại khai báo (`ON DELETE CASCADE`). `seen_messages` đứng riêng để chống xử lý trùng webhook.
+Cơ sở dữ liệu lưu dữ liệu theo nhóm chat (`chat_id`). Bảng `channels` quản lý trạng thái duyệt kênh (`active`, `pending`, `disabled`).
 
 ```mermaid
 erDiagram
@@ -104,6 +137,7 @@ erDiagram
     channels ||--o{ memory_book : "chat_id"
     channels ||--o{ scheduled_lookups : "chat_id"
     scheduled_lookups ||--o{ scheduled_lookup_runs : "lookup_id"
+    channels ||--o{ group_members : "chat_id"
 
     seen_messages {
         TEXT message_id PK
@@ -175,6 +209,10 @@ erDiagram
         TEXT chat_id
         TEXT subject
         TEXT fact
+        TEXT category
+        TEXT condition
+        TEXT avoid_action
+        TEXT expires_at
         TEXT created_by
         INTEGER ts
     }
@@ -215,131 +253,418 @@ erDiagram
         INTEGER sent_at
         INTEGER started_at
     }
+
+    group_members {
+        INTEGER id PK
+        TEXT chat_id
+        TEXT sender_id
+        TEXT sender_name
+        TEXT alias
+        TEXT relationship
+        TEXT notes
+        INTEGER last_active_at
+    }
+
+    app_settings {
+        TEXT key PK
+        TEXT value
+        INTEGER updated_at
+    }
 ```
 
 ---
 
 ## ⚙️ Cấu hình môi trường (.env)
 
-Tạo file `.env` (tham khảo file mẫu `.env.example`) với các thông số cấu hình:
+Tạo file `.env` dựa trên `.env.example` với các thông số cấu hình dưới đây:
 
-| Biến môi trường | Bắt buộc | Mặc định | Ý nghĩa & Mô tả |
+### 1. Cấu hình cốt lõi (Bắt buộc)
+| Biến môi trường | Bắt buộc | Mặc định | Mô tả chi tiết |
 | :--- | :---: | :---: | :--- |
-| `ZALO_BOT_TOKEN` | **Có** | — | Bot Token do Zalo cung cấp khi tạo bot trên Zalo Bot Platform. |
-| `WEBHOOK_URL` | **Có** | — | Địa chỉ HTTPS công khai dẫn tới endpoint webhook, ví dụ: `https://bot.example.com/webhooks/zalo`. |
-| `WEBHOOK_SECRET` | **Có** | — | Chuỗi bí mật ngẫu nhiên (từ 8 đến 256 ký tự) dùng để ký và xác thực webhook. |
-| `MODE` | **Có** | `webhook` | Chế độ chạy: `webhook` (chế độ chính thức cho môi trường production). |
-| `PORT` | Không | `3000` | Cổng HTTP server lắng nghe bên trong container. |
-| `FAMILY_CHAT_IDS` | Không | `""` | Danh sách các `chat.id` của nhóm gia đình được phục vụ (phân cách bằng dấu phẩy). |
-| `FAMILY_CHAT_ID` | Không | `""` | ID đơn lẻ của nhóm gia đình (hỗ trợ tương thích ngược). Nếu để trống, bot chạy ở chế độ **Discovery Mode**. |
-| `LLM_PROVIDER` | Không | Tự nhận diện | Nhà cung cấp AI: `gemini` hoặc `deepseek`. Tự động suy luận dựa trên API Key cung cấp. |
-| `GEMINI_API_KEY` | Tùy chọn | — | API key của Google AI Studio (nếu dùng provider Gemini). |
-| `GEMINI_MODEL` | Không | `gemini-3.8-flash` | Tên mô hình Gemini sử dụng. |
-| `DEEPSEEK_API_KEY`| Tùy chọn | — | API key của DeepSeek (nếu dùng provider DeepSeek). |
+| `ZALO_BOT_TOKEN` | **Có** | — | Bot Token do Zalo Bot Platform cung cấp khi tạo bot. |
+| `WEBHOOK_URL` | **Có** | — | Đường dẫn HTTPS công khai nhận webhook từ Zalo, ví dụ: `https://bot.example.com/webhooks/zalo`. |
+| `WEBHOOK_SECRET` | **Có** | — | Chuỗi bí mật ngẫu nhiên (từ 8 đến 256 ký tự) dùng để ký và xác thực webhook qua header `X-Bot-Api-Secret-Token`. |
+| `MODE` | **Có** | `webhook` | Chế độ nhận tin nhắn từ Zalo (bắt buộc đặt là `webhook`). |
+| `PORT` | Không | `3000` | Cổng HTTP server Fastify lắng nghe. |
+| `BOT_ID` | Tùy chọn | `""` | User ID của Bot trên Zalo, giúp bot nhận diện chính xác khi có người nhắc tên (@bot) hoặc trích dẫn (quote/reply) tin nhắn của bot. |
+
+### 2. Cấu hình Quyền hạn & Phê duyệt Nhóm
+| Biến môi trường | Bắt buộc | Mặc định | Mô tả chi tiết |
+| :--- | :---: | :---: | :--- |
+| `FAMILY_CHAT_IDS` | Không | `""` | Danh sách các `chat_id` của nhóm gia đình được cấp quyền (ngăn cách bằng dấu phẩy). Nếu để trống, bot chạy ở **Discovery Mode** và trả về ID nhóm kèm hướng dẫn duyệt. |
+| `FAMILY_CHAT_ID` | Không | `""` | ID đơn lẻ của nhóm gia đình (hỗ trợ tương thích ngược). |
+| `ADMIN_SENDER_IDS`| Tùy chọn | `""` | Danh sách Zalo User ID của quản trị viên (phân cách bằng dấu phẩy). |
+| `ADMIN_PASSWORD` | Không | `admin123` | Mật khẩu đăng nhập vào giao diện Web Admin Dashboard tại `/admin`. |
+
+### 3. Cấu hình Mô hình Ngôn ngữ AI (LLM)
+> [!IMPORTANT]
+> Bạn phải cung cấp ít nhất một trong hai: `GEMINI_API_KEY` (khuyên dùng, có gói miễn phí) hoặc `DEEPSEEK_API_KEY`.
+
+| Biến môi trường | Bắt buộc | Mặc định | Mô tả chi tiết |
+| :--- | :---: | :---: | :--- |
+| `LLM_PROVIDER` | Không | Tự nhận diện | Nhà cung cấp AI: `gemini` hoặc `deepseek`. Tự động suy luận dựa trên API key được cung cấp. |
+| `GEMINI_API_KEY` | Tùy chọn | — | API key của Google AI Studio (lấy miễn phí tại [Google AI Studio](https://aistudio.google.com/)). |
+| `GEMINI_MODEL` | Không | `gemini-3.8-flash` | Tên mô hình văn bản Gemini sử dụng. |
+| `GEMINI_IMAGE_MODEL`| Không | `gemini-3.1-flash-image` | Tên mô hình tạo ảnh AI (Google Imagen / Gemini Image). |
+| `DEEPSEEK_API_KEY`| Tùy chọn | — | API key của DeepSeek (lấy tại [DeepSeek Platform](https://platform.deepseek.com/)). |
 | `DEEPSEEK_MODEL` | Không | `deepseek-chat` | Tên mô hình DeepSeek (khuyến nghị dùng bản chat, không dùng reasoner). |
-| `TAVILY_API_KEY` | Tùy chọn | — | API key của Tavily Search dùng cho công cụ tìm kiếm web thời gian thực `web_search`. |
-| `DB_PATH` | Không | `/data/family.db` | Đường dẫn tới file SQLite database (gắn với volume Docker `/data`). |
-| `TZ` | Không | `Asia/Ho_Chi_Minh` | Múi giờ hệ thống (khuyến nghị giữ nguyên giờ Việt Nam). |
+
+### 4. Cơ sở dữ liệu & Lưu trữ
+| Biến môi trường | Bắt buộc | Mặc định | Mô tả chi tiết |
+| :--- | :---: | :---: | :--- |
+| `DB_PATH` | Không | `/data/family.db` | Đường dẫn file SQLite database nội bộ (gắn với volume Docker `/data`). |
+| `TURSO_DATABASE_URL`| Tùy chọn | — | Địa chỉ kết nối Turso cloud database (`libsql://...` hoặc `https://...`). Nếu thiết lập, bot sẽ kết nối cloud database thay vì SQLite file cục bộ. |
+| `TURSO_AUTH_TOKEN`| Tùy chọn | — | Auth token tương ứng của database Turso. |
+
+### 5. Dịch vụ Mở rộng (Tìm kiếm, Cào web, Ảnh, Hàng đợi)
+| Biến môi trường | Bắt buộc | Mặc định | Mô tả chi tiết |
+| :--- | :---: | :---: | :--- |
+| `TAVILY_API_KEY` | Tùy chọn | — | API key từ [Tavily](https://tavily.com/) cho tính năng `web_search` (miễn phí 1,000 lượt tìm kiếm/tháng). |
+| `CRAWL4AI_API_TOKEN`| Tùy chọn | — | API token của Crawl4AI cho tính năng đọc sâu liên kết trang web `scrape_url`. |
+| `ZIPLINE_URL` | Tùy chọn | — | URL máy chủ lưu trữ hình ảnh Zipline (dùng để lưu ảnh lịch tháng và ảnh AI tạo ra). |
+| `ZIPLINE_TOKEN` | Tùy chọn | — | Token xác thực Zipline API. |
+| `REDIS_URL` | Tùy chọn | `redis://redis:6379` | Đường dẫn kết nối Redis cho BullMQ scheduler. Để trống nếu chạy local mà không dùng Redis (tự động fallback về timer bộ nhớ). |
+| `SCHEDULER_CONCURRENCY`| Không | `5` | Số tác vụ chạy đồng thời tối đa của scheduler. |
+| `PASSIVE_MEMORY_ENABLED`| Không | `true` | Bật/tắt tính năng tự động trích xuất ký ức thụ động qua tin nhắn hội thoại thường ngày. |
+| `TZ` | Không | `Asia/Ho_Chi_Minh` | Múi giờ hệ thống (khuyên dùng `Asia/Ho_Chi_Minh` để nhắc lịch chuẩn xác). |
 
 ---
 
-## 🚀 Hướng dẫn Triển khai trên Dokploy (Docker Compose)
+## 📖 Hướng dẫn Cài đặt & Triển khai Bot (Setup Guide)
 
-### Bước 1: Khởi tạo Project trên Dokploy
-1. Trong giao diện quản trị Dokploy, chọn **Create Project** -> **Docker Compose**.
-2. Kết nối tới Git repository này.
-3. Cấu hình volume lưu trữ dữ liệu bền vững: Docker Compose đã định nghĩa sẵn named volume `bot-data` gắn vào `/data`.
+### 📌 Bước 1: Đăng ký & Chuẩn bị Bot Zalo
 
-### Bước 2: Cài đặt Biến môi trường (Environment Variables)
-Trong mục **Environment** của Dokploy, điền các giá trị từ file mẫu `.env.example`:
-- Để trống `FAMILY_CHAT_IDS` ở lần chạy đầu tiên.
-- Đặt `WEBHOOK_SECRET` là một chuỗi ngẫu nhiên an toàn (tối thiểu 16 ký tự).
-- Cung cấp `GEMINI_API_KEY` (hoặc `DEEPSEEK_API_KEY`) và `TAVILY_API_KEY`.
+1. **Tạo Bot trên Zalo:**
+   - Sử dụng tài khoản Zalo của bạn, truy cập vào nền tảng **Zalo Bot Platform** (hoặc tìm kiếm bot tạo bot chính thức của Zalo).
+   - Đặt tên cho bot (ví dụ: `Family Bot` hoặc `Trợ Lý Gia Đình`) và nhận **Bot Token**.
+   - Lưu lại **Bot Token** này để điền vào biến `ZALO_BOT_TOKEN`.
+   - Ghi lại **Bot ID** (User ID của bot) để điền vào `BOT_ID` (giúp bot nhận diện chính xác khi có người nhắc tên @bot hoặc reply tin nhắn của bot trong nhóm).
+2. **Chuẩn bị API Key AI:**
+   - Truy cập [Google AI Studio](https://aistudio.google.com/) để lấy `GEMINI_API_KEY` (hoàn toàn miễn phí với hạn mức thoải mái cho gia đình).
+   - *(Tùy chọn)* Đăng ký [Tavily Search](https://tavily.com/) để lấy `TAVILY_API_KEY` miễn phí 1.000 lượt tìm kiếm/tháng.
+3. **Mời Bot vào nhóm chat gia đình:**
+   - Mời tài khoản Bot vừa tạo vào nhóm chat gia đình trên Zalo của bạn.
 
-### Bước 3: Cấu hình Tên miền (Domain & Traefik SSL)
-1. Trong mục **Domains**, thêm domain của bạn (ví dụ `bot.example.com`).
-2. Chọn Service Name là `bot`, Container Port là `3000`.
-3. Bật tùy chọn **HTTPS** (Dokploy tự động cấp chứng chỉ Let's Encrypt SSL miễn phí).
-4. Điền `WEBHOOK_URL` trong biến môi trường đúng bằng: `https://bot.example.com/webhooks/zalo`.
+---
 
-### Bước 4: Deploy & Lấy Family Chat ID (Discovery Mode)
+### 💻 Bước 2A: Chạy phát triển cục bộ (Local Development)
+
+Nếu bạn muốn chạy thử nghiệm trên máy tính cá nhân (macOS, Linux, Windows WSL):
+
+#### 1. Yêu cầu môi trường
+- **Node.js:** phiên bản `>= 22.0.0`
+- **pnpm:** phiên bản `>= 12.0.0` (Cài đặt: `npm install -g pnpm@12.14.0`)
+
+#### 2. Cài đặt mã nguồn & dependencies
+```bash
+# Clone repository
+git clone https://github.com/tranlehaiquan/46-bot.git
+cd 46-bot
+
+# Cài đặt toàn bộ dependencies trong workspace
+pnpm install
+```
+
+#### 3. Tạo đường hầm HTTPS công khai (HTTPS Tunnel)
+Zalo Webhook yêu cầu địa chỉ webhook phải là HTTPS công khai. Khi chạy dưới máy local, bạn cần dùng Cloudflare Tunnel hoặc Ngrok:
+
+- **Dùng Cloudflare Tunnel (Miễn phí, không cần đăng ký tài khoản):**
+  ```bash
+  cloudflared tunnel --url http://localhost:3000
+  ```
+  Bạn sẽ nhận được một địa chỉ HTTPS dạng: `https://xxxx-xxxx.trycloudflare.com`.
+
+- **Hoặc dùng Ngrok:**
+  ```bash
+  ngrok http 3000
+  ```
+  Bạn sẽ nhận được địa chỉ dạng: `https://xxxx.ngrok-free.app`.
+
+#### 4. Cấu hình file `.env`
+Sao chép file cấu hình mẫu và điền các thông số:
+```bash
+cp .env.example .env
+```
+Chỉnh sửa file `.env`:
+```env
+ZALO_BOT_TOKEN=your_zalo_bot_token_here
+BOT_ID=your_bot_id_here
+WEBHOOK_URL=https://xxxx-xxxx.trycloudflare.com/webhooks/zalo
+WEBHOOK_SECRET=chuoi_bi_mat_ngau_nhien_16_ky_tu_tro_len
+MODE=webhook
+PORT=3000
+
+# LLM
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-3.8-flash
+
+# Database SQLite cục bộ
+DB_PATH=./data/family.db
+
+# Mật khẩu Web Admin Dashboard
+ADMIN_PASSWORD=admin123
+
+# Để trống FAMILY_CHAT_IDS ở lần chạy đầu tiên để dùng Discovery Mode
+FAMILY_CHAT_IDS=
+```
+
+#### 5. Khởi động ứng dụng
+```bash
+# Chạy đồng thời cả Backend và Admin Frontend (Vite hot reload):
+pnpm dev
+
+# Hoặc chỉ chạy Backend:
+pnpm dev:backend
+```
+
+Khi backend khởi động, hàm `syncWebhook` sẽ tự động gọi API `setWebhook` của Zalo để đăng ký địa chỉ `WEBHOOK_URL`. Bạn sẽ thấy log dạng:
+```json
+{"event":"setWebhook","outcome":"success"}
+```
+
+---
+
+### 🐳 Bước 2B: Triển khai với Docker Compose (VPS / Server riêng)
+
+Đây là phương thức triển khai tiện lợi nhất cho máy chủ cá nhân hoặc VPS có cài sẵn Docker:
+
+1. Clone mã nguồn về VPS và tạo file `.env`:
+   ```bash
+   git clone https://github.com/tranlehaiquan/46-bot.git
+   cd 46-bot
+   cp .env.example .env
+   nano .env
+   ```
+2. Điền đầy đủ thông tin vào `.env`:
+   - `ZALO_BOT_TOKEN`
+   - `WEBHOOK_URL=https://your-domain.com/webhooks/zalo`
+   - `WEBHOOK_SECRET=chuoi_ngau_nhien_bao_mat`
+   - `GEMINI_API_KEY=...`
+   - `ADMIN_PASSWORD=mat_khau_quan_tri_an_toan`
+3. Khởi động hệ thống bằng Docker Compose:
+   ```bash
+   docker compose up -d --build
+   ```
+   *Docker Compose sẽ tự động khởi động 2 service:*
+   - **`bot`**: Chạy backend Fastify (cổng 3000) phục vụ cả Webhook Zalo và giao diện Web Admin Dashboard tại `/admin`, mount volume `bot-data` vào `/data`.
+   - **`redis`**: Chạy Redis 7 Alpine làm hàng đợi tác vụ cho BullMQ scheduler, mount volume `redis-data`.
+4. Cấu hình Nginx / Caddy Reverse Proxy trỏ tên miền của bạn về cổng `3000` với SSL Let's Encrypt.
+5. Xem log khởi động:
+   ```bash
+   docker compose logs -f bot
+   ```
+
+---
+
+### 🚀 Bước 2C: Triển khai trên Dokploy (Khuyến nghị cho Production)
+
+Nếu bạn dùng nền tảng quản trị PaaS **Dokploy**:
+
+#### Bước 1: Tạo Project trên Dokploy
+1. Đăng nhập giao diện Dokploy, chọn **Create Project** -> **Docker Compose**.
+2. Đặt tên project (ví dụ: `family-bot`).
+3. Trong phần Source, chọn **Git Repository** và kết nối tới repository `tranlehaiquan/46-bot` (nhánh `main`).
+
+#### Bước 2: Cài đặt Biến môi trường (Environment Variables)
+Trong tab **Environment** của Dokploy, dán nội dung từ file `.env` của bạn:
+- `ZALO_BOT_TOKEN`: Token lấy từ Zalo Bot Platform.
+- `WEBHOOK_URL`: Điền chính xác `https://bot.example.com/webhooks/zalo` (thay bằng domain của bạn).
+- `WEBHOOK_SECRET`: Một chuỗi bí mật ngẫu nhiên tối thiểu 16 ký tự.
+- `MODE`: `webhook`
+- `PORT`: `3000`
+- `LLM_PROVIDER`: `gemini`
+- `GEMINI_API_KEY`: API key Google AI Studio.
+- `ADMIN_PASSWORD`: Mật khẩu bảo vệ Web Admin Dashboard.
+- `DB_PATH`: `/data/family.db`
+- `FAMILY_CHAT_IDS`: Tạm thời để trống ở lần deploy đầu tiên.
+
+#### Bước 3: Cấu hình Tên miền & SSL (Traefik)
+1. Trong mục **Domains** trên Dokploy, bấm **Add Domain**.
+2. Nhập domain của bạn (ví dụ: `bot.example.com`).
+3. Chọn Service Name: `bot`, Container Port: `3000`.
+4. Bật tùy chọn **HTTPS** (Dokploy tự động cấp phát chứng chỉ SSL Let's Encrypt miễn phí).
+
+#### Bước 4: Deploy ứng dụng
 1. Bấm **Deploy**.
-2. Kiểm tra Logs của container để xác nhận bot đã khởi động thành công và tự động đăng ký Webhook với Zalo qua API `setWebhook`.
-3. Trong nhóm Zalo gia đình, hãy mời bot vào nhóm và gửi một tin nhắn nhắc tên bot: `@FamilyBot xin chào`.
-4. Mở Logs trên Dokploy: Bạn sẽ thấy dòng log ghi nhận tin nhắn đến kèm thông tin `chat.id` của nhóm (loại `chat_type: GROUP`).
-5. Sao chép ID đó và cập nhật vào biến môi trường `FAMILY_CHAT_IDS` (hoặc `FAMILY_CHAT_ID`) trên Dokploy, sau đó bấm **Redeploy**. Từ lúc này, bot chỉ phản hồi nhóm gia đình của bạn.
+2. Xem mục **Logs**: Xác nhận ứng dụng đã build xong cả frontend và backend, container khởi động thành công và tự động đăng ký `setWebhook` với Zalo.
 
 ---
 
-## 💻 Phát triển cục bộ & Kiểm thử (Local Development)
+### 📦 Bước 2D: Sử dụng Docker Image đóng gói sẵn từ GHCR
+
+Dự án tự động build và đẩy image Docker lên GitHub Container Registry (GHCR) qua GitHub Actions:
 
 ```bash
-# 1. Cài đặt dependencies
+# Kéo image mới nhất
+docker pull ghcr.io/tranlehaiquan/46-bot:latest
+
+# Tạo thư mục lưu dữ liệu SQLite
+mkdir -p data
+
+# Chạy container trực tiếp với file .env
+docker run -d \
+  --name family-bot \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -v $(pwd)/data:/data \
+  --env-file .env \
+  ghcr.io/tranlehaiquan/46-bot:latest
+```
+
+---
+
+## 🔑 Kích hoạt Nhóm Chat & Cơ chế Phê duyệt (Discovery Mode)
+
+Sau khi bot đã khởi động thành công, hãy thực hiện kích hoạt nhóm chat theo các bước sau:
+
+1. **Mời Bot vào nhóm chat gia đình** trên Zalo.
+2. **Gửi tin nhắn nhắc tên bot** trong nhóm:
+   ```text
+   @FamilyBot xin chào
+   ```
+3. **Phản hồi từ Bot:**
+   Do nhóm này chưa được phê duyệt trong danh sách cho phép, bot sẽ tự động trả lời thông báo kèm ID nhóm:
+   ```text
+   Kênh/nhóm này đang chờ quản trị viên phê duyệt trên Dashboard (chat ID "zgr-98a4f1a7dfc5369b6fd4").
+   ```
+4. **Phê duyệt nhóm (Chọn 1 trong 2 cách):**
+   - **Cách 1: Phê duyệt nhanh qua Web Admin Dashboard (Khuyên dùng):**
+     1. Mở trình duyệt và truy cập `https://bot.example.com/admin` (hoặc `http://localhost:3000/admin`).
+     2. Đăng nhập bằng mật khẩu `ADMIN_PASSWORD`.
+     3. Vào tab **Kênh (Channels)**: Bạn sẽ thấy nhóm mới đang ở trạng thái `Chờ duyệt` (`pending`).
+     4. Bấm nút **Phê duyệt (Approve)**.
+     5. Bot sẽ ngay lập tức gửi một tin nhắn vào nhóm: *"Kênh/nhóm này đã được quản trị viên phê duyệt. Bạn có thể bắt đầu trò chuyện với bot nhé."*
+   - **Cách 2: Cập nhật qua file `.env`:**
+     1. Sao chép chuỗi chat ID (ví dụ: `zgr-98a4f1a7dfc5369b6fd4`).
+     2. Mở file `.env` (hoặc cấu hình Environment trên Dokploy/VPS), cập nhật:
+        ```env
+        FAMILY_CHAT_IDS=zgr-98a4f1a7dfc5369b6fd4
+        ```
+        *(Nếu có nhiều nhóm, phân cách bằng dấu phẩy: `zgr-nhom1,zgr-nhom2`)*.
+     3. Khởi động lại (Redeploy) bot.
+
+Từ thời điểm này, bot sẽ phản hồi đầy đủ các câu hỏi, thực thi công cụ và hỗ trợ các thành viên trong gia đình!
+
+---
+
+## 🖥️ Hướng dẫn sử dụng Web Admin Dashboard
+
+Bot đi kèm giao diện web quản trị đầy đủ tính năng phục vụ việc giám sát và vận hành:
+
+- **Đường dẫn truy cập:**
+  - Cục bộ: `http://localhost:3000/admin/` (hoặc port của bạn)
+  - Production: `https://bot.example.com/admin/`
+- **Đăng nhập:** Nhập mật khẩu đã cấu hình tại `ADMIN_PASSWORD` (mặc định: `admin123`).
+
+### Các phân hệ chính trong Dashboard:
+1. **Cài đặt Hệ thống (Settings):**
+   - Đổi nhà cung cấp AI linh hoạt giữa **Gemini** và **DeepSeek**.
+   - Cập nhật tên mô hình, API Keys (Gemini, DeepSeek, Tavily, Crawl4AI, Zipline) tức thì vào cơ sở dữ liệu **mà không cần khởi động lại bot hay redeploy container**.
+   - Bật/tắt tính năng ghi nhớ thụ động (Passive Memory).
+2. **Quản lý Kênh (Channels):**
+   - Xem danh sách toàn bộ các nhóm chat và cuộc trò chuyện cá nhân.
+   - Phê duyệt kênh mới (`Active`), tạm dừng hoạt động (`Pending`), hoặc chặn kênh (`Disabled`).
+3. **Thành viên Nhóm (Group Members):**
+   - Xem danh sách thành viên đang hoạt động trong từng nhóm.
+   - Thiết lập biệt danh, vai vế gia đình (Bố, Mẹ, Con gái cả, Em út...) và ghi chú cá nhân để bot xưng hô chuẩn mực và ấm cúng.
+4. **Ký ức & Sổ Kỷ niệm (Memories):**
+   - Quản lý các thông tin thói quen đã lưu theo nhóm chat.
+   - Phân loại thông tin cốt lõi (`core`) hoặc chung (`general`).
+   - Xem và tìm kiếm các mốc kỷ niệm gia đình trong Cuốn sổ Kỷ niệm.
+5. **Sự kiện & Lịch định kỳ (Events & Lookups):**
+   - Xem danh sách các ngày giỗ, sinh nhật, lịch hẹn âm dương.
+   - Giám sát các lịch tra cứu tự động hàng ngày (báo thời tiết, giá vàng) và lịch sử lần chạy gần nhất.
+
+---
+
+## 💻 Phát triển cục bộ & Kiểm thử (Commands & Testing)
+
+Dự án cấu hình monorepo qua `pnpm-workspace.yaml` với 2 package: `@bot/backend` và `@bot/admin`.
+
+```bash
+# 1. Cài đặt toàn bộ dependencies
 pnpm install
 
-# 2. Kiểm tra Typescript và build dự án
-pnpm build
+# 2. Chạy môi trường phát triển (chạy đồng thời backend & admin frontend)
+pnpm dev
 
-# 3. Chạy toàn bộ test suites
+# Chạy riêng từng module:
+pnpm dev:backend   # Fastify backend với tsx watch
+pnpm dev:admin     # Vite dev server cho admin UI
+
+# 3. Kiểm tra kiểu dữ liệu toàn bộ workspace (Strict TypeScript)
+pnpm typecheck
+
+# 4. Chạy toàn bộ bộ test suites (340+ tests kiểm tra toàn diện)
 pnpm test
 
-# 4. Chạy kiểm tra riêng từng nhóm công cụ
-pnpm test src/tools/lists.test.ts
-pnpm test src/tools/events.test.ts
-pnpm test src/tools/holidays.test.ts
+# 5. Chạy kiểm tra riêng từng nhóm công cụ:
+pnpm test src/tools/lists.test.ts          # Kiểm tra nhóm công cụ danh sách
+pnpm test src/tools/events.test.ts         # Kiểm tra nhóm sự kiện & âm lịch
+pnpm test src/tools/holidays.test.ts       # Kiểm tra ngày lễ Việt Nam
+pnpm test src/tools/weather.test.ts        # Kiểm tra tra cứu thời tiết
+pnpm test src/tools/lottery.test.ts        # Kiểm tra dò vé số 3 miền & Vietlott
+pnpm test src/tools/memory.test.ts         # Kiểm tra ký ức gia đình
+pnpm test src/tools/sticker.test.ts        # Kiểm tra gửi sticker Zalo
+pnpm test src/tools/image-generation.test.ts # Kiểm tra tạo ảnh AI
+pnpm test src/admin/admin-api.test.ts      # Kiểm tra Admin API & Auth
+
+# 6. Build dự án cho production
+pnpm build
 ```
 
 ---
 
 ## 🔄 CI/CD Pipelines & Container Registry
 
-Dự án sử dụng GitHub Actions để tự động hóa quy trình kiểm thử, build và phát hành container Docker lên GitHub Container Registry (GHCR):
+Dự án sử dụng **GitHub Actions** để tự động hóa toàn diện quy trình kiểm thử, build và phát hành container Docker:
 
 ### 1. Continuous Integration (`.github/workflows/ci.yml`)
-- **Kích hoạt (Triggers):** Tự động chạy khi có commit push lên nhánh `main` hoặc khi tạo/cập nhật `Pull Request` vào nhánh `main`.
+- **Kích hoạt:** Khi có commit push hoặc tạo `Pull Request` vào nhánh `main`.
 - **Nội dung kiểm tra:**
   - Thiết lập môi trường Node.js 22 và pnpm 12 kèm cache pnpm store tự động.
   - Cài đặt dependencies với `pnpm install --frozen-lockfile`.
   - Kiểm tra kiểu dữ liệu toàn bộ monorepo: `pnpm typecheck`.
-  - Chạy toàn bộ bộ test suite: `pnpm test`.
-  - Build thử nghiệm bundle: `pnpm build` (bao gồm build frontend admin và compile backend).
-  - Kiểm tra tính toàn vẹn của Dockerfile: Build thử nghiệm image Docker multi-stage mà không đẩy lên registry (`push: false`) kèm Buildx cache.
+  - Chạy toàn bộ test suites: `pnpm test`.
+  - Build thử nghiệm bundle: `pnpm build` (build cả frontend admin và compile backend).
+  - Kiểm tra Dockerfile: Build thử nghiệm image Docker multi-stage mà không đẩy lên registry (`push: false`) kèm Buildx cache.
 
-### 2. Continuous Delivery / Container Release (`.github/workflows/cd.yml`)
-- **Kích hoạt (Triggers):** Khi push tag phiên bản (`v*.*.*`), khi merge vào nhánh `main`, hoặc kích hoạt thủ công qua `workflow_dispatch`.
-- **Quyền hạn (Permissions):** `contents: read`, `packages: write` sử dụng `GITHUB_TOKEN` mặc định của repo.
-- **Phát hành (GHCR):** Tự động đóng gói và xuất bản image Docker tới:
+### 2. Continuous Delivery (`.github/workflows/cd.yml`)
+- **Kích hoạt:** Khi push tag phiên bản (`v*.*.*`), khi merge vào nhánh `main`, hoặc kích hoạt thủ công qua `workflow_dispatch`.
+- **Phát hành (GHCR):** Tự động đóng gói và xuất bản image Docker tới GitHub Container Registry:
   ```text
-  ghcr.io/<owner>/46-bot:<tag>
-  ```
-  - `ghcr.io/<owner>/46-bot:latest` (khi chạy trên nhánh `main`)
-  - `ghcr.io/<owner>/46-bot:sha-<commit-hash>`
-  - `ghcr.io/<owner>/46-bot:vX.Y.Z` (khi có release tag)
-
-### 3. Kéo và chạy image từ GHCR
-```bash
-# Đăng nhập GHCR (nếu repo ở chế độ private)
-echo $GITHUB_TOKEN | docker login ghcr.io -u <YOUR_GITHUB_USERNAME> --password-stdin
-
-# Kéo image mới nhất
-docker pull ghcr.io/<owner>/46-bot:latest
-
-# Chạy container
-docker run -d \
-  --name family-bot \
-  -p 3000:3000 \
-  -v $(pwd)/data:/data \
-  --env-file .env \
   ghcr.io/<owner>/46-bot:latest
-```
+  ghcr.io/<owner>/46-bot:sha-<commit-hash>
+  ghcr.io/<owner>/46-bot:vX.Y.Z
+  ```
 
 ---
 
 ## 🔒 Xử lý sự cố thường gặp (Troubleshooting)
 
-- **Webhook trả về lỗi 401 Unauthorized:** Kiểm tra xem `WEBHOOK_SECRET` trên Dokploy có khớp với secret được đăng ký tại Zalo hay không.
-- **Bot không phản hồi trong nhóm:**
-  - Nhóm chat trên Zalo yêu cầu phải tag `@bot` hoặc ấn **Reply** vào tin nhắn của bot để bot nhận được webhook.
-  - Kiểm tra xem `FAMILY_CHAT_IDS` có chứa đúng `chat.id` của nhóm hay không.
-- **Lỗi hết quota / Rate Limit:** Bot được thiết kế để giữ câu trả lời ngắn gọn, súc tích nhằm tiết kiệm hạn ngạch tin nhắn miễn phí của Zalo Official Account.
-- **Dữ liệu danh sách hoặc sự kiện bị mất sau khi redeploy:** Đảm bảo container đang dùng named volume `bot-data` mount vào thư mục `/data` theo đúng file `docker-compose.yml`.
+### 1. Webhook trả về lỗi `401 Unauthorized`
+- **Nguyên nhân:** Mã bí mật trong header `X-Bot-Api-Secret-Token` từ Zalo gửi tới không khớp với `WEBHOOK_SECRET` trong cấu hình bot.
+- **Cách khắc phục:** Kiểm tra lại giá trị `WEBHOOK_SECRET` trong `.env`. Đảm bảo chuỗi bí mật dài từ 8 đến 256 ký tự và không chứa khoảng trắng thừa ở hai đầu. Khi bot khởi động lại, bot sẽ tự động cập nhật lại secret với Zalo qua API `setWebhook`.
+
+### 2. Bot không phản hồi trong nhóm chat Zalo
+- **Nguyên nhân 1:** Chưa tag bot hoặc chưa reply tin nhắn của bot. Trong các nhóm chat Zalo, bot chỉ nhận được sự kiện webhook khi thành viên **gõ `@tên_bot`** hoặc ấn **Trả lời (Reply)** vào tin nhắn trước đó của bot.
+- **Nguyên nhân 2:** Nhóm chat chưa được phê duyệt. Kiểm tra log hoặc truy cập `/admin` mục **Kênh** để xem nhóm có đang ở trạng thái `pending` hay không và bấm **Phê duyệt**.
+- **Nguyên nhân 3:** `BOT_ID` chưa được cấu hình hoặc cấu hình sai, dẫn đến bot không nhận diện được lượt mention là dành cho mình. Hãy kiểm tra lại `BOT_ID` trong `.env`.
+
+### 3. Dữ liệu (danh sách, sự kiện, ký ức) bị mất sau khi redeploy
+- **Nguyên nhân:** Container không được gắn volume lưu trữ bền vững.
+- **Cách khắc phục:** Đảm bảo container Docker đang mount volume `bot-data` vào thư mục `/data` (ví dụ: `-v $(pwd)/data:/data` hoặc cấu hình volume trong `docker-compose.yml`). Nếu dùng Turso cloud database (`TURSO_DATABASE_URL`), dữ liệu luôn được lưu an toàn trên đám mây.
+
+### 4. Lỗi khi sử dụng tính năng Tạo ảnh AI (`image_generate`)
+- **Nguyên nhân:** Tính năng tạo ảnh AI yêu cầu cấu hình đầy đủ cả `GEMINI_API_KEY` và dịch vụ lưu trữ hình ảnh `ZIPLINE_URL` cùng `ZIPLINE_TOKEN`.
+- **Cách khắc phục:** Cập nhật các thông số Zipline trong trang **Cài đặt** của Web Admin Dashboard hoặc trong file `.env`.
+
+### 5. Tin nhắn Zalo bị lỗi ký tự hoặc xuống dòng xấu
+- Bot đã tích hợp bộ lọc làm sạch văn bản outbound (`cleanOutboundText`) tự động chuyển đổi định dạng và loại bỏ các ký tự phân cách kẻ ngang (`---`) hay bảng biểu không tương thích với Zalo, đồng thời tự động gửi fallback dạng văn bản thuần nếu Zalo từ chối gói tin Markdown.
+
+---
+
+## 📄 License
+
+Dự án được phát triển cho mục đích gia đình và cộng đồng. Giữ nguyên bản quyền mã nguồn khi sử dụng hoặc phát triển thêm.
