@@ -38,10 +38,9 @@ describe("AI Image Generation Tool (image_generate)", () => {
       config,
     });
 
-    const result = await toolGroup.image_generate.execute(
-      { prompt: "vẽ một chú mèo" },
-      { toolCallId: "call-1", messages: [] },
-    );
+    const result = await (toolGroup.image_generate as any).execute({
+      prompt: "vẽ một chú mèo",
+    });
 
     assert.equal(result.success, false);
     assert.match(result.message, /Chưa cấu hình Gemini API Key/);
@@ -54,10 +53,9 @@ describe("AI Image Generation Tool (image_generate)", () => {
       config,
     });
 
-    const result = await toolGroup.image_generate.execute(
-      { prompt: "vẽ cảnh hoàng hôn" },
-      { toolCallId: "call-2", messages: [] },
-    );
+    const result = await (toolGroup.image_generate as any).execute({
+      prompt: "vẽ cảnh hoàng hôn",
+    });
 
     assert.equal(result.success, false);
     assert.match(result.message, /Chưa cấu hình Zipline URL hoặc API token/);
@@ -75,10 +73,9 @@ describe("AI Image Generation Tool (image_generate)", () => {
       generateImageFn: mockGenerateImage as any,
     });
 
-    const result = await toolGroup.image_generate.execute(
-      { prompt: "hình ảnh bị cấm" },
-      { toolCallId: "call-3", messages: [] },
-    );
+    const result = await (toolGroup.image_generate as any).execute({
+      prompt: "hình ảnh bị cấm",
+    });
 
     assert.equal(result.success, false);
     assert.match(result.message, /Không thể tạo hình ảnh lúc này/);
@@ -136,10 +133,11 @@ describe("AI Image Generation Tool (image_generate)", () => {
       uploadToZiplineFn: mockUploadZipline as any,
     });
 
-    const result = await toolGroup.image_generate.execute(
-      { prompt: "chú mèo lông vàng dễ thương", aspectRatio: "16:9", caption: "Ảnh mèo con" },
-      { toolCallId: "call-4", messages: [] },
-    );
+    const result = await (toolGroup.image_generate as any).execute({
+      prompt: "chú mèo lông vàng dễ thương",
+      aspectRatio: "16:9",
+      caption: "Ảnh mèo con",
+    });
 
     assert.equal(result.success, true);
     assert.equal(result.url, "https://zipline.example.com/u/cat_123.png");
@@ -177,10 +175,9 @@ describe("AI Image Generation Tool (image_generate)", () => {
       uploadToZiplineFn: mockUploadZipline as any,
     });
 
-    const result = await toolGroup.image_generate.execute(
-      { prompt: "phong cảnh rừng cây" },
-      { toolCallId: "call-5", messages: [] },
-    );
+    const result = await (toolGroup.image_generate as any).execute({
+      prompt: "phong cảnh rừng cây",
+    });
 
     assert.equal(result.success, false);
     assert.match(result.message, /tải lên Zipline thất bại/);
@@ -215,10 +212,9 @@ describe("AI Image Generation Tool (image_generate)", () => {
       uploadToZiplineFn: (async () => ({ url: "https://zipline.example.com/test.png" })) as any,
     });
 
-    await toolGroup.image_generate.execute(
-      { prompt: "bầu trời xanh" },
-      { toolCallId: "call-6", messages: [] },
-    );
+    await (toolGroup.image_generate as any).execute({
+      prompt: "bầu trời xanh",
+    });
 
     assert.equal(invokedModelId, "gemini-3-pro-image");
   });
