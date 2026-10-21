@@ -40,15 +40,27 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
     adminScope.addHook("preHandler", requireAuth);
 
     // 1. Auth: Login
-    adminScope.post("/api/admin/login", async (request, reply) => {
-      const body = parseJsonBody(request.body);
-      const password = typeof body.password === "string" ? body.password : "";
-      if (password && password === deps.config.adminPassword) {
-        const token = createToken(deps.config.adminPassword);
-        return reply.code(200).send({ ok: true, token });
-      }
-      return reply.code(401).send({ error: "Invalid password" });
-    });
+    const maxLoginAttempts = deps.rateLimitMaxLogin ?? 5;
+    adminScope.post(
+      "/api/admin/login",
+      {
+        config: {
+          rateLimit: {
+            max: maxLoginAttempts,
+            timeWindow: 15 * 60 * 1000,
+          },
+        },
+      },
+      async (request, reply) => {
+        const body = parseJsonBody(request.body);
+        const password = typeof body.password === "string" ? body.password : "";
+        if (password && password === deps.config.adminPassword) {
+          const token = createToken(deps.config.adminPassword);
+          return reply.code(200).send({ ok: true, token });
+        }
+        return reply.code(401).send({ error: "Invalid password" });
+      },
+    );
 
     // 2. Channels: List & Update
     adminScope.get("/api/admin/channels", async (request, reply) => {

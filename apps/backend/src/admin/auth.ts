@@ -13,9 +13,6 @@ export function createToken(password: string): string {
 
 export function verifyToken(token: string, password: string): boolean {
   if (!token || !password) return false;
-  if (token === password) {
-    return true;
-  }
   const parts = token.split(".");
   if (parts.length !== 2) return false;
   const [body, hmac] = parts;

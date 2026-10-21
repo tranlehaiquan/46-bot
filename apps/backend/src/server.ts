@@ -15,6 +15,8 @@ import { WorkQueue } from "./queue.js";
 import { secretsMatch } from "./secrets.js";
 import type { ZaloClient } from "./zalo-client.js";
 import fastifyStatic from "@fastify/static";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyRateLimit from "@fastify/rate-limit";
 import path from "node:path";
 import fs from "node:fs";
 import type { SqliteDatabase } from "./db/connection.js";
@@ -46,6 +48,7 @@ export type ServerDeps = {
   groupMemberRepo?: GroupMemberRepository;
   llmClient?: LlmClient;
   webDistPath?: string;
+  rateLimitMaxLogin?: number;
 };
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
@@ -54,6 +57,15 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({
     logger: false,
     bodyLimit: BODY_LIMIT,
+  });
+
+  app.register(fastifyHelmet, {
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  });
+
+  app.register(fastifyRateLimit, {
+    global: false,
   });
 
   app.removeContentTypeParser("application/json");

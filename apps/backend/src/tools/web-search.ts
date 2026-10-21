@@ -1,6 +1,7 @@
 import { tavily } from "@tavily/core";
 import { tool } from "ai";
 import { z } from "zod";
+import { sanitizeUntrustedContent } from "../llm/prompt-security.js";
 
 export function createWebSearchTool(tavilyApiKey: string) {
   const client = tavily({ apiKey: tavilyApiKey });
@@ -27,11 +28,11 @@ export function createWebSearchTool(tavilyApiKey: string) {
       const results = response.results.map((r) => ({
         title: r.title,
         url: r.url,
-        snippet: r.content,
+        snippet: sanitizeUntrustedContent(r.content),
       }));
 
       return {
-        answer: response.answer ?? null,
+        answer: response.answer ? sanitizeUntrustedContent(response.answer) : null,
         results,
         query,
       };

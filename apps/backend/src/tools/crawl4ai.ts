@@ -1,10 +1,13 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { validateSafeUrl, type LookupFn } from "../security/ssrf.js";
+import { formatUntrustedContentTag } from "../llm/prompt-security.js";
 
 export interface Crawl4AiClientOptions {
   apiToken: string;
   baseUrl?: string;
   fetchFn?: typeof fetch;
+  lookupFn?: LookupFn;
 }
 
 export const MAX_CRAWL_CONTENT_LENGTH = 20000;
@@ -23,6 +26,9 @@ export async function scrapeUrlWithCrawl4Ai(
     throw new Error("Crawl4AI API token is not configured.");
   }
 
+  const safeUrl = await validateSafeUrl(url, options.lookupFn);
+  const targetUrl = safeUrl.toString();
+
   const baseUrl = options.baseUrl || "https://api.crawl4ai.com";
   const fetchFn = options.fetchFn || fetch;
 
@@ -32,7 +38,7 @@ export async function scrapeUrlWithCrawl4Ai(
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url: targetUrl }),
     signal: AbortSignal.timeout(30000),
   });
 
@@ -64,7 +70,11 @@ export async function scrapeUrlWithCrawl4Ai(
   };
 }
 
-export function createCrawl4AiTool(crawl4aiApiToken: string, fetchFn?: typeof fetch) {
+export function createCrawl4AiTool(
+  crawl4aiApiToken: string,
+  fetchFn?: typeof fetch,
+  lookupFn?: LookupFn,
+) {
   const scrape_url = tool({
     description:
       "Đọc và thu thập nội dung chi tiết từ một đường link (URL) trang web bằng Crawl4AI. Dùng khi người dùng gửi một liên kết và muốn tóm tắt, tìm thông tin cụ thể, hoặc đọc nội dung bài viết trên trang web đó.",
@@ -76,12 +86,18 @@ export function createCrawl4AiTool(crawl4aiApiToken: string, fetchFn?: typeof fe
         const result = await scrapeUrlWithCrawl4Ai(url, {
           apiToken: crawl4aiApiToken,
           fetchFn,
+          lookupFn,
         });
+        const safeContent = formatUntrustedContentTag(
+          "web_scrape",
+          result.markdown,
+          result.url,
+        );
         return {
           success: true,
           url: result.url,
           title: result.title,
-          content: result.markdown,
+          content: safeContent,
           truncated: result.truncated,
         };
       } catch (error: any) {

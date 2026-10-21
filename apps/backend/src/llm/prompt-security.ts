@@ -113,3 +113,34 @@ export function formatMemoryItemTag(subject: string, fact: string): string {
   const cleanFact = sanitizePromptText(fact);
   return `<memory_item subject="${cleanSubject}">${cleanFact}</memory_item>`;
 }
+
+/**
+ * Sanitizes untrusted content from external sources (web scraping, web search).
+ * Neutralizes nested delimiter tags and instruction override signatures so the LLM treats it as inert data.
+ */
+export function sanitizeUntrustedContent(content: string | undefined | null): string {
+  if (!content) return "";
+  let sanitized = sanitizePromptText(content);
+  for (const pattern of INSTRUCTION_OVERRIDE_PATTERNS) {
+    sanitized = sanitized.replace(pattern, "[untrusted instruction attempt neutralized]");
+  }
+  for (const pattern of PROMPT_EXTRACTION_PATTERNS) {
+    sanitized = sanitized.replace(pattern, "[untrusted extraction attempt neutralized]");
+  }
+  return sanitized;
+}
+
+/**
+ * Formats external untrusted content (e.g. from web scrape or search) wrapped in structured XML tags.
+ */
+export function formatUntrustedContentTag(
+  source: string,
+  content: string,
+  url?: string,
+): string {
+  const cleanSource = sanitizePromptText(source).replace(/"/g, "&quot;");
+  const cleanUrl = url ? sanitizePromptText(url).replace(/"/g, "&quot;") : undefined;
+  const urlAttr = cleanUrl ? ` url="${cleanUrl}"` : "";
+  const cleanContent = sanitizeUntrustedContent(content);
+  return `<untrusted_content source="${cleanSource}"${urlAttr}>\n${cleanContent}\n</untrusted_content>`;
+}

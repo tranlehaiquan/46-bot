@@ -113,4 +113,27 @@ describe("Crawl4AI Tool", () => {
     assert.equal(output.success, false);
     assert.match(output.error, /404/);
   });
+
+  it("blocks SSRF attempts to localhost and private addresses", async () => {
+    const fakeFetch: typeof fetch = async () => {
+      throw new Error("fetch should not be called for SSRF target");
+    };
+
+    const { scrape_url } = createCrawl4AiTool("c4ai-valid-token", fakeFetch);
+
+    // 1. Localhost
+    const res1 = await (scrape_url as any).execute({ url: "http://localhost:3000/secret" });
+    assert.equal(res1.success, false);
+    assert.match(res1.error, /mạng nội bộ/);
+
+    // 2. Private IP
+    const res2 = await (scrape_url as any).execute({ url: "http://192.168.1.1/admin" });
+    assert.equal(res2.success, false);
+    assert.match(res2.error, /nội bộ/);
+
+    // 3. Cloud metadata
+    const res3 = await (scrape_url as any).execute({ url: "http://169.254.169.254/latest/meta-data" });
+    assert.equal(res3.success, false);
+    assert.match(res3.error, /nội bộ/);
+  });
 });

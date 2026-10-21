@@ -16,10 +16,12 @@ import { createLogger } from "../logger.js";
 import type { ZaloClient } from "../zalo-client.js";
 import type { AppConfig } from "../config.js";
 import { getChannelActivatedMessage } from "../delivery.js";
+import { createToken } from "./auth.js";
 
 const token = "bot-token-test";
 const secret = "webhook-secret-123456";
 const adminPassword = "super-secret-admin-pass";
+const adminToken = createToken(adminPassword);
 
 function mockConfig(): AppConfig {
   return {
@@ -104,11 +106,48 @@ describe("Admin REST API", () => {
         },
       });
       assert.equal(authedRes.statusCode, 200);
+      assert.equal(authedRes.headers["x-content-type-options"], "nosniff");
+
+      // 5. Access with raw password as Bearer -> 401 Unauthorized
+      const rawPasswordRes = await app.inject({
+        method: "GET",
+        url: "/api/admin/channels",
+        headers: {
+          authorization: `Bearer ${adminPassword}`,
+        },
+      });
+      assert.equal(rawPasswordRes.statusCode, 401);
 
       await app.close();
     } finally {
       closeDatabase(db);
     }
+  });
+
+  it("enforces rate limiting on /api/admin/login", async () => {
+    const app = buildServer({
+      config: mockConfig(),
+      log: createLogger(),
+      zalo: fakeZalo(),
+      rateLimitMaxLogin: 3,
+    });
+
+    for (let i = 0; i < 3; i++) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/admin/login",
+        payload: JSON.stringify({ password: "wrong-password" }),
+      });
+      assert.equal(res.statusCode, 401);
+    }
+
+    const rateLimitedRes = await app.inject({
+      method: "POST",
+      url: "/api/admin/login",
+      payload: JSON.stringify({ password: "wrong-password" }),
+    });
+    assert.equal(rateLimitedRes.statusCode, 429);
+    await app.close();
   });
 
   it("manages channels lifecycle via API", async () => {
@@ -137,7 +176,7 @@ describe("Admin REST API", () => {
       const listRes = await app.inject({
         method: "GET",
         url: "/api/admin/channels",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
       });
       assert.equal(listRes.statusCode, 200);
       const listBody = JSON.parse(listRes.body);
@@ -149,7 +188,7 @@ describe("Admin REST API", () => {
       const patchRes = await app.inject({
         method: "PATCH",
         url: "/api/admin/channels/group-100",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
         payload: JSON.stringify({ status: "active", name: "Official Group" }),
       });
       assert.equal(patchRes.statusCode, 200);
@@ -164,7 +203,7 @@ describe("Admin REST API", () => {
       const repeatPatchRes = await app.inject({
         method: "PATCH",
         url: "/api/admin/channels/group-100",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
         payload: JSON.stringify({ status: "active" }),
       });
       assert.equal(repeatPatchRes.statusCode, 200);
@@ -174,7 +213,7 @@ describe("Admin REST API", () => {
       const renameOnlyRes = await app.inject({
         method: "PATCH",
         url: "/api/admin/channels/group-100",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
         payload: JSON.stringify({ name: "Renamed Family Channel" }),
       });
       assert.equal(renameOnlyRes.statusCode, 200);
@@ -215,7 +254,7 @@ describe("Admin REST API", () => {
       const getRes = await app.inject({
         method: "GET",
         url: "/api/admin/channels/group-200/messages",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
       });
       assert.equal(getRes.statusCode, 200);
       const getBody = JSON.parse(getRes.body);
@@ -226,7 +265,7 @@ describe("Admin REST API", () => {
       const sendRes = await app.inject({
         method: "POST",
         url: "/api/admin/channels/group-200/messages",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
         payload: JSON.stringify({ content: "Direct reply from admin" }),
       });
       assert.equal(sendRes.statusCode, 200);
@@ -261,7 +300,7 @@ describe("Admin REST API", () => {
       const createRes = await app.inject({
         method: "POST",
         url: "/api/admin/channels/group-300/events",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
         payload: JSON.stringify({
           title: "Sinh nhật Bé",
           kind: "birthday",
@@ -281,7 +320,7 @@ describe("Admin REST API", () => {
       const listRes = await app.inject({
         method: "GET",
         url: "/api/admin/channels/group-300/events",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
       });
       assert.equal(listRes.statusCode, 200);
       const listBody = JSON.parse(listRes.body);
@@ -289,7 +328,7 @@ describe("Admin REST API", () => {
       const patchRes = await app.inject({
         method: "PATCH",
         url: `/api/admin/channels/group-300/events/${eventId}`,
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
         payload: JSON.stringify({
           title: "Sinh nhật Bé (Đã sửa)",
           remindDaysBefore: 3,
@@ -305,7 +344,7 @@ describe("Admin REST API", () => {
       const deleteRes = await app.inject({
         method: "DELETE",
         url: `/api/admin/channels/group-300/events/${eventId}`,
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
       });
       assert.equal(deleteRes.statusCode, 200);
       assert.equal(JSON.parse(deleteRes.body).ok, true);
@@ -335,7 +374,7 @@ describe("Admin REST API", () => {
       const factRes = await app.inject({
         method: "POST",
         url: "/api/admin/channels/group-400/memories/facts",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
         payload: JSON.stringify({
           subject: "Mẹ",
           fact: "Thích hoa cúc họa mi",
@@ -349,7 +388,7 @@ describe("Admin REST API", () => {
       const storyRes = await app.inject({
         method: "POST",
         url: "/api/admin/channels/group-400/memories/stories",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
         payload: JSON.stringify({
           title: "Chuyến đi Đà Lạt",
           story: "Gia đình đi ngắm hoa dã quỳ rất vui.",
@@ -363,7 +402,7 @@ describe("Admin REST API", () => {
       const listRes = await app.inject({
         method: "GET",
         url: "/api/admin/channels/group-400/memories",
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
       });
       assert.equal(listRes.statusCode, 200);
       const listBody = JSON.parse(listRes.body);
@@ -374,7 +413,7 @@ describe("Admin REST API", () => {
       const delFactRes = await app.inject({
         method: "DELETE",
         url: `/api/admin/channels/group-400/memories/facts/${factId}`,
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
       });
       assert.equal(delFactRes.statusCode, 200);
 
@@ -382,7 +421,7 @@ describe("Admin REST API", () => {
       const delStoryRes = await app.inject({
         method: "DELETE",
         url: `/api/admin/channels/group-400/memories/stories/${storyId}`,
-        headers: { authorization: `Bearer ${adminPassword}` },
+        headers: { authorization: `Bearer ${adminToken}` },
       });
       assert.equal(delStoryRes.statusCode, 200);
 
@@ -687,7 +726,7 @@ describe("Admin REST API", () => {
     const db = openDatabase(":memory:");
     try {
       await migrate(db);
-      const settingsRepo = createSettingsRepository(db);
+      const settingsRepo = createSettingsRepository(db, adminPassword);
       const config = mockConfig();
       config.geminiApiKey = "AQ.test-gemini-key-123456";
       config.tavilyApiKey = "tvly-test-tavily-key-9999";
@@ -761,11 +800,14 @@ describe("Admin REST API", () => {
       assert.equal(patchBody.settings.deepseekApiKeySource, "db");
       assert.equal(patchBody.settings.tavilyApiKeySource, "db");
 
-      // Verify stored in DB
+      // Verify stored in DB (transparently decrypted by repo, but encrypted in raw SQLite)
       assert.equal(await settingsRepo.get("llm_provider"), "gemini");
       assert.equal(await settingsRepo.get("gemini_image_model"), "gemini-3-pro-image");
       assert.equal(await settingsRepo.get("gemini_api_key"), "AQ.custom-gemini-key-8888");
       assert.equal(await settingsRepo.get("deepseek_api_key"), "sk-custom-deepseek-key-7777");
+
+      const rawDbRows = (await db.execute("SELECT key, value FROM system_settings WHERE key = 'deepseek_api_key'")).rows;
+      assert.ok(String(rawDbRows[0].value).startsWith("enc:v1:"));
 
       // 4. Update with masked placeholder should preserve existing DB key
       const maskedPatch = await app.inject({

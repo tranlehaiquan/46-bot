@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   const memoryRepo = createMemoryRepository(db);
   const channelRepo = createChannelRepository(db);
   const lookupsRepo = createLookupRepository(db);
-  const settingsRepo = createSettingsRepository(db);
+  const settingsRepo = createSettingsRepository(db, config.adminPassword);
   const groupMemberRepo = createGroupMemberRepository(db);
   const zalo = createZaloClient(config.zaloBotToken);
 

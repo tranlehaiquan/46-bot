@@ -86,6 +86,10 @@ describe("buildSystemPrompt", () => {
     assert.match(DEFAULT_SYSTEM_PROMPT, /list_memories/);
   });
 
+  it("instructs assistant regarding untrusted_content delimiter in DEFAULT_SYSTEM_PROMPT", () => {
+    assert.match(DEFAULT_SYSTEM_PROMPT, /<untrusted_content source="\.\.\.">/);
+  });
+
   it("injects group members section with active speaker label when members are provided", () => {
     const fixedDate = new Date("2026-10-04T12:00:00.000Z");
     const members = [
@@ -189,6 +193,7 @@ describe("buildSystemPrompt", () => {
           llmApiKey: "key",
           llmModel: "gemini",
           geminiModel: "gemini",
+          geminiImageModel: "gemini-3.1-flash-image",
           deepseekModel: "deepseek",
           passiveMemoryEnabled: true,
         },
