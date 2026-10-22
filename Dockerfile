@@ -1,4 +1,4 @@
-FROM node:22-slim AS build
+FROM node:24-slim AS build
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -23,7 +23,7 @@ COPY apps/admin ./apps/admin
 # Build admin frontend and backend
 RUN pnpm run build
 
-FROM node:22-slim AS runtime
+FROM node:24-slim AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \

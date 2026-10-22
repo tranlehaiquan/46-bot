@@ -6,7 +6,7 @@ Automated continuous integration and continuous deployment pipelines using GitHu
 ## Requirements
 
 ### Requirement: Continuous Integration Workflow
-The repository SHALL provide a GitHub Actions CI workflow in `.github/workflows/ci.yml` triggered on pull requests and pushes to the `main` branch. The workflow SHALL validate the workspace using Node.js 22 and pnpm 12 with store caching, and execute typechecking, test suites, and build scripts.
+The repository SHALL provide a GitHub Actions CI workflow in `.github/workflows/ci.yml` triggered on pull requests and pushes to the `main` branch. The workflow SHALL validate the workspace using Node.js 24 and pnpm 12 with store caching, and execute typechecking, test suites, and build scripts.
 
 #### Scenario: Pull request verification
 - **WHEN** a pull request is created or updated targeting the `main` branch

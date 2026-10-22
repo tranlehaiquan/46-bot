@@ -3,7 +3,7 @@
 [![CI](https://github.com/tranlehaiquan/46-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/tranlehaiquan/46-bot/actions/workflows/ci.yml)
 [![CD](https://github.com/tranlehaiquan/46-bot/actions/workflows/cd.yml/badge.svg)](https://github.com/tranlehaiquan/46-bot/actions/workflows/cd.yml)
 
-Trợ lý ảo thông minh, thân thiện dành riêng cho nhóm chat gia đình trên **Zalo**. Bot được xây dựng trên nền tảng **Node.js 22**, **TypeScript**, **Fastify**, **SQLite / libSQL / Turso**, tích hợp hàng đợi **Redis & BullMQ** cùng mô hình ngôn ngữ lớn (**Google Gemini 3.8 Flash / DeepSeek**) thông qua Vercel AI SDK với khả năng tự động gọi công cụ (Function Calling / Tool Calling) và giao diện quản trị **Web Admin Dashboard** trực quan.
+Trợ lý ảo thông minh, thân thiện dành riêng cho nhóm chat gia đình trên **Zalo**. Bot được xây dựng trên nền tảng **Node.js 24**, **TypeScript**, **Fastify**, **SQLite / libSQL / Turso**, tích hợp hàng đợi **Redis & BullMQ** cùng mô hình ngôn ngữ lớn (**Google Gemini 3.8 Flash / DeepSeek**) thông qua Vercel AI SDK với khả năng tự động gọi công cụ (Function Calling / Tool Calling) và giao diện quản trị **Web Admin Dashboard** trực quan.
 
 ---
 
@@ -108,7 +108,7 @@ Dưới đây là bảng tổng hợp các công cụ (tools) được tích h�
 
 ## 🏗️ Kiến trúc & Công nghệ (Tech Stack)
 
-- **Ngôn ngữ & Runtime:** Node.js 22 (LTS), TypeScript (Strict Mode), ESM module.
+- **Ngôn ngữ & Runtime:** Node.js 24 (LTS), TypeScript (Strict Mode), ESM module.
 - **Giao diện Web Admin:** React 19, Vite, Radix UI Themes, Tailwind CSS, Lucide Icons, Wouter routing.
 - **Backend Server:** Fastify với Fastify Helmet, Fastify Rate Limit và Fastify Static (phục vụ dashboard tại `/admin`).
 - **Giao thức Zalo:** Webhook API chính thức của Zalo thông qua thư viện `zalo-bot-js`. Tự động đăng ký webhook qua `setWebhook` khi khởi động.
@@ -118,7 +118,7 @@ Dưới đây là bảng tổng hợp các công cụ (tools) được tích h�
 - **Âm lịch Việt Nam:** Thuật toán thiên văn Hồ Ngọc Đức (GMT+7), hỗ trợ tính toán tháng nhuận và năm nhuận.
 - **Thời tiết:** wttr.in JSON API (nhanh, miễn phí, hỗ trợ toàn cầu).
 - **Lưu trữ hình ảnh:** Zipline API integration.
-- **Triển khai (Deployment):** Docker Multi-stage build (Node 22-slim), Docker Compose, hỗ trợ Dokploy, VPS hoặc Kubernetes.
+- **Triển khai (Deployment):** Docker Multi-stage build (Node 24-slim), Docker Compose, hỗ trợ Dokploy, VPS hoặc Kubernetes.
 
 ---
 
@@ -352,7 +352,7 @@ Tạo file `.env` dựa trên `.env.example` với các thông số cấu hình 
 Nếu bạn muốn chạy thử nghiệm trên máy tính cá nhân (macOS, Linux, Windows WSL):
 
 #### 1. Yêu cầu môi trường
-- **Node.js:** phiên bản `>= 22.0.0`
+- **Node.js:** phiên bản `>= 24.0.0`
 - **pnpm:** phiên bản `>= 12.0.0` (Cài đặt: `npm install -g pnpm@12.14.0`)
 
 #### 2. Cài đặt mã nguồn & dependencies
@@ -623,7 +623,7 @@ Dự án sử dụng **GitHub Actions** để tự động hóa toàn diện quy
 ### 1. Continuous Integration (`.github/workflows/ci.yml`)
 - **Kích hoạt:** Khi có commit push hoặc tạo `Pull Request` vào nhánh `main`.
 - **Nội dung kiểm tra:**
-  - Thiết lập môi trường Node.js 22 và pnpm 12 kèm cache pnpm store tự động.
+  - Thiết lập môi trường Node.js 24 và pnpm 12 kèm cache pnpm store tự động.
   - Cài đặt dependencies với `pnpm install --frozen-lockfile`.
   - Kiểm tra kiểu dữ liệu toàn bộ monorepo: `pnpm typecheck`.
   - Chạy toàn bộ test suites: `pnpm test`.
